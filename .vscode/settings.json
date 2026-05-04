@@ -1,0 +1,23 @@
+{
+  "cmake.sourceDirectory": "/home/ros2/ws/src/roboter_tetris",
+  "clang-format.fallbackStyle": "none",
+  "clang-format.language.cpp.style": "file:/home/ros2/.clang-format",
+  "C_Cpp.intelliSenseEngine": "disabled",
+  "[cpp]": {
+    "editor.defaultFormatter": "xaver.clang-format",
+    "editor.inlayHints.enabled": "on"
+  },
+  "editor.rulers": [
+    120
+  ],
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff"
+  },
+  "ruff.nativeServer": "on",
+  "ruff.lineLength": 120,
+  "yaml.schemas": {
+    "https://raw.githubusercontent.com/aica-technology/api/731960c66a8fb9b29620a9f79baaa935818ab1db/docs/static/schemas/1-0-2/extension.schema.json": [
+        "extension_descriptions/*.yaml"
+    ]
+  }
+}

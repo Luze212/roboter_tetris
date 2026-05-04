@@ -1,0 +1,26 @@
+{
+  "name": "roboter-tetris",
+  "containerUser": "ros2",
+  "initializeCommand": [
+    "docker",
+    "build",
+    "--file=aica-package.toml",
+    "--target=development",
+    "--build-arg=config.signing.enabled=false",
+    "--tag=aica-technology/roboter-tetris:development",
+    "."
+  ],
+  "image": "aica-technology/roboter-tetris:development",
+  "postStartCommand": "rm -r /home/ros2/ws/src/roboter_tetris && ln -s ${containerWorkspaceFolder}/source/roboter_tetris /home/ros2/ws/src/roboter_tetris",
+  "postCreateCommand": "/usr/local/bin/generate_compile_commands -p roboter_tetris -t 60 -o ${containerWorkspaceFolder} --cmake-args BUILD_TESTING=ON",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools-extension-pack",
+        "llvm-vs-code-extensions.vscode-clangd",
+        "xaver.clang-format",
+        "charliermarsh.ruff"
+      ]
+    }
+  }
+}
