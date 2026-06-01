@@ -1,1 +1,2 @@
 # list any python requirements
+pyrobotiqgripper==3.2.6

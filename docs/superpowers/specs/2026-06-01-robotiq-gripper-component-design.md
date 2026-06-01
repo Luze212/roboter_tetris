@@ -103,16 +103,16 @@ wiederholt publizierte gleiche Werte keine erneute Bewegung auslösen.
 
 - **Force/Speed:** `raw = clamp(round(pct / 100 * 255), 0, 255)`. Bei jedem Bewegungsbefehl
   aus den aktuellen Parameterwerten gelesen.
-- **Öffnungsweite (`gripper_change`):** mm, Wertebereich 0–140 (Hub des 2F-140).
-  `0 mm` = vollständig geschlossen, `140 mm` = vollständig geöffnet. Umsetzung via
-  `move_mm(positionmm)` (erfordert mm-Kalibrierung beim Start).
+- **Öffnungsweite (`gripper_change`):** mm, Wertebereich 0–130 (kalibrierter Bereich,
+  siehe unten). `0 mm` = vollständig geschlossen, `130 mm` = vollständig geöffnet.
+  Umsetzung via `move_mm(positionmm)` (erfordert mm-Kalibrierung beim Start).
 - **Voll schließen / voll öffnen:** `close()` / `open()` (bzw. `move(255)` / `move(0)`).
 
 ## Lifecycle
 
 | Callback | Aktionen |
 |---|---|
-| `on_configure` | `RobotiqGripper(com_port='auto')` → `connect()` → `activate()` → `calibrate_bit()` (auto) → `calibrate_mm(0, 140)`. Bei Fehler: Log + `return False`. Setzt `is_connected = True`. |
+| `on_configure` | `RobotiqGripper(com_port='auto')` → `connect()` → `activate()` → `calibrate_bit()` (auto) → `calibrate_mm(0, 130)`. Bei Fehler: Log + `return False`. Setzt `is_connected = True`. |
 | `on_activate` | Worker-Thread starten; Befehlsverarbeitung aktiv. `return True`. |
 | `on_deactivate` | Laufende Bewegung `stop()`; Verarbeitung pausieren. |
 | `on_cleanup` / `on_shutdown` | Worker beenden + joinen; `stop()`; `disconnect()`; `is_connected = False`. |

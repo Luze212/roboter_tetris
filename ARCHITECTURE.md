@@ -1,0 +1,528 @@
+# System-Briefing für KI-Assistenten: AICA Modulo Framework
+
+**Anweisung an die KI:** Dieses Dokument beschreibt die Architektur und Programmierrichtlinien für das AICA-Framework. Das System basiert unter der Haube auf ROS 2 Lifecycle Nodes, abstrahiert dieses aber vollständig durch das `modulo_components`-Framework. 
+
+**WICHTIG:** Vergiss klassische ROS 2 Konzepte in Python (wie `rclpy.create_publisher`, `rclpy.create_subscription`, `TimerCallbacks` oder manuelle Message-Serialisierung zu JSON-Strings). Nutze ausschließlich die hier definierten AICA-Paradigmen!
+
+---
+
+## 1. Kernphilosophie: Komponenten & Ports
+Ein AICA-Programm besteht aus Blöcken (Komponenten), die über grafische Kabel (Ports) in einer Web-UI verbunden werden.
+
+* **Basisklasse:** Alle Python-Skripte erben von `from modulo_components.lifecycle_component import LifecycleComponent`.
+* **Kein Pub/Sub:** Inputs und Outputs werden im Konstruktor (`__init__`) als Variablen registriert und an die AICA-Engine gebunden.
+* **Das Publizieren:** Um Daten zu senden, wird **kein** `.publish()` aufgerufen. Die Python-Variable wird im Code einfach überschrieben. Die AICA-Engine liest die Variablen am Ende jedes Taktzyklus automatisch aus und verschickt sie über das ROS-Netzwerk.
+
+---
+
+## 2. Code-Struktur & Signale (I/O)
+* **Inputs anlegen:** `self.add_input("ui_port_name", "_variablen_name", DataType)`
+* **Outputs anlegen:** `self.add_output("ui_port_name", "_variablen_name", DataType)`
+> **Reihenfolge:** Erster Parameter = AICA-Portname (ohne Unterstrich), zweiter Parameter = Attributname der Instanzvariable (mit Unterstrich). Verwechslung führt zu Laufzeitfehlern.
+* **Datentypen:** AICA nutzt die eigene Bibliothek `state_representation` (importiert als `sr`).
+    * *Posen:* `sr.CartesianPose("name", "reference_frame")`
+    * *Bilder:* `sr.Image()`
+    * *Listen/Arrays:* Einfache Python `list` (wird in AICA intern als `double_array` behandelt).
+
+Objekte kopieren (Achtung C++ Bindings!): Verwende niemals copy.deepcopy() für state_representation Objekte (wie sr.Image oder sr.CartesianPose). Dies führt aufgrund der C++ Bindings im Hintergrund zu Fehlern. Nutze stattdessen immer den Klon-/Copy-Konstruktor der Klasse:
+
+    Richtig: neue_pose = sr.CartesianPose(alte_pose)
+
+    Richtig: neues_bild = sr.Image(altes_bild)
+
+---
+
+## 3. Service Clients (ROS 2 direkt — nicht durch AICA abstrahiert)
+
+AICA abstrahiert **Publisher und Subscriber** (via `add_output`/`add_input`) sowie **Timer** (via `on_step_callback`). Service Clients sind **nicht** abstrahiert — hier wird der ROS 2 Node direkt genutzt. Das ist kein Verstoß gegen die AICA-Paradigmen:
+
+```python
+from modulo_interfaces.srv import StringTrigger
+
+# In on_configure_callback (nicht in __init__, damit UI-Parameter zuerst gesetzt werden)
+self._my_client = self.create_client(StringTrigger, "/service/name")
+```
+
+**Regeln für Service Calls in on_step_callback:**
+- **Niemals blockierend** — kein `wait_for_service(timeout_sec=X)` im Step
+- Stattdessen nicht-blockierende Prüfung: `self._my_client.service_is_ready()`
+- Aufruf immer via `call_async` + `add_done_callback`:
+
+```python
+def _send_request(self, payload: str):
+    if not self._my_client.service_is_ready():
+        self.get_logger().warn("Service nicht erreichbar.")
+        return
+    req = StringTrigger.Request()
+    req.payload = payload
+    future = self._my_client.call_async(req)
+    future.add_done_callback(self._response_callback)
+
+def _response_callback(self, future):
+    try:
+        response = future.result()
+        if not response.success:
+            self.get_logger().warn(f"Service abgelehnt: {response.message}")
+    except Exception as e:
+        self.get_logger().error(f"Service Call fehlgeschlagen: {e}")
+```
+
+---
+
+## 3. Ausführungsmodelle (Callbacks)
+AICA bietet zwei Wege, wie Code ausgeführt wird. **Blockierendes `time.sleep()` ist streng verboten**, da es die Node einfriert. Zeitmessungen erfolgen über `(self.get_clock().now() - start_time).nanoseconds / 1e9`.
+
+* **A) Zyklisch (Step-basiert):**
+  Die Funktion `def on_step_callback(self):` wird automatisch mit der in der UI konfigurierten Frequenz (z.B. 50 Hz) aufgerufen. Hier laufen State Machines und kontinuierliche Berechnungen.
+* **B) Event-basiert (Data-driven):**
+  Inputs können mit Callbacks verknüpft werden. Der Code läuft nur, wenn neue Daten ankommen. Das spart massiv CPU-Leistung.
+  *Syntax:* `self.add_input("_img", "image_in", sr.Image, user_callback=self._on_new_image)`
+
+---
+
+## 4. UI-Integration: Die YAML-Beschreibungen
+Jede Python-Komponente benötigt zwingend eine `.yaml`-Datei im Ordner `extension_descriptions`. Diese definiert, wie der Block in der Web-Oberfläche aussieht und registriert die Komponente im AICA-System.
+
+* **WICHTIG:** Die YAML-Beschreibung akzeptiert **nur AICA-spezifische `signal_type` Strings!** Verwende niemals ROS-Typen wie `sensor_msgs/Image` oder `PoseStamped`.
+
+### Vollständige Signal-Typen (aus AICA Wiki bestätigt)
+
+**Basis-Typen (`signal_type`):**
+| Datentyp | `signal_type` |
+|---|---|
+| `bool` / `Bool` | `"bool"` |
+| `int` / `Int32` | `"int"` |
+| `float` / `Float64` | `"double"` |
+| `list` / `Float64MultiArray` | `"double_array"` |
+| `str` / `String` | `"string"` |
+
+**Zustandstypen (`signal_type`):**
+| Datentyp | `signal_type` |
+|---|---|
+| `sr.CartesianPose` | `"cartesian_pose"` |
+| `sr.CartesianTwist` | `"cartesian_twist"` |
+| `sr.CartesianAcceleration` | `"cartesian_acceleration"` |
+| `sr.CartesianWrench` | `"cartesian_wrench"` |
+| `sr.JointPositions` | `"joint_positions"` |
+| `sr.JointVelocities` | `"joint_velocities"` |
+| `sr.JointAccelerations` | `"joint_accelerations"` |
+| `sr.JointTorques` | `"joint_torques"` |
+| `sr.JointState` | `"joint_state"` |
+
+**Nicht-native Typen (Custom):**
+Alle anderen ROS2-Nachrichtentypen (z.B. Bilder) müssen als `"other"` deklariert werden, gefolgt vom vollqualifizierten C++-Typ:
+  ```json
+  "signal_type": "other",
+  "custom_signal_type": "sensor_msgs::msg::Image"
+
+
+## 5. Strikte Datei- und Verzeichnisstruktur (Ament Build System)
+**WICHTIG:** Das Paket wird über das ROS 2 Ament Build System gebaut. Die Platzierung der Konfigurationsdateien ist absolut strikt und darf nicht variiert werden!
+
+* **Der Python-Modul-Ordner:** Alle Python-Komponenten (`.py`-Dateien) müssen in einem Unterordner liegen, der exakt denselben Namen trägt wie das Paket selbst (z.B. `packagename/packagename/meine_komponente.py`).
+
+## 6. CMakeLists.txt — Korrekte Befehle
+
+* **AICA-Makros verwenden:** Das Build-System stellt `InstallAicaDescriptions` bereit. Die folgenden Befehle sind **Pflicht** und müssen exakt so verwendet werden:
+
+```cmake
+find_package(ament_cmake_auto REQUIRED)
+find_package(ament_cmake_python REQUIRED)
+include(InstallAicaDescriptions)
+
+ament_auto_find_build_dependencies()
+
+install_aica_descriptions(./extension_descriptions ${CMAKE_INSTALL_PREFIX}/extension_descriptions)
+
+ament_python_install_package(${PROJECT_NAME} SCRIPTS_DESTINATION lib/${PROJECT_NAME})
+
+ament_auto_package()
+```
+
+* **Nicht verwenden:** `install(DIRECTORY ./component_descriptions DESTINATION .)` — dieser native CMake-Befehl ersetzt **nicht** `install_aica_descriptions` und funktioniert nicht korrekt mit dem AICA-Build-System.
+
+
+## JTC-Integration (Joint Trajectory Controller)
+
+Der JTC ist in AICA Core standardmäßig enthalten und wird über das Hardware-Interface geladen.
+
+### Zwei Wege eine Trajektorie zu setzen
+
+**Weg 1: JointTrajectory-Signal (Topic)**
+Direkt verbunden als Output einer Komponente mit dem JTC-Input. Erfordert **echte Gelenkpositionen in Radiant**:
+
+```python
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+self._trajectory = JointTrajectory()
+self.add_output("trajectory", "_trajectory", JointTrajectory, publish_on_step=False)
+# Manuell triggern (nicht automatisch durch AICA-Engine):
+self.publish_output("trajectory")
+```
+
+**Weg 2: `set_trajectory`-Service (StringTrigger)**
+Nutzt TF-Frame-Namen + AICA-internen IK-Solver. **Kein Zugriff auf Gelenkpositionen nötig.**
+
+- **Service-Typ:** `modulo_interfaces.srv.StringTrigger` ([Quelle](https://github.com/aica-technology/modulo/blob/main/source/modulo_interfaces/srv/StringTrigger.srv))
+
+```
+# StringTrigger.srv
+string payload
+---
+bool success
+string message
+```
+
+Payload-Formate (nur jeweils **eines** von `frames`/`joint_positions` und `durations`/`times_from_start`):
+```
+{frames: [frame_1, frame_2], durations: [2.0]}          # gleiche Duration für alle
+{frames: [frame_1, frame_2], durations: [2.0, 1.5]}     # pro Waypoint
+{frames: [frame_1, frame_2], times_from_start: [2.0, 3.5]}
+{joint_positions: [config_1, config_2], durations: [2.0]}
+```
+
+> Beim Empfang einer neuen Trajektorie wird eine aktive Trajektorie sofort abgebrochen (kein Buffering).
+
+### JTC-Predicates (Ausführungsstatus)
+
+| Predicate | Bedeutung |
+|---|---|
+| `has_active_trajectory` | Trajektorie läuft gerade |
+| `has_trajectory_succeeded` | Trajektorie erfolgreich abgeschlossen |
+| `has_trajectory_failed` | Toleranz verletzt (Zeit oder Position) |
+| `is_trajectory_cancelled` | Manuell abgebrochen |
+
+---
+
+## AICA SDK — Technische Referenz
+
+### Paketstruktur (Component Package)
+
+Minimale Verzeichnisstruktur für ein Paket `custom_component_package`:
+
+```
+custom_component_package/
+├── extension_descriptions/
+│   ├── custom_component_package_cpp_component.yaml
+│   └── custom_component_package_py_component.yaml
+├── custom_component_package/
+│   └── py_component.py          ← Python-Komponenten (Unterverzeichnis = Paketname)
+├── include/custom_component_package/
+│   └── CppComponent.hpp         ← C++ Header
+├── src/
+│   └── CppComponent.cpp         ← C++ Implementierung
+├── CMakeLists.txt
+├── package.xml
+└── setup.cfg                    ← Nur wenn Python-Komponenten enthalten
+```
+
+**package.xml** (minimal):
+```xml
+<depend>modulo_components</depend>
+<buildtool_depend>ament_cmake_auto</buildtool_depend>
+<buildtool_depend>ament_cmake_python</buildtool_depend>
+<export><build_type>ament_cmake</build_type></export>
+```
+
+**CMakeLists.txt** (minimal):
+```cmake
+find_package(ament_cmake_auto REQUIRED)
+find_package(ament_cmake_python REQUIRED)
+include(InstallAicaDescriptions)
+ament_auto_find_build_dependencies()
+install_aica_descriptions(./extension_descriptions ${CMAKE_INSTALL_PREFIX}/extension_descriptions)
+ament_python_install_package(${PROJECT_NAME} SCRIPTS_DESTINATION lib/${PROJECT_NAME})
+ament_auto_package()
+```
+
+**setup.cfg** (Python-Registrierung):
+```ini
+[options.entry_points]
+python_components =
+    custom_component_package::PyComponent = custom_component_package.py_component:PyComponent
+```
+> Wichtig: Klassenname muss als `paketname::KlassenName` registriert werden (doppelte `::`)
+
+---
+
+### Komponente implementieren (Python)
+
+#### Vererbung
+
+```python
+from modulo_components.component import Component
+# oder: from modulo_components.lifecycle_component import LifecycleComponent
+
+class MyComponent(Component):
+    def __init__(self, node_name: str, *args, **kwargs):
+        super().__init__(node_name, *args, **kwargs)
+        # Parameter, Signale, Callbacks hier deklarieren
+```
+
+`LifecycleComponent` zusätzliche Override-Methoden: `on_configure_callback()`, `on_activate_callback()`, `on_deactivate_callback()`, `on_cleanup_callback()`, `on_shutdown_callback()`, `on_error_callback()`
+
+#### Parameter
+
+```python
+import state_representation as sr
+
+# Als Klassenattribut
+self._param_a = sr.Parameter("A", sr.ParameterType.INT)
+self.add_parameter("_param_a", "Beschreibung")
+
+# Inline
+self.add_parameter(sr.Parameter("B", 1.0, sr.ParameterType.DOUBLE), "Beschreibung")
+
+# Wert lesen
+self._param_a.get_value()
+self.get_parameter("B").get_value()
+```
+
+Leerer Parameter: `sr.Parameter("X", sr.ParameterType.INT)` → `is_empty() == True`, `get_value()` wirft `EmptyStateError`
+
+**Validierung** (wird bei jeder Parameteränderung aufgerufen):
+```python
+def on_validate_parameter_callback(self, parameter: sr.Parameter) -> bool:
+    if parameter.get_name() == "A":
+        if parameter.is_empty():
+            self.get_logger().warn("Parameter A darf nicht leer sein")
+            return False  # Änderung ablehnen
+    return True  # Änderung akzeptieren (Mutation des Werts vor return möglich)
+```
+
+#### Signale (Ein- und Ausgänge)
+
+Signalnamen: `lower_snake_case`, einzigartig, darf nicht mit Zahl/Unterstrich beginnen. Standard-Topic: `~/signal_name`
+
+**Unterstützte Nachrichtentypen:**
+```python
+from std_msgs.msg import Bool, Int32, Float64, Float64MultiArray, String
+from modulo_core.encoded_state import EncodedState  # für state_representation Typen
+```
+
+**Eingang (Input):**
+```python
+from state_representation import JointPositions
+
+self._input_positions = JointPositions()
+self.add_input("positions", "_input_positions", EncodedState)
+
+# Mit Callback:
+self.add_input("number", "_input_number", Int32, user_callback=self._my_callback)
+# Attribut wird VOR dem Callback aktualisiert
+```
+
+**Ausgang (Output):**
+```python
+from clproto import MessageType
+from state_representation import CartesianPose
+
+self._output_pose = CartesianPose()
+self.add_output("pose", "_output_pose", EncodedState, MessageType.CARTESIAN_POSE_MESSAGE)
+
+self._output_number = 3.14
+self.add_output("number", "_output_number", Float64)
+```
+> Leere Zustände werden nicht publiziert. LifecycleComponent publiziert nur im Zustand `ACTIVE`.
+
+#### Periodisches Verhalten
+
+```python
+def on_step_callback(self):
+    # Wird mit der konfigurierten `rate` (Hz) aufgerufen
+    # Wird VOR dem Publizieren der Ausgänge ausgewertet
+    self._output_value = compute_something()
+```
+
+---
+
+### Komponentenbeschreibung (YAML)
+
+Jede Komponente braucht eine YAML-Datei in `extension_descriptions/`. Dateiname-Konvention: `paketname_komponentenname.yaml`
+
+**Minimale Struktur** (Schema `1-0-2`, entspricht dem Template):
+```yaml
+schema: 1-0-2
+name: My Component
+description:
+  brief: Einzeilige Beschreibung
+  details: Ausführliche Beschreibung.
+inherits: "modulo_components::Component"
+class: "my_package::MyComponent"
+type: component
+```
+
+Für `LifecycleComponent`: `type: lifecycle_component` und `inherits: "modulo_components::LifecycleComponent"`.
+
+**Signale:**
+```yaml
+inputs:
+  - display_name: Gelenkzustand
+    description: Aktueller Gelenkzustand
+    signal_name: state
+    signal_type: joint_state
+
+outputs:
+  - display_name: Gelenkbefehl
+    description: Gewünschter Befehl
+    signal_name: command
+    signal_type: joint_state
+```
+
+**Parameter:**
+```yaml
+parameters:
+  - display_name: Verstärkung
+    description: Skalierungsfaktor
+    parameter_name: gain
+    parameter_type: double
+    default_value: "1.0"
+```
+`default_value: null` → Pflichtparameter (muss gesetzt werden). `default_value: ""` → gültiger leerer Zustand.
+Optionale Felder: `dynamic` (laufzeit-rekonfigurierbar), `internal` (versteckt in UI)
+
+**Prädikate:**
+```yaml
+predicates:
+  - display_name: Ist aktiv
+    description: True wenn Komponente aktiv verarbeitet
+    predicate_name: is_active
+```
+
+**Dienste (Services):**
+```yaml
+services:
+  - display_name: Zurücksetzen
+    description: Interne Zustände zurücksetzen
+    service_name: reset
+  - display_name: Frame aufzeichnen
+    description: Zeichnet einen TF-Frame auf
+    service_name: record_frame
+    payload_format: "YAML-Dict mit 'frame' und optionalem 'reference_frame'"
+```
+Ohne `payload_format` → leerer Trigger-Service. Mit `payload_format` → String-Payload-Service.
+
+**Virtuelle Komponente** (abstrakte Basisklasse, nicht direkt instanziierbar):
+```yaml
+virtual: true
+```
+
+### Externe Abhängigkeiten (aica-package.toml)
+
+```toml
+# System-Bibliotheken
+[build.packages.component.dependencies.apt]
+libyaml-cpp-dev = "*"
+
+# Python-Pakete via requirements.txt
+[build.packages.component.dependencies.pip]
+file = "requirements.txt"
+
+# Python-Pakete direkt
+[build.packages.component.dependencies.pip.packages]
+numpy = "1.0.0"
+```
+
+---
+
+## Entwicklungsrichtlinien für dieses Projekt
+
+- **Nur notwendige Dateien anpassen** im Sinne der AICA-Vorlage (keine Änderungen an `.init_wizard/` nach Wizard-Ausführung)
+- **Requirements pflegen**: Alle neuen Python-Abhängigkeiten in `requirements.txt` des jeweiligen Pakets eintragen; C++-Deps in `aica-package.toml`
+- **Imports**: Alle neuen Imports müssen in den jeweiligen Paket-Anforderungen gepflegt werden
+- **YOLOv11 & Linienerkennung**: Als optionale/externe Module behandeln — Code so strukturieren, dass diese nachträglich eingebracht werden können
+- **Nicht selbstständig weiterarbeiten** ohne Nutzeranweisung — jeder Schritt wird explizit vom Nutzer vorgegeben
+
+---
+
+## 7. AICA-Build & Test
+
+AICA verwendet ein **eigenes Docker-Frontend** statt eines klassischen `Dockerfile`. Die gesamte Build-Konfiguration steht in `aica-package.toml`.
+
+### Standard-Befehle
+
+```bash
+# Paket bauen
+docker build -f aica-package.toml .
+
+# Nur Tests ausführen (eigene Build-Stage)
+docker build -f aica-package.toml --target test .
+```
+
+Da `docker build` genutzt wird, sind alle Standard-Docker-Argumente erlaubt (`-t <image_name>`, `--platform <platform>`, …).
+
+### Build-Konfiguration über CLI überschreiben
+
+Werte aus `aica-package.toml` lassen sich pro Build über die CLI überschreiben:
+
+```bash
+docker build -f aica-package.toml \
+  --build-arg config.build.cmake_args.SOME_FLAG=Release .
+```
+
+Schema: `--build-arg config.<key>=<value>` (Punkt-Notation entspricht der TOML-Verschachtelung).
+
+### Tests
+
+Tests werden mit `pytest` ausgeführt und nutzen ROS-Context-Fixtures (typisch unter `test/python_tests/conftest.py`).
+
+---
+
+## 8. AICA Package Template / Collections / DevContainer
+
+### Template-Repository
+
+Das Repo basiert auf dem **AICA Package Template** (https://github.com/aica-technology/component-template). Das Template wird typischerweise per "Use this template" auf GitHub oder durch Klonen instanziiert.
+
+### Initialisierungs-Wizard
+
+Beim ersten Klon ist `source/` leer. Der Wizard wird gestartet via:
+
+```bash
+./initialize_templates.sh
+```
+
+Der interaktive Wizard erzeugt Paketordner unter `source/`, befüllt `aica-package.toml` und erlaubt Auswahl der Komponenten-Templates. Re-Run ist möglich, **löscht aber alle vom Wizard angelegten Dateien**.
+
+### Single Package vs. Collection
+
+- **Single Package:** Genau ein ROS-2-Paket unter `source/<paketname>/`.
+- **Collection:** Mehrere Pakete unter `source/`, jeweils registriert in `aica-package.toml` unter `[build.packages.<paketname>]`. Beim Wizard wird optional ein Collection-Name abgefragt.
+
+Zusätzliche Pakete einer Collection lassen sich nachträglich hinzufügen, indem ein neuer Ordner in `source/` angelegt und in `aica-package.toml` unter `[build.packages.name_of_new_package]` referenziert wird.
+
+### DevContainer
+
+Das Template enthält eine `.devcontainer/devcontainer.json` mit AICA-Base-Images. Empfohlen: VS Code + `Dev Containers`-Extension → "Reopen in Container". Andere IDEs (z. B. JetBrains) können analog konfiguriert werden.
+
+> Bei Änderungen an `aica-package.toml` (Paketname, Dependencies) muss der DevContainer rebuildet werden.
+> Bei Collections fragt der Wizard, welches Paket der DevContainer nutzen soll – manuell änderbar in `devcontainer.json`.
+
+---
+
+## 9. Ergänzende AICA-Regeln (aus CLAUDE.md / CONTEXT.md / component_descriptions/README.md)
+
+### Datei-Layout: Build-Configs ZWINGEND am Paket-Root
+
+`CMakeLists.txt`, `package.xml`, `setup.cfg`, `requirements.txt` **müssen** im Paket-Root liegen (z. B. `source/<paketname>/`) – **niemals in Unterordnern**. Python-Komponenten liegen im gleichnamigen Unterordner (`source/<paketname>/<paketname>/*.py`). Andernfalls schlägt der Ament-Build fehl.
+
+### Signal-Type-Ergänzung: `sr.Image`
+
+Für `state_representation::Image` (AICA-natives Bild-Objekt) gilt – analog zu `sensor_msgs::msg::Image`:
+
+```json
+"signal_type": "other",
+"custom_signal_type": "state_representation::Image"
+```
+
+Beide Custom-Types sind je nach Verwendung gültig: `sensor_msgs::msg::Image` für ROS-Topic-Bilder, `state_representation::Image` für AICA-interne Bildobjekte.
+
+### Übertragungs-Einschränkung: Komplexe Listen
+
+AICA kann **Listen komplexer Objekte** (z. B. Liste von Posen, Liste von Detektionen) **nicht direkt** als Signal übertragen. Erlaubt sind nur skalare Typen, `state_representation`-Einzelobjekte und flache `double_array`s.
+
+→ **Konsequenz:** Listen-artige Daten werden mit festen **Strides** in flache `double_array`s gepackt und auf der Empfängerseite wieder entpackt. Die Stride-Definition ist Teil des Komponenten-Vertrags und muss dokumentiert sein.
+
+### Komponentenbeschreibungs-Schema (offizielle Referenz)
+
+Vollständiges JSON-Schema für `component_descriptions/*.json`:
+https://github.com/aica-technology/api/tree/main/schemas/component-descriptions

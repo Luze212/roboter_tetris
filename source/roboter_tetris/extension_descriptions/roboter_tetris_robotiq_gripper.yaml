@@ -1,0 +1,45 @@
+schema: 1-0-2
+name: Robotiq Gripper
+description:
+  brief: Steuert einen per USB angeschlossenen Robotiq 2F-140 Greifer.
+  details: >-
+    Lifecycle-Komponente zur Ansteuerung eines Robotiq 2-Finger-Greifers 2F-140
+    über die Library pyrobotiqgripper (Modbus RTU über USB). "Gripper Close"
+    schließt bzw. öffnet vollständig, "Gripper Change" fährt eine Ziel-Öffnungsweite
+    in mm an und stoppt bei Erreichen oder Blockade. "Gripper Close" hat Vorrang.
+inherits: "modulo_components::LifecycleComponent"
+class: "roboter_tetris::RobotiqGripperComponent"
+type: lifecycle_component
+inputs:
+  - display_name: Gripper Close
+    description: >-
+      True schließt den Greifer vollständig (Stopp bei Objekt/Blockade),
+      False öffnet ihn vollständig.
+    signal_name: gripper_close
+    signal_type: bool
+  - display_name: Gripper Change
+    description: >-
+      Ziel-Öffnungsweite in mm (0-130). Nur wirksam, wenn Gripper Close False ist.
+      Schließt bis zur Weite oder bis der Greifer blockiert wird.
+    signal_name: gripper_change
+    signal_type: int
+parameters:
+  - display_name: Force
+    description: Greifkraft in Prozent (0-100 %). Intern auf 0-255 gemappt.
+    parameter_name: force
+    parameter_type: double
+    default_value: "50"
+    dynamic: true
+  - display_name: Grasping Speed
+    description: Schließgeschwindigkeit in Prozent (0-100 %). Intern auf 0-255 gemappt.
+    parameter_name: grasping_speed
+    parameter_type: double
+    default_value: "100"
+    dynamic: true
+predicates:
+  - display_name: Object Grasped
+    description: True, wenn der Greifer auf ein Objekt gestoppt hat (Objekt erkannt).
+    predicate_name: is_object_grasped
+  - display_name: Connected
+    description: True, wenn die Verbindung zum Greifer steht und er aktiviert ist.
+    predicate_name: is_connected

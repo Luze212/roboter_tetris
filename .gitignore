@@ -4,3 +4,5 @@
 compile_commands.json
 .*CommandMarker
 __pycache__
+CLAUDE.md
+docs/superpowers/specs/2026-06-01-robotiq-gripper-component-design.md
