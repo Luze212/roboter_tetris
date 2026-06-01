@@ -31,7 +31,8 @@ Diese Komponente unterliegt den Regeln aus `ARCHITECTURE.md` (verbindlich). Beso
 | Python-Datei | `source/roboter_tetris/roboter_tetris/robotiq_gripper.py` |
 | Beschreibung | `source/roboter_tetris/extension_descriptions/roboter_tetris_robotiq_gripper.yaml` |
 | Registrierung (`setup.cfg`) | `roboter_tetris::RobotiqGripperComponent = roboter_tetris.robotiq_gripper:RobotiqGripperComponent` |
-| Dependency | `pyrobotiqgripper==3.2.6` in `requirements.txt` |
+| Hardware-Treiber | vendored `roboter_tetris.robotiq_driver` (Modbus RTU) |
+| Dependencies | `pymodbus==3.6.9`, `pyserial==3.5` in `requirements.txt` |
 | UI-Anzeigename | `Robotiq Gripper` |
 
 ## Schnittstellen
@@ -64,6 +65,29 @@ Keine Signal-Outputs (wie gefordert).
 Der Prozent-Hinweis steht explizit in der `description` der YAML-Parameterdefinition,
 damit der Bediener den erwarteten Wert einordnen kann. Parameter sind `dynamic` und
 wirken ab der nächsten Bewegung.
+
+## Hardware-Treiber (vendored)
+
+Statt der Library `pyrobotiqgripper` wird ein schlanker, paketinterner Treiber
+`roboter_tetris.robotiq_driver` verwendet. **Grund:** `pyrobotiqgripper` (move-API,
+3.x) deklariert `numpy>=1.28` (faktisch numpy ≥ 2.0) und kollidiert damit mit dem
+apt-installierten `numpy 1.26.4` des ROS-Jazzy-Images; AICAs Build kann diese
+pip-Auflösung nicht überschreiben (kein `--no-deps`). Zusätzlich schleppt die
+Library Desktop-GUI-Abhängigkeiten (pygame/pyautogui/pynput) mit, die auf einem
+headless Steuerrechner unerwünscht sind.
+
+Der Treiber implementiert nur die genutzte Methoden-Teilmenge direkt über
+`pymodbus` + `pyserial` (beide ohne numpy-Konflikt) mit **identischen
+Methodennamen/Signaturen** (`connect`, `activate`, `calibrate_bit`,
+`calibrate_mm`, `move`, `move_mm`, `stop`, `disconnect`, `status`), sodass der
+Komponenten-Code unverändert bleibt. Grundlage ist das dokumentierte
+Robotiq-2F-Modbus-Registerlayout (Command-Register ab 0x03E8, Status-Register ab
+0x07D0; `gOBJ` aus dem Statusbyte für Objekterkennung).
+
+> `time.sleep` wird ausschließlich beim einmaligen Bring-up (Aktivierung/
+> Kalibrierung in `on_configure`) sowie im blockierenden `wait=True`-Pfad genutzt —
+> **nicht** im laufenden Zyklus. Der Worker fährt Bewegungen mit `wait=False` und
+> pollt über sein eigenes `threading.Event`, nie über `time.sleep`.
 
 ## Ausführungsmodell (gewählter Ansatz)
 
@@ -138,9 +162,10 @@ Das USB-Gerät des Greifers muss in den AICA-Container durchgereicht werden
 ## Dateien (neu/geändert)
 
 - **Neu:** `source/roboter_tetris/roboter_tetris/robotiq_gripper.py`
+- **Neu:** `source/roboter_tetris/roboter_tetris/robotiq_driver.py` (vendored Modbus-Treiber)
 - **Neu:** `source/roboter_tetris/extension_descriptions/roboter_tetris_robotiq_gripper.yaml`
 - **Geändert:** `source/roboter_tetris/setup.cfg` (Registrierung der neuen Komponente)
-- **Geändert:** `source/roboter_tetris/requirements.txt` (`pyrobotiqgripper==3.2.6`)
+- **Geändert:** `source/roboter_tetris/requirements.txt` (`pymodbus==3.6.9`, `pyserial==3.5`)
 - **Neu (Tests):** `source/roboter_tetris/test/python_tests/test_robotiq_gripper.py`
   (Konstruktion/Lifecycle mit gemocktem `RobotiqGripper`, ohne echte Hardware)
 

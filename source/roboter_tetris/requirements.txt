@@ -1,2 +1,5 @@
 # list any python requirements
-pyrobotiqgripper==3.2.6
+# Robotiq gripper is driven by the vendored roboter_tetris.robotiq_driver, which
+# only needs a Modbus RTU + serial stack (no numpy/GUI deps, unlike pyrobotiqgripper).
+pymodbus==3.6.9
+pyserial==3.5

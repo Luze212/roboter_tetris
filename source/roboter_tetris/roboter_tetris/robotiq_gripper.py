@@ -1,7 +1,8 @@
 """AICA lifecycle component controlling a Robotiq 2F-140 gripper.
 
 The component drives a Robotiq 2-finger gripper 2F-140 that is connected to the
-AICA/Ubuntu host via USB, using the ``pyrobotiqgripper`` library (Modbus RTU).
+AICA/Ubuntu host via USB, using the vendored :mod:`roboter_tetris.robotiq_driver`
+(Modbus RTU on top of pymodbus/pyserial).
 
 All blocking serial I/O happens on a dedicated worker thread, because
 
@@ -22,10 +23,10 @@ import state_representation as sr
 from modulo_components.lifecycle_component import LifecycleComponent
 from std_msgs.msg import Bool, Int32
 
-try:  # pragma: no cover - library is only installed in the built AICA image
-    from pyrobotiqgripper import RobotiqGripper
+try:  # pragma: no cover - needs pymodbus/pyserial, only present in built image
+    from .robotiq_driver import RobotiqGripper
 except ImportError:  # allow importing this module (and unit-testing the pure
-    RobotiqGripper = None  # logic) without the hardware library present
+    RobotiqGripper = None  # logic) without the serial/Modbus stack present
 
 
 # --- Hardware constants (Robotiq 2F-140, calibrated range used by our setup) ---
@@ -178,7 +179,9 @@ class RobotiqGripperComponent(LifecycleComponent):
 
     def on_configure_callback(self) -> bool:
         if RobotiqGripper is None:
-            self.get_logger().error("pyrobotiqgripper is not available")
+            self.get_logger().error(
+                "robotiq_driver unavailable (pymodbus/pyserial not installed)"
+            )
             return False
         try:
             self._gripper = RobotiqGripper(com_port="auto")
