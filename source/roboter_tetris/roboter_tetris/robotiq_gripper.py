@@ -1,8 +1,9 @@
 """AICA lifecycle component controlling a Robotiq 2F-140 gripper.
 
 The component drives a Robotiq 2-finger gripper 2F-140 that is connected to the
-AICA/Ubuntu host via USB, using the vendored :mod:`roboter_tetris.robotiq_driver`
-(Modbus RTU on top of pymodbus/pyserial).
+AICA/Ubuntu host via USB, using the ``pyrobotiqgripper`` library (2.x line —
+only depends on pymodbus + pyserial, no numpy, so it installs cleanly into the
+ROS image whose system numpy is 1.26.4).
 
 All blocking serial I/O happens on a dedicated worker thread, because
 
@@ -11,8 +12,8 @@ All blocking serial I/O happens on a dedicated worker thread, because
   only ever be touched from a single thread.
 
 The input callbacks therefore only resolve a motion target and hand it to the
-worker; the worker owns the gripper connection and reacts to newer targets
-cooperatively (preemption by overwriting the ``move`` target).
+worker; the worker owns the gripper connection. Motions are issued non-blocking
+(``wait=False``) and a newer target simply overrides the current one.
 """
 
 import threading
@@ -23,23 +24,25 @@ import state_representation as sr
 from modulo_components.lifecycle_component import LifecycleComponent
 from std_msgs.msg import Bool, Int32
 
-try:  # pragma: no cover - needs pymodbus/pyserial, only present in built image
-    from .robotiq_driver import RobotiqGripper
+try:  # pragma: no cover - library only present in the built AICA image
+    from pyrobotiqgripper import RobotiqGripper
 except ImportError:  # allow importing this module (and unit-testing the pure
-    RobotiqGripper = None  # logic) without the serial/Modbus stack present
+    RobotiqGripper = None  # logic) without the library/serial stack present
 
 
 # --- Hardware constants (Robotiq 2F-140, calibrated range used by our setup) ---
 GRIPPER_CLOSE_MM = 0.0       # opening width when fully closed
 GRIPPER_OPEN_MM = 130.0      # opening width when fully open (calibrated 0..130)
-RAW_MIN = 0                  # raw bit value: fully open
-RAW_MAX = 255                # raw bit value: fully closed
 
 # gOBJ status-register codes (Robotiq specification)
 GOBJ_IN_MOTION = 0
 GOBJ_OBJECT_WHILE_OPENING = 1
 GOBJ_OBJECT_WHILE_CLOSING = 2
 GOBJ_AT_POSITION = 3
+
+# Raw 0-255 limits for the percent->raw mapping of speed/force.
+RAW_MIN = 0
+RAW_MAX = 255
 
 
 def percent_to_raw(percent: float) -> int:
@@ -180,18 +183,15 @@ class RobotiqGripperComponent(LifecycleComponent):
 
     def on_configure_callback(self) -> bool:
         if RobotiqGripper is None:
-            self.get_logger().error(
-                "robotiq_driver unavailable (pymodbus/pyserial not installed)"
-            )
+            self.get_logger().error("pyrobotiqgripper is not installed")
             return False
         try:
-            self._gripper = RobotiqGripper(com_port="auto")
+            self._gripper = RobotiqGripper()
             self._gripper.connect()
+            # activate() and calibrate() each perform a full open/close cycle;
+            # the fingers must be free to move during start-up.
             self._gripper.activate()
-            # Auto bit-calibration performs a full open/close cycle; fingers must
-            # be free to move during start-up.
-            self._gripper.calibrate_bit()
-            self._gripper.calibrate_mm(GRIPPER_CLOSE_MM, GRIPPER_OPEN_MM)
+            self._gripper.calibrate(GRIPPER_CLOSE_MM, GRIPPER_OPEN_MM)
         except Exception as exc:
             self.get_logger().error(f"Failed to set up Robotiq gripper: {exc}")
             self._gripper = None
@@ -213,11 +213,6 @@ class RobotiqGripperComponent(LifecycleComponent):
 
     def on_deactivate_callback(self) -> bool:
         self._join_worker()
-        try:
-            if self._gripper is not None:
-                self._gripper.stop()
-        except Exception as exc:
-            self.get_logger().warn(f"Failed to stop gripper on deactivate: {exc}")
         return True
 
     def on_cleanup_callback(self) -> bool:
@@ -243,7 +238,6 @@ class RobotiqGripperComponent(LifecycleComponent):
         self._join_worker()
         if self._gripper is not None:
             try:
-                self._gripper.stop()
                 self._gripper.disconnect()
             except Exception as exc:
                 self.get_logger().warn(f"Failed to disconnect gripper: {exc}")
@@ -281,11 +275,11 @@ class RobotiqGripperComponent(LifecycleComponent):
 
         # Issue the motion non-blocking; a newer target later simply overrides it.
         if command.kind == "open":
-            self._gripper.move(RAW_MIN, speed, force, wait=False)
+            self._gripper.open(speed=speed, force=force, wait=False)
         elif command.kind == "close":
-            self._gripper.move(RAW_MAX, speed, force, wait=False)
+            self._gripper.close(speed=speed, force=force, wait=False)
         else:  # "move_mm"
-            self._gripper.move_mm(command.value_mm, speed, force, wait=False)
+            self._gripper.move_mm(command.value_mm, speed=speed, force=force, wait=False)
 
         # Cooperative poll loop: we own the serial port here and stay responsive
         # to newer commands. Waiting before the first read also gives the gripper
@@ -295,8 +289,8 @@ class RobotiqGripperComponent(LifecycleComponent):
             self._wake.clear()
             if self._has_pending():
                 return  # newer command overrides; the outer loop picks it up
-            status = self._gripper.status()
-            gobj = status.get("gOBJ", GOBJ_IN_MOTION)
+            self._gripper.readStatus()
+            gobj = self._gripper.status.get("gOBJ", GOBJ_IN_MOTION)
             self.set_predicate(
                 "is_object_grasped",
                 gobj in (GOBJ_OBJECT_WHILE_OPENING, GOBJ_OBJECT_WHILE_CLOSING),
