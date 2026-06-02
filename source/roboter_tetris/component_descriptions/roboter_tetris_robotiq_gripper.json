@@ -22,6 +22,27 @@
   ],
   "parameters": [
     {
+      "display_name": "Port",
+      "description": "Serieller Port des Greifers, z. B. '/dev/ttyUSB0'. 'auto' = automatische Erkennung.",
+      "parameter_name": "port",
+      "parameter_type": "string",
+      "default_value": "auto"
+    },
+    {
+      "display_name": "Device ID",
+      "description": "Modbus-Slave-ID des Greifers (Robotiq-Standard: 9).",
+      "parameter_name": "device_id",
+      "parameter_type": "int",
+      "default_value": "9"
+    },
+    {
+      "display_name": "Activation Timeout",
+      "description": "Max. Wartezeit (s) auf Abschluss der Aktivierung beim Start. Der 2F-140 braucht teils länger als die Library-Default-10 s.",
+      "parameter_name": "activation_timeout",
+      "parameter_type": "double",
+      "default_value": "30"
+    },
+    {
       "display_name": "Force",
       "description": "Greifkraft in Prozent (0-100 %). Intern auf 0-255 gemappt.",
       "parameter_name": "force",

@@ -123,6 +123,21 @@ class RobotiqGripperComponent(LifecycleComponent):
             user_callback=self._on_gripper_change,
         )
 
+        # Connection parameters (read once at configure time).
+        self.add_parameter(
+            sr.Parameter("port", "auto", sr.ParameterType.STRING),
+            "Serieller Port des Greifers, z. B. '/dev/ttyUSB0'. 'auto' = automatische Erkennung.",
+        )
+        self.add_parameter(
+            sr.Parameter("device_id", 9, sr.ParameterType.INT),
+            "Modbus-Slave-ID des Greifers (Robotiq-Standard: 9).",
+        )
+        self.add_parameter(
+            sr.Parameter("activation_timeout", 30.0, sr.ParameterType.DOUBLE),
+            "Max. Wartezeit (s) auf Abschluss der Aktivierung beim Start. Der 2F-140 "
+            "braucht für seinen Aktivierungshub teils länger als die Library-Default-10 s.",
+        )
+
         # Parameters (dynamic, expressed in percent for the operator).
         self.add_parameter(
             sr.Parameter("force", 50.0, sr.ParameterType.DOUBLE),
@@ -185,9 +200,19 @@ class RobotiqGripperComponent(LifecycleComponent):
         if RobotiqGripper is None:
             self.get_logger().error("pyrobotiqgripper is not installed")
             return False
+        port = self.get_parameter("port").get_value()
+        device_id = int(self.get_parameter("device_id").get_value())
+        activation_timeout = float(self.get_parameter("activation_timeout").get_value())
         try:
-            self._gripper = RobotiqGripper()
+            self._gripper = RobotiqGripper(com_port=port, device_id=device_id)
+            # The 2F-140 activation stroke can exceed the library's 10 s default
+            # timeout (tuned for the smaller 2F-85); allow more time.
+            self._gripper.timeOut = activation_timeout
             self._gripper.connect()
+            # Clear any stale/fault state (rACT=0) before re-activating (rACT=1) —
+            # the canonical Robotiq sequence; avoids a stuck activation if a previous
+            # load attempt left the gripper half-activated.
+            self._gripper.reset()
             # activate() and calibrate() each perform a full open/close cycle;
             # the fingers must be free to move during start-up.
             self._gripper.activate()
