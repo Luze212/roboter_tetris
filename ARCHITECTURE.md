@@ -558,3 +558,36 @@ AICA versucht, das Image aus einer Registry zu *ziehen*, weil lokal **kein Image
 2. der in AICA referenzierte Image-Name stimmt nicht mit dem tatsächlich über `-t` gebauten Namen überein.
 
 → **Lösung:** Package erfolgreich bauen und mit `-t <name>` taggen, dann in AICA **exakt** diesen `<name>` referenzieren.
+
+---
+
+## 12. Konzept-Referenz: AICA Building Blocks (geprüft 2026-06-02)
+
+Ergänzende Konzepte aus der offiziellen Doku (`https://docs.aica.tech/docs/concepts/building-blocks/...`). Bestätigen und erweitern die obigen Abschnitte.
+
+### Signals (`/signals`)
+Signals sind eine Abstraktion von ROS-2-Topics, die Daten in **regelmäßiger, periodischer Frequenz** austauschen. Typen: bool, int, double, vector (= `double_array`), string, sowie `state_representation`-Typen (Joint-/Cartesian-State) und `custom` (eigene ROS-2-Messages). Beim Verbinden im Application-Graph prüft AICA die **Typ-Gleichheit** der Signale. → Bestätigt §9: Listen komplexer Objekte sind **nicht** als Signal übertragbar; nur Skalare, Vektoren, State-Objekte.
+
+### Events & Predicates (`/events`)
+- **Predicate:** logische True/False-Aussage über einen internen Zustand, global gebroadcastet (Quelle, Name, Wert).
+- **Event:** diskrete Aktion, die den dynamischen Zustand der Anwendung ändert (Komponente laden/entladen, Lifecycle-Transition, Controller aktivieren, Parameter setzen, Service aufrufen).
+- **Trigger-Regel (wichtig):** Events werden **nur auf der steigenden Flanke** eines Predicates ausgelöst (false → true). Beispiel: „Wenn Komponente A *is in bounds* → lade Komponente B".
+→ Für diese Komponente: `is_object_grasped` / `is_connected` können so Events auslösen — jeweils beim Wechsel auf `true`.
+
+### Frames (`/frames`)
+Frames sind Koordinatensysteme im **TF-System** (Live-Datenbank von Frames und ihren Beziehungen über die Zeit). **Application Frames** werden in AICA Studio (3D-Szene) definiert und sind allen Komponenten zur Laufzeit zugänglich. Brücken zwischen TF und Signalen:
+- **Frame to Signal:** holt einen Frame aus TF und publiziert ihn als `CartesianPose`.
+- **Signal to Frame:** nimmt eine `CartesianPose` und schreibt sie nach TF.
+Der `reference_frame` ist standardmäßig **`world`**. → Relevant für die JTC-`set_trajectory`-Frames (siehe JTC-Abschnitt).
+
+### Components (`/components`)
+- Components = Wrapper für ROS-2-(Lifecycle-)Nodes.
+- **Standard-Component:** Step läuft kontinuierlich. **LifecycleComponent:** Step nur im Zustand `ACTIVE`, startet in `UNCONFIGURED`; publiziert Outputs **nur in `ACTIVE`** (bestätigt §SDK).
+- Lifecycle-Zustände: `unconfigured` → `inactive` → `active` → `finalized`. Auto-Transition-Events möglich (`on_load` → configure, `on_configure` → activate).
+- Step-Rate über den `rate`-Parameter (Hz). Daten-Attribute **und** Predicates werden periodisch automatisch publiziert.
+
+### Hardware Interfaces (`/hardware-interfaces`)
+- **Hardware Interface** = Verbindungsschicht zwischen AICA Core und der physischen/simulierten Hardware (liest Joint-/Sensorzustände, sendet Position/Velocity/Effort/Torque-Befehle); basiert auf **`ros2_control`**.
+- **Control-Stack:** physische Hardware → **Hardware Interface** → **Controller** (z. B. der JTC) → Components.
+- Laut Doku werden **Roboterarm und Greifer typischerweise als Hardware Interface** (ros2_control) integriert, nicht als Component. Für Custom-Hardware ohne fertiges Interface verweist AICA auf ros2_control-konforme Drittanbieter-Interfaces bzw. den Support.
+> ⚠️ **Architektur-Hinweis für dieses Projekt:** Der Robotiq-Greifer ist hier bewusst als **Component mit eigenem USB-/Modbus-Treiber** umgesetzt (direkte Ansteuerung), nicht als ros2_control-Hardware-Interface. Pragmatisch und funktionsfähig, weicht aber vom AICA-Idealpfad ab. Eine spätere Migration zu einem Hardware-Interface wäre ein anderer Pakettyp/Aufwand.

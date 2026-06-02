@@ -1,9 +1,0 @@
-{
-  "name": "Template Python Component",
-  "description": {
-    "brief": "Brief description of the component",
-    "details": "Detailed description of the component."
-  },
-  "registration": "roboter_tetris::PyComponent",
-  "inherits": "modulo_components::Component"
-}

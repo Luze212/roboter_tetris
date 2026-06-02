@@ -108,8 +108,9 @@ class RobotiqGripperComponent(LifecycleComponent):
         super().__init__(node_name, *args, **kwargs)
 
         # Inputs (event-driven; callbacks must not block and must not do I/O).
-        self._gripper_close = Bool()
-        self._gripper_change = Int32()
+        # modulo exposes std_msgs signals as plain Python values, not messages.
+        self._gripper_close = False
+        self._gripper_change = 0
         self.add_input(
             "gripper_close", "_gripper_close", Bool,
             user_callback=self._on_gripper_close,
@@ -161,12 +162,12 @@ class RobotiqGripperComponent(LifecycleComponent):
     # -- Input callbacks (executor thread: no blocking, no serial I/O) --------
 
     def _on_gripper_close(self) -> None:
-        command = self._logic.update_close(bool(self._gripper_close.data))
+        command = self._logic.update_close(bool(self._gripper_close))
         if command is not None:
             self._enqueue(command)
 
     def _on_gripper_change(self) -> None:
-        command = self._logic.update_change(int(self._gripper_change.data))
+        command = self._logic.update_change(int(self._gripper_change))
         if command is not None:
             self._enqueue(command)
 
