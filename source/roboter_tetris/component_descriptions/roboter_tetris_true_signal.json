@@ -1,0 +1,17 @@
+{
+  "name": "True Signal",
+  "description": {
+    "brief": "Gibt konstant ein boolesches True aus.",
+    "details": "Minimaler Test-Block zur Prüfung der Signalverdrahtung in AICA. Der Bool-Output 'value' ist immer True und wird im Zustand ACTIVE periodisch publiziert. Mit einem beliebigen Bool-Input verbinden, um ein konstantes True einzuspeisen."
+  },
+  "registration": "roboter_tetris::TrueSignal",
+  "inherits": "modulo_components::LifecycleComponent",
+  "outputs": [
+    {
+      "display_name": "Value",
+      "description": "Konstantes boolesches True.",
+      "signal_name": "value",
+      "signal_type": "bool"
+    }
+  ]
+}
