@@ -76,14 +76,14 @@ AICA bietet zwei Wege, wie Code ausgeführt wird. **Blockierendes `time.sleep()`
   Die Funktion `def on_step_callback(self):` wird automatisch mit der in der UI konfigurierten Frequenz (z.B. 50 Hz) aufgerufen. Hier laufen State Machines und kontinuierliche Berechnungen.
 * **B) Event-basiert (Data-driven):**
   Inputs können mit Callbacks verknüpft werden. Der Code läuft nur, wenn neue Daten ankommen. Das spart massiv CPU-Leistung.
-  *Syntax:* `self.add_input("_img", "image_in", sr.Image, user_callback=self._on_new_image)`
+  *Syntax:* `self.add_input("image_in", "_img", sr.Image, user_callback=self._on_new_image)`
 
 ---
 
-## 4. UI-Integration: Die YAML-Beschreibungen
-Jede Python-Komponente benötigt zwingend eine `.yaml`-Datei im Ordner `extension_descriptions`. Diese definiert, wie der Block in der Web-Oberfläche aussieht und registriert die Komponente im AICA-System.
+## 4. UI-Integration: Die JSON-Beschreibungen
+Jede Python-Komponente benötigt zwingend eine `.json`-Datei im Ordner `component_descriptions`. Diese definiert, wie der Block in der Web-Oberfläche aussieht.
 
-* **WICHTIG:** Die YAML-Beschreibung akzeptiert **nur AICA-spezifische `signal_type` Strings!** Verwende niemals ROS-Typen wie `sensor_msgs/Image` oder `PoseStamped`.
+* **WICHTIG:** Das JSON-Schema akzeptiert **nur AICA-spezifische `signal_type` Strings!** Verwende niemals ROS-Typen wie `sensor_msgs/Image` oder `PoseStamped`.
 
 ### Vollständige Signal-Typen (aus AICA Wiki bestätigt)
 
@@ -121,25 +121,11 @@ Alle anderen ROS2-Nachrichtentypen (z.B. Bilder) müssen als `"other"` deklarier
 
 * **Der Python-Modul-Ordner:** Alle Python-Komponenten (`.py`-Dateien) müssen in einem Unterordner liegen, der exakt denselben Namen trägt wie das Paket selbst (z.B. `packagename/packagename/meine_komponente.py`).
 
-## 6. CMakeLists.txt — Korrekte Befehle
-
-* **AICA-Makros verwenden:** Das Build-System stellt `InstallAicaDescriptions` bereit. Die folgenden Befehle sind **Pflicht** und müssen exakt so verwendet werden:
-
-```cmake
-find_package(ament_cmake_auto REQUIRED)
-find_package(ament_cmake_python REQUIRED)
-include(InstallAicaDescriptions)
-
-ament_auto_find_build_dependencies()
-
-install_aica_descriptions(./extension_descriptions ${CMAKE_INSTALL_PREFIX}/extension_descriptions)
-
-ament_python_install_package(${PROJECT_NAME} SCRIPTS_DESTINATION lib/${PROJECT_NAME})
-
-ament_auto_package()
-```
-
-* **Nicht verwenden:** `install(DIRECTORY ./component_descriptions DESTINATION .)` — dieser native CMake-Befehl ersetzt **nicht** `install_aica_descriptions` und funktioniert nicht korrekt mit dem AICA-Build-System.
+## 6. CMakeLists.txt Anti-Patterns (Verbotene Befehle)
+* **Keine fiktiven Makros:** Erfinde unter keinen Umständen eigene AICA-spezifische CMake-Makros. 
+* **Verboten:** Befehle wie `include(InstallAicaDescriptions)` oder `install_aica_descriptions(...)` existieren nicht und führen unweigerlich zu Build-Fehlern.
+* **Erlaubt (Best Practice):** Um den Ordner mit den JSON-Beschreibungen zu installieren, nutze ausschließlich den nativen CMake-Befehl: 
+  `install(DIRECTORY ./component_descriptions DESTINATION .)`
 
 
 ## JTC-Integration (Joint Trajectory Controller)
@@ -201,9 +187,9 @@ Minimale Verzeichnisstruktur für ein Paket `custom_component_package`:
 
 ```
 custom_component_package/
-├── extension_descriptions/
-│   ├── custom_component_package_cpp_component.yaml
-│   └── custom_component_package_py_component.yaml
+├── component_descriptions/
+│   ├── custom_component_package_cpp_component.json
+│   └── custom_component_package_py_component.json
 ├── custom_component_package/
 │   └── py_component.py          ← Python-Komponenten (Unterverzeichnis = Paketname)
 ├── include/custom_component_package/
@@ -227,10 +213,9 @@ custom_component_package/
 ```cmake
 find_package(ament_cmake_auto REQUIRED)
 find_package(ament_cmake_python REQUIRED)
-include(InstallAicaDescriptions)
 ament_auto_find_build_dependencies()
-install_aica_descriptions(./extension_descriptions ${CMAKE_INSTALL_PREFIX}/extension_descriptions)
 ament_python_install_package(${PROJECT_NAME} SCRIPTS_DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY ./component_descriptions DESTINATION .)
 ament_auto_package()
 ```
 
@@ -335,75 +320,90 @@ def on_step_callback(self):
 
 ---
 
-### Komponentenbeschreibung (YAML)
+### Komponentenbeschreibung (JSON)
 
-Jede Komponente braucht eine YAML-Datei in `extension_descriptions/`. Dateiname-Konvention: `paketname_komponentenname.yaml`
+Jede Komponente braucht eine JSON-Datei in `component_descriptions/`. Dateiname-Konvention: `paketname_komponentenname.json`
 
-**Minimale Struktur** (Schema `1-0-2`, entspricht dem Template):
-```yaml
-schema: 1-0-2
-name: My Component
-description:
-  brief: Einzeilige Beschreibung
-  details: Ausführliche Beschreibung.
-inherits: "modulo_components::Component"
-class: "my_package::MyComponent"
-type: component
+**Minimale Struktur:**
+```json
+{
+  "name": "My Component",
+  "description": {
+    "brief": "Einzeilige Beschreibung",
+    "details": "Ausführliche Beschreibung"
+  },
+  "registration": "my_package::MyComponent",
+  "inherits": "modulo_components::Component"
+}
 ```
 
-Für `LifecycleComponent`: `type: lifecycle_component` und `inherits: "modulo_components::LifecycleComponent"`.
-
 **Signale:**
-```yaml
-inputs:
-  - display_name: Gelenkzustand
-    description: Aktueller Gelenkzustand
-    signal_name: state
-    signal_type: joint_state
-
-outputs:
-  - display_name: Gelenkbefehl
-    description: Gewünschter Befehl
-    signal_name: command
-    signal_type: joint_state
+```json
+{
+  "inputs": [{
+    "display_name": "Gelenkzustand",
+    "description": "Aktueller Gelenkzustand",
+    "signal_name": "state",
+    "signal_type": "joint_state"
+  }],
+  "outputs": [{
+    "display_name": "Gelenkbefehl",
+    "description": "Gewünschter Befehl",
+    "signal_name": "command",
+    "signal_type": "joint_state"
+  }]
+}
 ```
 
 **Parameter:**
-```yaml
-parameters:
-  - display_name: Verstärkung
-    description: Skalierungsfaktor
-    parameter_name: gain
-    parameter_type: double
-    default_value: "1.0"
+```json
+{
+  "parameters": [{
+    "display_name": "Verstärkung",
+    "description": "Skalierungsfaktor",
+    "parameter_name": "gain",
+    "parameter_type": "double",
+    "default_value": "1.0"
+  }]
+}
 ```
 `default_value: null` → Pflichtparameter (muss gesetzt werden). `default_value: ""` → gültiger leerer Zustand.
 Optionale Felder: `dynamic` (laufzeit-rekonfigurierbar), `internal` (versteckt in UI)
 
 **Prädikate:**
-```yaml
-predicates:
-  - display_name: Ist aktiv
-    description: True wenn Komponente aktiv verarbeitet
-    predicate_name: is_active
+```json
+{
+  "predicates": [{
+    "display_name": "Ist aktiv",
+    "description": "True wenn Komponente aktiv verarbeitet",
+    "predicate_name": "is_active"
+  }]
+}
 ```
 
 **Dienste (Services):**
-```yaml
-services:
-  - display_name: Zurücksetzen
-    description: Interne Zustände zurücksetzen
-    service_name: reset
-  - display_name: Frame aufzeichnen
-    description: Zeichnet einen TF-Frame auf
-    service_name: record_frame
-    payload_format: "YAML-Dict mit 'frame' und optionalem 'reference_frame'"
+```json
+{
+  "services": [
+    {
+      "display_name": "Zurücksetzen",
+      "description": "Interne Zustände zurücksetzen",
+      "service_name": "reset"
+    },
+    {
+      "display_name": "Frame aufzeichnen",
+      "description": "Zeichnet einen TF-Frame auf",
+      "service_name": "record_frame",
+      "payload_format": "YAML-Dict mit 'frame' und optionalem 'reference_frame'"
+    }
+  ]
+}
 ```
 Ohne `payload_format` → leerer Trigger-Service. Mit `payload_format` → String-Payload-Service.
 
 **Virtuelle Komponente** (abstrakte Basisklasse, nicht direkt instanziierbar):
-```yaml
-virtual: true
+```json
+{ "virtual": true }
 ```
 
 ### Externe Abhängigkeiten (aica-package.toml)
@@ -526,3 +526,35 @@ AICA kann **Listen komplexer Objekte** (z. B. Liste von Posen, Liste von Detekti
 
 Vollständiges JSON-Schema für `component_descriptions/*.json`:
 https://github.com/aica-technology/api/tree/main/schemas/component-descriptions
+
+---
+
+## 10. Offizielle AICA-Referenz-Doku (geprüft 2026-06-02)
+
+Die folgenden offiziellen Seiten bestätigen die oben beschriebenen Konventionen — insbesondere **JSON-Beschreibungen in `component_descriptions/`**, die Felder `registration`/`inherits` (kein `class`/`schema`/`type`) und das native `install(DIRECTORY ./component_descriptions DESTINATION .)` in der CMakeLists (kein `install_aica_descriptions`).
+
+- Component package: https://docs.aica.tech/docs/reference/custom-components/component-package
+- Custom component (Python): https://docs.aica.tech/docs/reference/custom-components/custom-component
+- Component descriptions: https://docs.aica.tech/docs/reference/custom-components/component-descriptions
+- Package building: https://docs.aica.tech/docs/reference/custom-components/package-building
+- aica-package.toml: https://docs.aica.tech/docs/reference/custom-components/aica-package-toml
+
+---
+
+## 11. Image-Benennung & Import in AICA (ergänzend zu §7)
+
+Laut offizieller Doku ("Package building" / "aica-package.toml"):
+
+- Der **Docker-Image-Name wird ausschließlich über das `-t`-Flag** beim Bauen gesetzt:
+  ```bash
+  docker build -f aica-package.toml -t <image_name> .
+  ```
+- Der Paketname unter `[build.packages.<name>]` in `aica-package.toml` wird **nur während des Builds** verwendet und bestimmt **nicht** den Image-Namen (er muss auch nicht mit `package.xml` übereinstimmen).
+- Im **AICA Launcher** wird genau dieser `-t`-Image-Name als Custom-Package in die System-Konfiguration eingetragen.
+
+**Fehlerbild `pull access denied / repository does not exist` (z. B. `name:tag:latest`):**
+AICA versucht, das Image aus einer Registry zu *ziehen*, weil lokal **kein Image mit exakt diesem Namen/Tag** existiert. Typische Ursachen:
+1. Das Image wurde nie gebaut/getaggt — z. B. weil der Build vorher abbrach (etwa an einem nicht existenten CMake-Makro wie `include(InstallAicaDescriptions)` / `install_aica_descriptions(...)`, siehe §6), oder
+2. der in AICA referenzierte Image-Name stimmt nicht mit dem tatsächlich über `-t` gebauten Namen überein.
+
+→ **Lösung:** Package erfolgreich bauen und mit `-t <name>` taggen, dann in AICA **exakt** diesen `<name>` referenzieren.

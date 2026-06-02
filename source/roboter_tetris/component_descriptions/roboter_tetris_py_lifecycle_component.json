@@ -1,0 +1,9 @@
+{
+  "name": "Template Python Lifecycle Component",
+  "description": {
+    "brief": "Brief description of the component",
+    "details": "Detailed description of the component."
+  },
+  "registration": "roboter_tetris::PyLifecycleComponent",
+  "inherits": "modulo_components::LifecycleComponent"
+}

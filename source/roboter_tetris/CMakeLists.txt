@@ -18,13 +18,11 @@ endif()
 # find dependencies
 find_package(ament_cmake_auto REQUIRED)
 find_package(ament_cmake_python REQUIRED)
-include(InstallAicaDescriptions)
 
 ament_auto_find_build_dependencies()
 
-
-
-install_aica_descriptions(./extension_descriptions ${CMAKE_INSTALL_PREFIX}/extension_descriptions)
+# install component description JSON files
+install(DIRECTORY ./component_descriptions DESTINATION .)
 
 # install Python modules
 ament_python_install_package(${PROJECT_NAME} SCRIPTS_DESTINATION lib/${PROJECT_NAME})

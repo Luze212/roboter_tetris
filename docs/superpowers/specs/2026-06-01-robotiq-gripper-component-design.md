@@ -20,7 +20,7 @@ Diese Komponente unterliegt den Regeln aus `ARCHITECTURE.md` (verbindlich). Beso
 - **Niemals blockieren** in AICA-Callbacks, **kein `time.sleep()`**.
 - **Kein `copy.deepcopy()`** auf `state_representation`-Objekte (hier nicht relevant, da keine sr-Signale).
 - Strikte Ament-Struktur; Python-Modul im gleichnamigen Unterordner; Registrierung in `setup.cfg` mit `::`.
-- Beschreibung als **YAML** in `extension_descriptions/` (Schema `1-0-2`).
+- Beschreibung als **JSON** in `component_descriptions/` (Felder `registration`/`inherits`, kein `class`/`schema`/`type`).
 
 ## Komponente
 
@@ -29,7 +29,7 @@ Diese Komponente unterliegt den Regeln aus `ARCHITECTURE.md` (verbindlich). Beso
 | Klassenname | `RobotiqGripperComponent` (bewusst ≠ Library-Klasse `RobotiqGripper`) |
 | Basisklasse | `modulo_components.lifecycle_component.LifecycleComponent` |
 | Python-Datei | `source/roboter_tetris/roboter_tetris/robotiq_gripper.py` |
-| Beschreibung | `source/roboter_tetris/extension_descriptions/roboter_tetris_robotiq_gripper.yaml` |
+| Beschreibung | `source/roboter_tetris/component_descriptions/roboter_tetris_robotiq_gripper.json` |
 | Registrierung (`setup.cfg`) | `roboter_tetris::RobotiqGripperComponent = roboter_tetris.robotiq_gripper:RobotiqGripperComponent` |
 | Hardware-Treiber | vendored `roboter_tetris.robotiq_driver` (Modbus RTU) |
 | Dependencies | `pymodbus==3.6.9`, `pyserial==3.5` in `requirements.txt` |
@@ -62,7 +62,7 @@ Keine Signal-Outputs (wie gefordert).
 | `force` | `double` | `50` | Greifkraft in Prozent (0–100 %). Intern linear auf 0–255 gemappt. |
 | `grasping_speed` | `double` | `100` | Schließgeschwindigkeit in Prozent (0–100 %). Intern linear auf 0–255 gemappt. |
 
-Der Prozent-Hinweis steht explizit in der `description` der YAML-Parameterdefinition,
+Der Prozent-Hinweis steht explizit in der `description` der JSON-Parameterdefinition,
 damit der Bediener den erwarteten Wert einordnen kann. Parameter sind `dynamic` und
 wirken ab der nächsten Bewegung.
 
@@ -163,8 +163,9 @@ Das USB-Gerät des Greifers muss in den AICA-Container durchgereicht werden
 
 - **Neu:** `source/roboter_tetris/roboter_tetris/robotiq_gripper.py`
 - **Neu:** `source/roboter_tetris/roboter_tetris/robotiq_driver.py` (vendored Modbus-Treiber)
-- **Neu:** `source/roboter_tetris/extension_descriptions/roboter_tetris_robotiq_gripper.yaml`
+- **Neu:** `source/roboter_tetris/component_descriptions/roboter_tetris_robotiq_gripper.json`
 - **Geändert:** `source/roboter_tetris/setup.cfg` (Registrierung der neuen Komponente)
+- **Geändert:** `source/roboter_tetris/CMakeLists.txt` (`install(DIRECTORY ./component_descriptions DESTINATION .)` statt verbotener AICA-Makros)
 - **Geändert:** `source/roboter_tetris/requirements.txt` (`pymodbus==3.6.9`, `pyserial==3.5`)
 - **Neu (Tests):** `source/roboter_tetris/test/python_tests/test_robotiq_gripper.py`
   (Konstruktion/Lifecycle mit gemocktem `RobotiqGripper`, ohne echte Hardware)
