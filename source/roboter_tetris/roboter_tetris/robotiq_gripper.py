@@ -217,8 +217,19 @@ class RobotiqGripperComponent(LifecycleComponent):
             # the fingers must be free to move during start-up.
             self._gripper.activate()
             self._gripper.calibrate(GRIPPER_CLOSE_MM, GRIPPER_OPEN_MM)
+            # Calibration leaves the gripper closed; open it so the physical state
+            # matches the logic's initial "open" assumption (gripper_close == False).
+            # Otherwise the first "open" command is a no-op and looks unresponsive.
+            self._gripper.open(wait=False)
         except Exception as exc:
             self.get_logger().error(f"Failed to set up Robotiq gripper: {exc}")
+            # Release the serial port if connect() already succeeded — otherwise the
+            # port stays open and the next load reports "no gripper detected".
+            if self._gripper is not None:
+                try:
+                    self._gripper.disconnect()
+                except Exception:
+                    pass
             self._gripper = None
             return False
         self.set_predicate("is_connected", True)
