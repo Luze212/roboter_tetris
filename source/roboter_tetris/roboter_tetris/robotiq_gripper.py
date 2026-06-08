@@ -245,6 +245,17 @@ class RobotiqGripperComponent(LifecycleComponent):
         return True
 
     def on_activate_callback(self) -> bool:
+        if self._gripper is None:
+            self.get_logger().error("Gripper is not configured")
+            return False
+        try:
+            # Re-open the serial port (released on the previous deactivate).
+            # Idempotent if still connected from on_configure.
+            self._gripper.connect()
+        except Exception as exc:
+            self.get_logger().error(f"Failed to (re)connect gripper: {exc}")
+            return False
+        self.set_predicate("is_connected", True)
         # Drop any command that arrived while inactive.
         with self._lock:
             self._pending = None
@@ -258,6 +269,14 @@ class RobotiqGripperComponent(LifecycleComponent):
 
     def on_deactivate_callback(self) -> bool:
         self._join_worker()
+        # Release the serial port while inactive so a reload (or another instance)
+        # can open it. The gripper keeps its activation in hardware.
+        if self._gripper is not None:
+            try:
+                self._gripper.disconnect()
+            except Exception as exc:
+                self.get_logger().warn(f"Failed to disconnect gripper on deactivate: {exc}")
+        self.set_predicate("is_connected", False)
         return True
 
     def on_cleanup_callback(self) -> bool:
