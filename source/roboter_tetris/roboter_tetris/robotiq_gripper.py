@@ -231,6 +231,11 @@ class RobotiqGripperComponent(LifecycleComponent):
             # matches the logic's initial "open" assumption (gripper_close == False).
             # Otherwise the first "open" command is a no-op and looks unresponsive.
             self._gripper.open(wait=False)
+            # Release the port after bring-up. The worker (re)opens it only for the
+            # duration of each command, so the port is never held while idle — this
+            # keeps reloads/restarts from failing with "Failed to connect" when a
+            # previous instance lingers.
+            self._gripper.disconnect()
         except Exception as exc:
             self.get_logger().error(f"Failed to set up Robotiq gripper: {exc}")
             # Release the serial port if connect() already succeeded — otherwise the
@@ -249,13 +254,7 @@ class RobotiqGripperComponent(LifecycleComponent):
         if self._gripper is None:
             self.get_logger().error("Gripper is not configured")
             return False
-        try:
-            # Re-open the serial port (released on the previous deactivate).
-            # Idempotent if still connected from on_configure.
-            self._connect_with_retries()
-        except Exception as exc:
-            self.get_logger().error(f"Failed to (re)connect gripper: {exc}")
-            return False
+        # The serial port is opened per command by the worker, not held here.
         self.set_predicate("is_connected", True)
         # Drop any command that arrived while inactive.
         with self._lock:
@@ -269,9 +268,9 @@ class RobotiqGripperComponent(LifecycleComponent):
         return True
 
     def on_deactivate_callback(self) -> bool:
+        # Stopping the worker also releases the port (the in-flight command's
+        # finally-block disconnects). Defensive disconnect in case of an odd state.
         self._join_worker()
-        # Release the serial port while inactive so a reload (or another instance)
-        # can open it. The gripper keeps its activation in hardware.
         if self._gripper is not None:
             try:
                 self._gripper.disconnect()
@@ -296,8 +295,9 @@ class RobotiqGripperComponent(LifecycleComponent):
         """Open the serial port, retrying briefly.
 
         Handles the case where a just-stopped instance is still releasing the port
-        (`Failed to connect`). Only used at configure/activate time, never in the
-        cyclic worker path.
+        (`Failed to connect`). Runs at configure time and inside the worker thread
+        (a background thread) — never in the node's cyclic executor, so the brief
+        sleeps are fine.
         """
         last_exc: Optional[Exception] = None
         for attempt in range(attempts):
@@ -356,27 +356,41 @@ class RobotiqGripperComponent(LifecycleComponent):
         speed = percent_to_raw(self.get_parameter("grasping_speed").get_value())
         force = percent_to_raw(self.get_parameter("force").get_value())
 
-        # Issue the motion non-blocking; a newer target later simply overrides it.
-        if command.kind == "open":
-            self._gripper.open(speed=speed, force=force, wait=False)
-        elif command.kind == "close":
-            self._gripper.close(speed=speed, force=force, wait=False)
-        else:  # "move_mm"
-            self._gripper.move_mm(command.value_mm, speed=speed, force=force, wait=False)
+        # Open the port only for this command, then release it in the finally block.
+        try:
+            self._connect_with_retries()
+        except Exception as exc:
+            self.get_logger().error(f"Gripper connect failed: {exc}")
+            self.set_predicate("is_connected", False)
+            return
+        self.set_predicate("is_connected", True)
+        try:
+            # Issue the motion non-blocking; a newer target later simply overrides it.
+            if command.kind == "open":
+                self._gripper.open(speed=speed, force=force, wait=False)
+            elif command.kind == "close":
+                self._gripper.close(speed=speed, force=force, wait=False)
+            else:  # "move_mm"
+                self._gripper.move_mm(command.value_mm, speed=speed, force=force, wait=False)
 
-        # Cooperative poll loop: we own the serial port here and stay responsive
-        # to newer commands. Waiting before the first read also gives the gripper
-        # a moment to start moving before we sample gOBJ.
-        while not self._stop.is_set():
-            self._wake.wait(timeout=self.POLL_PERIOD_S)
-            self._wake.clear()
-            if self._has_pending():
-                return  # newer command overrides; the outer loop picks it up
-            self._gripper.readStatus()
-            gobj = self._gripper.status.get("gOBJ", GOBJ_IN_MOTION)
-            self.set_predicate(
-                "is_object_grasped",
-                gobj in (GOBJ_OBJECT_WHILE_OPENING, GOBJ_OBJECT_WHILE_CLOSING),
-            )
-            if gobj != GOBJ_IN_MOTION:
-                return  # reached target or stopped on an object / blockage
+            # Cooperative poll loop: stay responsive to newer commands. Waiting before
+            # the first read also gives the gripper a moment to start moving.
+            while not self._stop.is_set():
+                self._wake.wait(timeout=self.POLL_PERIOD_S)
+                self._wake.clear()
+                if self._has_pending():
+                    return  # newer command overrides; the outer loop picks it up
+                self._gripper.readStatus()
+                gobj = self._gripper.status.get("gOBJ", GOBJ_IN_MOTION)
+                self.set_predicate(
+                    "is_object_grasped",
+                    gobj in (GOBJ_OBJECT_WHILE_OPENING, GOBJ_OBJECT_WHILE_CLOSING),
+                )
+                if gobj != GOBJ_IN_MOTION:
+                    return  # reached target or stopped on an object / blockage
+        finally:
+            # Always release the port so it is free between commands.
+            try:
+                self._gripper.disconnect()
+            except Exception:
+                pass
