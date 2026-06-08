@@ -23,10 +23,10 @@
   "parameters": [
     {
       "display_name": "Port",
-      "description": "Serieller Port des Greifers, z. B. '/dev/ttyUSB0'. 'auto' = automatische Erkennung.",
+      "description": "Serieller Port des Greifers (Default '/dev/ttyUSB0'). 'auto' = automatische Erkennung.",
       "parameter_name": "port",
       "parameter_type": "string",
-      "default_value": "auto"
+      "default_value": "/dev/ttyUSB0"
     },
     {
       "display_name": "Device ID",

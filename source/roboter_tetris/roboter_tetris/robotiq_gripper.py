@@ -17,6 +17,7 @@ worker; the worker owns the gripper connection. Motions are issued non-blocking
 """
 
 import threading
+import time
 from dataclasses import dataclass
 from typing import Optional
 
@@ -125,8 +126,8 @@ class RobotiqGripperComponent(LifecycleComponent):
 
         # Connection parameters (read once at configure time).
         self.add_parameter(
-            sr.Parameter("port", "auto", sr.ParameterType.STRING),
-            "Serieller Port des Greifers, z. B. '/dev/ttyUSB0'. 'auto' = automatische Erkennung.",
+            sr.Parameter("port", "/dev/ttyUSB0", sr.ParameterType.STRING),
+            "Serieller Port des Greifers (Default '/dev/ttyUSB0'). 'auto' = automatische Erkennung.",
         )
         self.add_parameter(
             sr.Parameter("device_id", 9, sr.ParameterType.INT),
@@ -217,7 +218,7 @@ class RobotiqGripperComponent(LifecycleComponent):
             # The 2F-140 activation stroke can exceed the library's 10 s default
             # timeout (tuned for the smaller 2F-85); allow more time.
             self._gripper.timeOut = activation_timeout
-            self._gripper.connect()
+            self._connect_with_retries()
             # Clear any stale/fault state (rACT=0) before re-activating (rACT=1) —
             # the canonical Robotiq sequence; avoids a stuck activation if a previous
             # load attempt left the gripper half-activated.
@@ -251,7 +252,7 @@ class RobotiqGripperComponent(LifecycleComponent):
         try:
             # Re-open the serial port (released on the previous deactivate).
             # Idempotent if still connected from on_configure.
-            self._gripper.connect()
+            self._connect_with_retries()
         except Exception as exc:
             self.get_logger().error(f"Failed to (re)connect gripper: {exc}")
             return False
@@ -290,6 +291,24 @@ class RobotiqGripperComponent(LifecycleComponent):
     def on_error_callback(self) -> bool:
         self._teardown()
         return True
+
+    def _connect_with_retries(self, attempts: int = 12, delay_s: float = 0.5) -> None:
+        """Open the serial port, retrying briefly.
+
+        Handles the case where a just-stopped instance is still releasing the port
+        (`Failed to connect`). Only used at configure/activate time, never in the
+        cyclic worker path.
+        """
+        last_exc: Optional[Exception] = None
+        for attempt in range(attempts):
+            try:
+                self._gripper.connect()
+                return
+            except Exception as exc:
+                last_exc = exc
+                if attempt < attempts - 1:
+                    time.sleep(delay_s)
+        raise last_exc if last_exc is not None else RuntimeError("connect failed")
 
     def _join_worker(self) -> None:
         self._stop.set()
