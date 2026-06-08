@@ -1,0 +1,34 @@
+{
+  "name": "Toggle Signal",
+  "description": {
+    "brief": "Wechselt ein boolesches Signal periodisch zwischen True und False.",
+    "details": "Test-Block: Der Bool-Output 'value' wechselt im Zustand ACTIVE alle 'period' Sekunden (Default 5 s) zwischen True und False. Mit einem Bool-Input verbinden (z. B. dem 'gripper_close'-Input des Robotiq-Gripper), um den Greifer freihändig wiederholt auf-/zufahren zu lassen."
+  },
+  "registration": "roboter_tetris::ToggleSignal",
+  "inherits": "modulo_components::LifecycleComponent",
+  "outputs": [
+    {
+      "display_name": "Value",
+      "description": "Boolesches Signal, das periodisch zwischen True und False wechselt.",
+      "signal_name": "value",
+      "signal_type": "bool"
+    }
+  ],
+  "parameters": [
+    {
+      "display_name": "Period",
+      "description": "Zeit (s) zwischen den Wechseln zwischen True und False.",
+      "parameter_name": "period",
+      "parameter_type": "double",
+      "default_value": "5",
+      "dynamic": true
+    }
+  ],
+  "predicates": [
+    {
+      "display_name": "Is True",
+      "description": "Aktueller Wert des Signals (True/False).",
+      "predicate_name": "is_true"
+    }
+  ]
+}

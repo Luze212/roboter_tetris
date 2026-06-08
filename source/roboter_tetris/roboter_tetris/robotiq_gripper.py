@@ -200,6 +200,15 @@ class RobotiqGripperComponent(LifecycleComponent):
         if RobotiqGripper is None:
             self.get_logger().error("pyrobotiqgripper is not installed")
             return False
+        # Defensive: release any connection left over from a previous configure,
+        # so re-configuring never leaves the serial port held open (which would make
+        # auto-detect report "no gripper detected on any available ports").
+        if self._gripper is not None:
+            try:
+                self._gripper.disconnect()
+            except Exception:
+                pass
+            self._gripper = None
         port = self.get_parameter("port").get_value()
         device_id = int(self.get_parameter("device_id").get_value())
         activation_timeout = float(self.get_parameter("activation_timeout").get_value())
