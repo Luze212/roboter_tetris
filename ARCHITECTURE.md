@@ -590,4 +590,42 @@ Der `reference_frame` ist standardmäßig **`world`**. → Relevant für die JTC
 - **Hardware Interface** = Verbindungsschicht zwischen AICA Core und der physischen/simulierten Hardware (liest Joint-/Sensorzustände, sendet Position/Velocity/Effort/Torque-Befehle); basiert auf **`ros2_control`**.
 - **Control-Stack:** physische Hardware → **Hardware Interface** → **Controller** (z. B. der JTC) → Components.
 - Laut Doku werden **Roboterarm und Greifer typischerweise als Hardware Interface** (ros2_control) integriert, nicht als Component. Für Custom-Hardware ohne fertiges Interface verweist AICA auf ros2_control-konforme Drittanbieter-Interfaces bzw. den Support.
-> ⚠️ **Architektur-Hinweis für dieses Projekt:** Der Robotiq-Greifer ist hier bewusst als **Component mit eigenem USB-/Modbus-Treiber** umgesetzt (direkte Ansteuerung), nicht als ros2_control-Hardware-Interface. Pragmatisch und funktionsfähig, weicht aber vom AICA-Idealpfad ab. Eine spätere Migration zu einem Hardware-Interface wäre ein anderer Pakettyp/Aufwand.
+> ⚠️ **Architektur-Hinweis für dieses Projekt:** Der Robotiq-Greifer ist hier bewusst als **Component, die die `pyrobotiqgripper`-Library direkt nutzt**, umgesetzt (direkte USB-/Modbus-Ansteuerung), nicht als ros2_control-Hardware-Interface. Pragmatisch und funktionsfähig, weicht aber vom AICA-Idealpfad ab. Eine spätere Migration zu einem Hardware-Interface wäre ein anderer Pakettyp/Aufwand.
+
+---
+
+## 13. Muster: Exklusive Hardware-Ressourcen (serielle/USB-Geräte) in einer Component
+
+Erprobt am Robotiq-Greifer (serieller Port `/dev/ttyUSB0` via Modbus RTU). Wenn eine Component ein **exklusives OS-Gerät** (serieller Port, USB-Device, Socket) direkt ansteuert, gelten folgende Regeln — sonst funktioniert es einmal, aber **nicht über Start/Stop hinweg**.
+
+### Das Kernproblem
+AICA lädt Components per **dynamic composition in einen langlebigen `component_container`-Prozess**. Dieser Prozess **überlebt das Start/Stop der Anwendung**. Hält eine Component das Gerät **dauerhaft offen** (über die ganze ACTIVE-Phase), bleibt der Datei-Deskriptor im Container-Prozess offen, auch wenn die Anwendung gestoppt wird — der nächste Start scheitert dann am erneuten Öffnen:
+- `Failed to connect [ModbusSerialClient /dev/ttyUSB0]` (Port belegt),
+- bzw. bei Auto-Detect `no gripper detected on any available ports`.
+
+Man darf sich **nicht** darauf verlassen, dass `on_deactivate`/`on_cleanup` die Ressource freigeben — beim Stop räumt AICA die Instanz nicht garantiert so ab, dass unser Teardown läuft (der Container-Prozess samt alter Verbindung bleibt bestehen).
+
+### Die Lösung: Ressource **pro Operation** öffnen/schließen
+Das Gerät **niemals über die ganze ACTIVE-Phase exklusiv halten**, sondern nur **für die Dauer einer einzelnen Operation** öffnen und danach (im `finally`) sofort schließen. Im Leerlauf ist die Ressource frei → Restart/zweite Instanz bekommt sie, egal ob ein altes Objekt im Container-Prozess hängt.
+
+```python
+def _execute(self, command):
+    self._connect_with_retries()      # Port nur jetzt öffnen
+    try:
+        ... Bewegung ausführen + Status pollen ...
+    finally:
+        try: self._device.disconnect()  # immer wieder freigeben
+        except Exception: pass
+```
+
+### Begleitregeln (alle am Greifer erprobt)
+1. **Blockierende Geräte-I/O gehört in einen dedizierten Worker-Thread**, nie in Callbacks/`on_step` (AICA-Callbacks dürfen nicht blockieren). Bibliotheken wie `pymodbus` sind **nicht thread-safe** → das Gerät hat **genau einen** besitzenden Thread. Input-Callbacks setzen nur ein Ziel und wecken den Worker.
+2. **Bring-up in `on_configure`** (verbinden/aktivieren/kalibrieren) darf blockieren (einmalig, außerhalb des zyklischen Pfads), **muss die Ressource am Ende aber ebenfalls freigeben**.
+3. **Connect mit kurzem Retry** (ein paar Sekunden), um eine gerade erst freigegebene Ressource (Race nach Stop) abzufangen.
+4. **Gerätepfad als Parameter** exponieren (Default auf den bekannten Pfad, z. B. `/dev/ttyUSB0`); Auto-Detect ist in Containern fragil.
+5. **Aktivierungs-/Timeouts konfigurierbar** machen — Hardware kann länger brauchen als Library-Defaults (z. B. 2F-140 vs. 2F-85, Default-Timeout 10 s zu kurz).
+6. **Startzustand konsistent zur internen Logik** lassen — nach dem Bring-up das Gerät in den Zustand bringen, den die Komponentenlogik annimmt (z. B. Greifer am Ende **öffnen**, wenn die Logik mit „offen" startet), sonst ist der erste Befehl ein No-op und wirkt „tot".
+
+### Diagnose
+- Die Component läuft **im AICA-`component_container`-Prozess**, nicht in einem separaten „Package-Container". Auf dem Host finden: `docker ps` (AICA-Image).
+- Wer hält den Port? Auf dem **Host als root**: `sudo fuser -v /dev/ttyUSB0` (sieht auch Container-Prozesse; ein nicht-root `lsof`/`fuser` ist bei Container-Dateisystemen unvollständig). Im **Leerlauf** muss die Ausgabe **leer** sein.
