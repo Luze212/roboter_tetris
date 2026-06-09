@@ -3,5 +3,5 @@
 # pymodbus + pyserial (no numpy), so it installs cleanly into the ROS image whose
 # system numpy is 1.26.4 — unlike 3.x, which requires numpy>=2.0.
 pyrobotiqgripper==2.1.0
-numpy
 opencv-python-headless
+
