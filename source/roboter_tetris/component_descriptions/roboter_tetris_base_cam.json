@@ -1,0 +1,77 @@
+{
+  "name": "Base Kamera",
+  "description": {
+    "brief": "Computer Vision für Fließbandsteine",
+    "details": "Ersetzt den alten C++ Code. Erkennt Steine auf dem Fließband durch Tiefenfilterung und Konturensuche."
+  },
+  "registration": "roboter_tetris::BaseCam",
+  "inherits": "modulo_components::Component",
+  "parameters": [
+    {
+      "display_name": "Fließband Z-Distanz (mm)",
+      "description": "Distanz von der Kamera zum Fließband in mm",
+      "parameter_name": "conveyor_z_dist",
+      "parameter_type": "double",
+      "default_value": "1000.0"
+    },
+    {
+      "display_name": "Min Objekthöhe (mm)",
+      "description": "Mindesthöhe, ab der ein Objekt erkannt wird",
+      "parameter_name": "min_obj_height",
+      "parameter_type": "double",
+      "default_value": "10.0"
+    },
+    {
+      "display_name": "Max Objekthöhe (mm)",
+      "description": "Maximale Höhe, bis zu der ein Objekt erkannt wird",
+      "parameter_name": "max_obj_height_mm",
+      "parameter_type": "double",
+      "default_value": "100.0"
+    },
+    {
+      "display_name": "Min Konturfläche (px)",
+      "description": "Mindestfläche in Pixeln",
+      "parameter_name": "min_contour_area",
+      "parameter_type": "double",
+      "default_value": "500.0"
+    }
+  ],
+  "inputs": [
+    {
+      "display_name": "Color Image",
+      "description": "RGB Bild der Kamera",
+      "signal_name": "color_image",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::Image"
+    },
+    {
+      "display_name": "Aligned Depth Image",
+      "description": "Tiefenbild der Kamera (registriert zu Farbe)",
+      "signal_name": "depth_image",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::Image"
+    },
+    {
+      "display_name": "Camera Info",
+      "description": "Kamera Intrinsics",
+      "signal_name": "camera_info",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::CameraInfo"
+    }
+  ],
+  "outputs": [
+    {
+      "display_name": "Erkannte Objekte (Array)",
+      "description": "Flaches Array mit Strides von 10 [id, color, x, y, z, orientation, vy, length, width, height]",
+      "signal_name": "objects",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Debug Image",
+      "description": "Visualisierung der Erkennung",
+      "signal_name": "debug_image",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::Image"
+    }
+  ]
+}
