@@ -21,10 +21,10 @@ class BaseCam(LifecycleComponent):
         # Inputs
         self._color_msg = Image()
         self.add_input("color_image", "_color_msg", Image)
+        self._info_msg = CameraInfo()
+        self.add_input("color_camera_info", "_info_msg", CameraInfo)
         self._depth_msg = Image()
         self.add_input("depth_image", "_depth_msg", Image)
-        self._info_msg = CameraInfo()
-        self.add_input("camera_info", "_info_msg", CameraInfo)
         
         # Outputs
         self._objects_msg = Float64MultiArray()

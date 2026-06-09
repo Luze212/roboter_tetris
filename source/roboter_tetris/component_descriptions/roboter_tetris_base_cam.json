@@ -45,18 +45,18 @@
       "custom_signal_type": "sensor_msgs::msg::Image"
     },
     {
+      "display_name": "Color Camera Info",
+      "description": "Kamera Intrinsics der Farbkamera",
+      "signal_name": "color_camera_info",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::CameraInfo"
+    },
+    {
       "display_name": "Aligned Depth Image",
       "description": "Tiefenbild der Kamera (registriert zu Farbe)",
       "signal_name": "depth_image",
       "signal_type": "other",
       "custom_signal_type": "sensor_msgs::msg::Image"
-    },
-    {
-      "display_name": "Camera Info",
-      "description": "Kamera Intrinsics",
-      "signal_name": "camera_info",
-      "signal_type": "other",
-      "custom_signal_type": "sensor_msgs::msg::CameraInfo"
     }
   ],
   "outputs": [
