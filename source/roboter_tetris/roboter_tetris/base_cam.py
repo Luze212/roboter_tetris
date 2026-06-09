@@ -13,9 +13,9 @@ class BaseCam(LifecycleComponent):
         self._bridge = CvBridge()
         
         # Parameters
-        self.add_parameter(sr.Parameter("conveyor_z_dist", 1000.0, sr.ParameterType.DOUBLE), "Z distance to conveyor in mm")
-        self.add_parameter(sr.Parameter("min_obj_height", 10.0, sr.ParameterType.DOUBLE), "Min height of object in mm")
-        self.add_parameter(sr.Parameter("max_obj_height_mm", 100.0, sr.ParameterType.DOUBLE), "Max height of object in mm")
+        self.add_parameter(sr.Parameter("conveyor_z_dist", 865.0, sr.ParameterType.DOUBLE), "Z distance to conveyor in mm")
+        self.add_parameter(sr.Parameter("min_obj_height", 15.0, sr.ParameterType.DOUBLE), "Min height of object in mm")
+        self.add_parameter(sr.Parameter("max_obj_height_mm", 150.0, sr.ParameterType.DOUBLE), "Max height of object in mm")
         self.add_parameter(sr.Parameter("min_contour_area", 500.0, sr.ParameterType.DOUBLE), "Min contour area in px")
         
         # Inputs

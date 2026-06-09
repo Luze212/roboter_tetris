@@ -12,21 +12,21 @@
       "description": "Distanz von der Kamera zum Fließband in mm",
       "parameter_name": "conveyor_z_dist",
       "parameter_type": "double",
-      "default_value": "1000.0"
+      "default_value": "865.0"
     },
     {
       "display_name": "Min Objekthöhe (mm)",
       "description": "Mindesthöhe, ab der ein Objekt erkannt wird",
       "parameter_name": "min_obj_height",
       "parameter_type": "double",
-      "default_value": "10.0"
+      "default_value": "15.0"
     },
     {
       "display_name": "Max Objekthöhe (mm)",
       "description": "Maximale Höhe, bis zu der ein Objekt erkannt wird",
       "parameter_name": "max_obj_height_mm",
       "parameter_type": "double",
-      "default_value": "100.0"
+      "default_value": "150.0"
     },
     {
       "display_name": "Min Konturfläche (px)",
