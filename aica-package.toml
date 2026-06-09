@@ -31,8 +31,8 @@ source = "./source/roboter_tetris"
 ## add any required apt dependencies for the custom component.
 ## these packages will be available during the build but also in the final image,
 ## so they are useful for dynamic libraries
-# [build.packages.roboter-tetris.dependencies.apt]
-# libyaml-cpp-dev = "*"
+[build.packages.roboter-tetris.dependencies.apt]
+python3-opencv = "*"
 
 ## by default, we will install any pip packages in `${package_source}/requirements.txt`
 ## but you can customize the name of the requirements file, e.g.
