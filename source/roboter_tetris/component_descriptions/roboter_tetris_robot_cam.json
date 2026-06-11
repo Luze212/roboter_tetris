@@ -1,0 +1,117 @@
+{
+  "name": "Roboter Kamera",
+  "description": {
+    "brief": "Feinortung des Greifobjekts durch die Endeffektor-Kamera",
+    "details": "Ortet das Objekt direkt unter dem Greifer über die am Roboterarm montierte RealSense und liefert einen zeitgestempelten Koordinatenstrom. Nutzt den Tiefen-Loch-Trick (Objekt zu nah → Tiefe 0 → Maske) und misst die Distanz am Förderband neben dem Objekt. Bewusst eigenständig: keine Klassifikation, kein Tracking, keine Basis-Frame-Transformation — diese Logik gehört in eine separate Verarbeitungskomponente."
+  },
+  "registration": "roboter_tetris::RobotCam",
+  "inherits": "modulo_components::LifecycleComponent",
+  "inputs": [
+    {
+      "display_name": "Depth Image",
+      "description": "Tiefenbild der Arm-Kamera (aligned), 16UC1 in mm oder 32FC1 in m",
+      "signal_name": "depth_image",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::Image"
+    },
+    {
+      "display_name": "Color Image",
+      "description": "Farbbild (nur für das Debug-Bild benötigt)",
+      "signal_name": "color_image",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::Image"
+    },
+    {
+      "display_name": "Color Camera Info",
+      "description": "Kamera-Intrinsics für die Rückprojektion",
+      "signal_name": "color_camera_info",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::CameraInfo"
+    }
+  ],
+  "outputs": [
+    {
+      "display_name": "Objektposition [t, x, y, z]",
+      "description": "Flaches Array [t, x, y, z]: t = Frame-Zeitstempel in s; x/y = Referenzpunkt in mm im Kamera-Frame; z = gemessene Band-Distanz in mm (Kamera→Förderband, NICHT die Greifhöhe — nachgelagert mit der Objekthöhe korrigieren). Leer, wenn kein Objekt sichtbar.",
+      "signal_name": "object_position",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Debug Image",
+      "description": "Visualisierung: Kontur, Referenzpunkt (rot), Band-Messpunkt (blau), z_band. Nur wenn Debug aktiviert.",
+      "signal_name": "debug_image",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::Image"
+    }
+  ],
+  "predicates": [
+    {
+      "display_name": "Object Visible",
+      "description": "True, wenn im aktuellen Frame eine Loch-Kontur über der Mindestfläche gefunden wurde.",
+      "predicate_name": "is_object_visible"
+    },
+    {
+      "display_name": "Receiving Frames",
+      "description": "True, solange frische Kamera-Frames ankommen (False nach ~1 s ohne neuen Frame).",
+      "predicate_name": "is_receiving_frames"
+    }
+  ],
+  "parameters": [
+    {
+      "display_name": "Randfilter-Modus",
+      "description": "Konturauswahl: 'none' = größte Loch-Kontur überall (Mitfahren, Default); 'top' = nur Konturen am oberen Bildrand (Original-Anfahrt von oben).",
+      "parameter_name": "border_filter_mode",
+      "parameter_type": "string",
+      "default_value": "none",
+      "dynamic": true
+    },
+    {
+      "display_name": "Referenzpunkt-Modus",
+      "description": "'centroid' = Schwerpunkt der Loch-Maske (stabil fürs Tracking, Default); 'bottom_edge' = Unterkante wie im C++-Original.",
+      "parameter_name": "reference_point_mode",
+      "parameter_type": "string",
+      "default_value": "centroid",
+      "dynamic": true
+    },
+    {
+      "display_name": "Min Konturfläche (px)",
+      "description": "Mindest-Konturfläche in px; kleinere Tiefen-Löcher gelten als Rauschen.",
+      "parameter_name": "min_contour_area",
+      "parameter_type": "double",
+      "default_value": "500.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Morphologie-Kernel (px)",
+      "description": "Kernelgröße des Morphologie-Open in px (Ellipse) gegen Tiefenrauschen an Kanten.",
+      "parameter_name": "morph_kernel_size",
+      "parameter_type": "int",
+      "default_value": "15",
+      "dynamic": true
+    },
+    {
+      "display_name": "Tiefen-Suchradius (px)",
+      "description": "Suchradius um den Band-Messpunkt für einen gültigen Tiefenwert (überspringt Null-Pixel).",
+      "parameter_name": "depth_search_radius_px",
+      "parameter_type": "int",
+      "default_value": "2",
+      "dynamic": true
+    },
+    {
+      "display_name": "Tiefen-Mittelung (Frames)",
+      "description": "Gleitender Mittelwert der Band-Distanz über die letzten N Frames (1 = aus). Mittelung gegen den ungenauen Tiefensensor.",
+      "parameter_name": "depth_average_frames",
+      "parameter_type": "int",
+      "default_value": "5",
+      "dynamic": true
+    },
+    {
+      "display_name": "Debug aktivieren",
+      "description": "Debug-Bild erzeugen und publizieren (kostet Rechenzeit).",
+      "parameter_name": "debug_enable",
+      "parameter_type": "bool",
+      "default_value": "false",
+      "dynamic": true
+    }
+  ]
+}
