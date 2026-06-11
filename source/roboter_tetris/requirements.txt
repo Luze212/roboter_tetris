@@ -4,4 +4,8 @@
 # system numpy is 1.26.4 — unlike 3.x, which requires numpy>=2.0.
 pyrobotiqgripper==2.1.0
 
-
+# base_cam imports — intentionally NOT installed via pip:
+#   cv2       -> apt python3-opencv (declared in aica-package.toml)
+#   numpy     -> provided by the ROS image (1.26.4); a pip entry would pull numpy 2.x
+#                and break the ROS C extensions (see gripper dependency history)
+#   cv_bridge -> ROS package, declared as <depend> in package.xml (rosdep)

@@ -1,41 +1,11 @@
 {
   "name": "Base Kamera",
   "description": {
-    "brief": "Computer Vision für Fließbandsteine",
-    "details": "Ersetzt den alten C++ Code. Erkennt Steine auf dem Fließband durch Tiefenfilterung und Konturensuche."
+    "brief": "Computer Vision für Fließbandsteine (Port der C++-Detektion)",
+    "details": "Treuer Python-Port der C++-Detektion des Vorgängerprojekts: Tiefenfilterung, Konturensuche, robuste HSV-Farbbestimmung, Kamera→Roboter-Transformation und Tracking mit Geschwindigkeitsschätzung/Prädiktion. Konsumiert die Signale des AICA-RealSense-Blocks (kein Kamera-Hardware-Zugriff). Output 'objects': flaches Array, Stride 10 [id, color, x, y, z, orientation, vy, length, width, height], x/y/z in mm im Roboter-Frame."
   },
   "registration": "roboter_tetris::BaseCam",
-  "inherits": "modulo_components::Component",
-  "parameters": [
-    {
-      "display_name": "Fließband Z-Distanz (mm)",
-      "description": "Distanz von der Kamera zum Fließband in mm",
-      "parameter_name": "conveyor_z_dist",
-      "parameter_type": "double",
-      "default_value": "865.0"
-    },
-    {
-      "display_name": "Min Objekthöhe (mm)",
-      "description": "Mindesthöhe, ab der ein Objekt erkannt wird",
-      "parameter_name": "min_obj_height",
-      "parameter_type": "double",
-      "default_value": "15.0"
-    },
-    {
-      "display_name": "Max Objekthöhe (mm)",
-      "description": "Maximale Höhe, bis zu der ein Objekt erkannt wird",
-      "parameter_name": "max_obj_height_mm",
-      "parameter_type": "double",
-      "default_value": "150.0"
-    },
-    {
-      "display_name": "Min Konturfläche (px)",
-      "description": "Mindestfläche in Pixeln",
-      "parameter_name": "min_contour_area",
-      "parameter_type": "double",
-      "default_value": "500.0"
-    }
-  ],
+  "inherits": "modulo_components::LifecycleComponent",
   "inputs": [
     {
       "display_name": "Color Image",
@@ -53,7 +23,7 @@
     },
     {
       "display_name": "Aligned Depth Image",
-      "description": "Tiefenbild der Kamera (registriert zu Farbe)",
+      "description": "Tiefenbild der Kamera (zu Farbe registriert), 16UC1 in mm oder 32FC1 in m",
       "signal_name": "depth_image",
       "signal_type": "other",
       "custom_signal_type": "sensor_msgs::msg::Image"
@@ -62,16 +32,262 @@
   "outputs": [
     {
       "display_name": "Erkannte Objekte (Array)",
-      "description": "Flaches Array mit Strides von 10 [id, color, x, y, z, orientation, vy, length, width, height]",
+      "description": "Flaches Array mit Stride 10 [id, color, x, y, z, orientation, vy, length, width, height]; x/y/z in mm im Roboter-Frame, vy in mm/s, orientation in rad [0, pi). Farben: 0=Rot, 1=Gelb, 2=Grün, 3=Blau, 4=Weiß, 5=Schwarz, 6=Unbekannt.",
       "signal_name": "objects",
       "signal_type": "double_array"
     },
     {
       "display_name": "Debug Image",
-      "description": "Visualisierung der Erkennung",
+      "description": "Visualisierung der Erkennung (nur wenn Debug aktiviert)",
       "signal_name": "debug_image",
       "signal_type": "other",
       "custom_signal_type": "sensor_msgs::msg::Image"
+    }
+  ],
+  "predicates": [
+    {
+      "display_name": "Receiving Frames",
+      "description": "True, solange frische Kamera-Frames ankommen (False nach ~1 s ohne neuen Frame).",
+      "predicate_name": "is_receiving_frames"
+    },
+    {
+      "display_name": "Has Objects",
+      "description": "True, wenn aktuell mindestens ein Objekt getrackt wird.",
+      "predicate_name": "has_objects"
+    }
+  ],
+  "parameters": [
+    {
+      "display_name": "ROI X (px)",
+      "description": "Bildausschnitt: x-Offset in px. ROI 0/0/0/0 = Vollbild.",
+      "parameter_name": "roi_x",
+      "parameter_type": "int",
+      "default_value": "130",
+      "dynamic": true
+    },
+    {
+      "display_name": "ROI Y (px)",
+      "description": "Bildausschnitt: y-Offset in px",
+      "parameter_name": "roi_y",
+      "parameter_type": "int",
+      "default_value": "0",
+      "dynamic": true
+    },
+    {
+      "display_name": "ROI Breite (px)",
+      "description": "Bildausschnitt: Breite in px",
+      "parameter_name": "roi_width",
+      "parameter_type": "int",
+      "default_value": "420",
+      "dynamic": true
+    },
+    {
+      "display_name": "ROI Höhe (px)",
+      "description": "Bildausschnitt: Höhe in px",
+      "parameter_name": "roi_height",
+      "parameter_type": "int",
+      "default_value": "415",
+      "dynamic": true
+    },
+    {
+      "display_name": "Fließband Z-Distanz (mm)",
+      "description": "Distanz von der Kamera zum Fließband in mm",
+      "parameter_name": "conveyor_z_dist",
+      "parameter_type": "double",
+      "default_value": "865.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Min Objekthöhe (mm)",
+      "description": "Mindesthöhe, ab der ein Objekt erkannt wird",
+      "parameter_name": "min_obj_height",
+      "parameter_type": "double",
+      "default_value": "15.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Max Objekthöhe (mm)",
+      "description": "Maximale Höhe, bis zu der ein Objekt erkannt wird",
+      "parameter_name": "max_obj_height_mm",
+      "parameter_type": "double",
+      "default_value": "150.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Z-Offset (mm)",
+      "description": "Reflexions-Offset des Fließbands. Alte Config: 15 — das alte C++ wandte ihn nicht an, daher Default 0.",
+      "parameter_name": "z_offset",
+      "parameter_type": "double",
+      "default_value": "0.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Min Konturfläche (px)",
+      "description": "Mindestfläche in Pixeln",
+      "parameter_name": "min_contour_area",
+      "parameter_type": "double",
+      "default_value": "500.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Kalibrierung X (m)",
+      "description": "Extrinsik Kamera→Roboter: Translation x in m. Werte vom alten Aufbau — nach Neumontage nachkalibrieren!",
+      "parameter_name": "cal_x",
+      "parameter_type": "double",
+      "default_value": "0.6118",
+      "dynamic": true
+    },
+    {
+      "display_name": "Kalibrierung Y (m)",
+      "description": "Extrinsik: Translation y in m",
+      "parameter_name": "cal_y",
+      "parameter_type": "double",
+      "default_value": "-0.7820",
+      "dynamic": true
+    },
+    {
+      "display_name": "Kalibrierung Z (m)",
+      "description": "Extrinsik: Translation z in m",
+      "parameter_name": "cal_z",
+      "parameter_type": "double",
+      "default_value": "0.8902",
+      "dynamic": true
+    },
+    {
+      "display_name": "Kalibrierung Roll (°)",
+      "description": "Extrinsik: Roll in Grad (Rotation ZYX: yaw·pitch·roll)",
+      "parameter_name": "cal_roll",
+      "parameter_type": "double",
+      "default_value": "176.26",
+      "dynamic": true
+    },
+    {
+      "display_name": "Kalibrierung Pitch (°)",
+      "description": "Extrinsik: Pitch in Grad",
+      "parameter_name": "cal_pitch",
+      "parameter_type": "double",
+      "default_value": "-8.27",
+      "dynamic": true
+    },
+    {
+      "display_name": "Kalibrierung Yaw (°)",
+      "description": "Extrinsik: Yaw in Grad",
+      "parameter_name": "cal_yaw",
+      "parameter_type": "double",
+      "default_value": "-12.94",
+      "dynamic": true
+    },
+    {
+      "display_name": "X-Skalierung",
+      "description": "Affine Korrektur im Roboter-Frame (1.0 = aus)",
+      "parameter_name": "x_scale",
+      "parameter_type": "double",
+      "default_value": "1.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Y-Skalierung",
+      "description": "Affine Korrektur im Roboter-Frame (1.0 = aus)",
+      "parameter_name": "y_scale",
+      "parameter_type": "double",
+      "default_value": "1.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "X-Offset (mm)",
+      "description": "Systematische x-Bias-Kompensation im Roboter-Frame. Alte Config: -35 (vom C++ nicht angewandt, daher Default 0).",
+      "parameter_name": "x_offset_mm",
+      "parameter_type": "double",
+      "default_value": "0.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Y-Offset (mm)",
+      "description": "Systematische y-Bias-Kompensation im Roboter-Frame",
+      "parameter_name": "y_offset_mm",
+      "parameter_type": "double",
+      "default_value": "0.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Suchbereich Y-Min (mm)",
+      "description": "Objekte außerhalb werden verworfen (Roboter-Frame). Alte Config: -350. Sehr großer Wert = Filter aus.",
+      "parameter_name": "search_area_y_min",
+      "parameter_type": "double",
+      "default_value": "-1000000000.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Suchbereich Y-Max (mm)",
+      "description": "Alte Config: 190. Sehr großer Wert = Filter aus.",
+      "parameter_name": "search_area_y_max",
+      "parameter_type": "double",
+      "default_value": "1000000000.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Tracker: Max Match-Distanz (mm)",
+      "description": "Maximale 3D-Distanz für die Zuordnung Detektion↔Track",
+      "parameter_name": "track_max_match_distance_mm",
+      "parameter_type": "double",
+      "default_value": "300.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Tracker: Y-Min (mm)",
+      "description": "Tracks unterhalb dieser y-Grenze werden gelöscht (Bandende)",
+      "parameter_name": "track_min_y_mm",
+      "parameter_type": "double",
+      "default_value": "-1080.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Tracker: Y-Max (mm)",
+      "description": "Tracks oberhalb dieser y-Grenze werden gelöscht (Bandanfang)",
+      "parameter_name": "track_max_y_mm",
+      "parameter_type": "double",
+      "default_value": "375.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Tracker: Max verpasste Frames",
+      "description": "Löschen eines Tracks in der Mess-Region nach so vielen verpassten Frames",
+      "parameter_name": "track_max_missed_in_region",
+      "parameter_type": "int",
+      "default_value": "3",
+      "dynamic": true
+    },
+    {
+      "display_name": "Tracker: Mess-Region Y-Min (mm)",
+      "description": "Vertrauenswürdige Region für Geschwindigkeitsmessung",
+      "parameter_name": "track_velocity_region_y_min",
+      "parameter_type": "double",
+      "default_value": "-1000.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Tracker: Mess-Region Y-Max (mm)",
+      "description": "Vertrauenswürdige Region für Geschwindigkeitsmessung",
+      "parameter_name": "track_velocity_region_y_max",
+      "parameter_type": "double",
+      "default_value": "-500.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Geschwindigkeits-Tiefpass Alpha",
+      "description": "EMA-Filter der Bandgeschwindigkeit (0-1; 0.3 = 30 % neuer Wert)",
+      "parameter_name": "vel_filter_alpha",
+      "parameter_type": "double",
+      "default_value": "0.3",
+      "dynamic": true
+    },
+    {
+      "display_name": "Debug aktivieren",
+      "description": "Debug-Bild erzeugen und publizieren (kostet Rechenzeit)",
+      "parameter_name": "debug_enable",
+      "parameter_type": "bool",
+      "default_value": "false",
+      "dynamic": true
     }
   ]
 }
