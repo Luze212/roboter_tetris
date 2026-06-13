@@ -8,13 +8,6 @@
   "inherits": "modulo_components::LifecycleComponent",
   "inputs": [
     {
-      "display_name": "Depth Image",
-      "description": "Tiefenbild der Arm-Kamera (aligned), 16UC1 in mm oder 32FC1 in m",
-      "signal_name": "depth_image",
-      "signal_type": "other",
-      "custom_signal_type": "sensor_msgs::msg::Image"
-    },
-    {
       "display_name": "Color Image",
       "description": "Farbbild (nur für das Debug-Bild benötigt)",
       "signal_name": "color_image",
@@ -27,6 +20,13 @@
       "signal_name": "color_camera_info",
       "signal_type": "other",
       "custom_signal_type": "sensor_msgs::msg::CameraInfo"
+    },
+    {
+      "display_name": "Depth Image",
+      "description": "Tiefenbild der Arm-Kamera (aligned), 16UC1 in mm oder 32FC1 in m",
+      "signal_name": "depth_image",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::Image"
     }
   ],
   "outputs": [
@@ -103,6 +103,14 @@
       "parameter_name": "depth_average_frames",
       "parameter_type": "int",
       "default_value": "5",
+      "dynamic": true
+    },
+    {
+      "display_name": "Tiefen-Skala (mm/Rohwert)",
+      "description": "mm pro Tiefen-Rohwert des 16UC1-Bilds. 1.0 = bereits mm (D400-Serie); für Kameras mit anderer Tiefen-Einheit entsprechend setzen.",
+      "parameter_name": "depth_scale_to_mm",
+      "parameter_type": "double",
+      "default_value": "1.0",
       "dynamic": true
     },
     {

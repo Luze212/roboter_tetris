@@ -23,7 +23,9 @@ from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import Image, CameraInfo
 
 from .vision.color_estimation import COLOR_NAMES
-from .vision.detection import DetectionParams, build_cam_to_robot, detect_objects
+from .vision.detection import (
+    DetectionParams, build_cam_to_robot, conveyor_mask, detect_objects, roi_bounds,
+)
 from .vision.tracker import VisionTracker
 
 # EMA low-pass for the global conveyor velocity (C++ VEL_FILTER_ALPHA).
@@ -60,6 +62,10 @@ class BaseCam(LifecycleComponent):
                            "C++ wandte ihn nicht an, daher Default 0)")
         self.add_parameter(sr.Parameter("min_contour_area", 500.0, sr.ParameterType.DOUBLE),
                            "Mindest-Konturfläche in px")
+        self.add_parameter(sr.Parameter("depth_scale_to_mm", 1.0, sr.ParameterType.DOUBLE),
+                           "mm pro Tiefen-Rohwert (16UC1-Bild). 1.0 = Werte sind bereits in mm "
+                           "(D400-Serie). Manche Kameras (z. B. L515) liefern andere Einheiten "
+                           "(z. B. 0.25). Faktor = bekannte Banddistanz / median im Debug-Bild.")
 
         # -- Extrinsic calibration camera→robot (old rig values as defaults; "
         #    re-calibrate after remounting the camera!) ---------------------------
@@ -232,8 +238,16 @@ class BaseCam(LifecycleComponent):
     # -- Periodic processing ----------------------------------------------------------
 
     def on_step_callback(self):
-        if self._depth_msg.width == 0 or self._color_msg.width == 0 \
-                or len(self._info_msg.k) < 9:
+        if self._depth_msg.width == 0 or self._color_msg.width == 0:
+            self._handle_stale()
+            return
+        if len(self._info_msg.k) < 9 or self._info_msg.k[0] <= 0.0 or self._info_msg.k[4] <= 0.0:
+            # Depth/color arriving but intrinsics not. A default CameraInfo() has
+            # an all-zero k of length 9, so the length check alone misses it —
+            # this almost always means color_camera_info is not wired.
+            self._log_error_throttled(
+                "Warte auf gültige color_camera_info (fx=0) — ist der "
+                "CameraInfo-Eingang mit dem Kamera-Topic verdrahtet?")
             self._handle_stale()
             return
 
@@ -251,19 +265,19 @@ class BaseCam(LifecycleComponent):
             cx = self._info_msg.k[2]
             fy = self._info_msg.k[4]
             cy = self._info_msg.k[5]
-            if fx <= 0.0 or fy <= 0.0:
-                self._log_error_throttled("Invalid camera intrinsics (fx/fy <= 0)")
-                return
 
             color_img = self._bridge.imgmsg_to_cv2(self._color_msg, "bgr8")
             depth_img = self._bridge.imgmsg_to_cv2(self._depth_msg, desired_encoding="passthrough")
             if depth_img.dtype == np.float32:
-                depth_mm = depth_img * 1000.0  # 32FC1 in meters
+                depth_mm = depth_img * 1000.0  # 32FC1 already in meters
             else:
-                depth_mm = depth_img.astype(np.float32)  # 16UC1 in mm
+                # 16UC1 raw depth units -> mm (1.0 for D400; e.g. 0.25 for L515)
+                depth_mm = depth_img.astype(np.float32) \
+                    * self.get_parameter("depth_scale_to_mm").get_value()
 
+            params = self._detection_params()
             detections, debug_infos = detect_objects(
-                color_img, depth_mm, fx, fy, cx, cy, self._detection_params())
+                color_img, depth_mm, fx, fy, cx, cy, params)
 
             # Tracker sequence as in the C++ main loop: predict with the filtered
             # velocity, update, low-pass the new global velocity, apply globally.
@@ -285,14 +299,38 @@ class BaseCam(LifecycleComponent):
             self.set_predicate("has_objects", len(tracks) > 0)
 
             if self.get_parameter("debug_enable").get_value():
-                debug_img = color_img.copy()
-                for det, info in zip(detections, debug_infos):
-                    cv2_box = info.box_px.reshape((-1, 1, 2))
-                    cv2.polylines(debug_img, [cv2_box], True, (0, 255, 0), 2)
-                    label = f"ID:{det.id} {COLOR_NAMES[det.color]}"
-                    cv2.putText(debug_img, label, info.center_px,
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                self._debug_msg = self._bridge.cv2_to_imgmsg(debug_img, "bgr8")
+                self._publish_debug(color_img, depth_mm, params, detections, debug_infos)
 
         except Exception as exc:
             self._log_error_throttled(f"base_cam pipeline error: {exc}")
+
+    def _publish_debug(self, color_img, depth_mm, params, detections, debug_infos) -> None:
+        """Debug overlay for tuning: ROI rectangle, conveyor-height mask (red),
+        depth readouts to calibrate ``conveyor_z_dist``, and detection boxes."""
+        debug_img = color_img.copy()
+        rx0, ry0, rw, rh = roi_bounds(depth_mm.shape, params)
+        cv2.rectangle(debug_img, (rx0, ry0), (rx0 + rw, ry0 + rh), (255, 255, 0), 1)
+
+        # Tint the pixels the depth threshold currently selects (what becomes a
+        # contour) so a wrong conveyor_z_dist is immediately visible.
+        mask = conveyor_mask(depth_mm[ry0:ry0 + rh, rx0:rx0 + rw], params)
+        roi_view = debug_img[ry0:ry0 + rh, rx0:rx0 + rw]
+        roi_view[mask > 0] = (0, 0, 255)
+
+        # Depth readouts to calibrate conveyor_z_dist (set it to the belt depth).
+        ch, cw = depth_mm.shape[:2]
+        center_d = float(depth_mm[ch // 2, cw // 2])
+        valid = depth_mm[depth_mm > 0]
+        median_d = float(np.median(valid)) if valid.size else 0.0
+        cv2.putText(
+            debug_img,
+            f"center={center_d:.0f}mm  median={median_d:.0f}mm  "
+            f"conveyor_z={params.conveyor_z_dist:.0f}  window=[{params.conveyor_z_dist - params.max_obj_height_mm:.0f},"
+            f"{params.conveyor_z_dist - params.min_obj_height - params.z_offset:.0f}]  n={len(detections)}",
+            (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
+
+        for det, info in zip(detections, debug_infos):
+            cv2.polylines(debug_img, [info.box_px.reshape((-1, 1, 2))], True, (0, 255, 0), 2)
+            cv2.putText(debug_img, f"ID:{det.id} {COLOR_NAMES[det.color]}", info.center_px,
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        self._debug_msg = self._bridge.cv2_to_imgmsg(debug_img, "bgr8")

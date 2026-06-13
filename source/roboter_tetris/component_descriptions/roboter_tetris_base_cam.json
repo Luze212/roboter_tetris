@@ -130,6 +130,14 @@
       "dynamic": true
     },
     {
+      "display_name": "Tiefen-Skala (mm/Rohwert)",
+      "description": "mm pro Tiefen-Rohwert des 16UC1-Bilds. 1.0 = bereits mm (D400-Serie); manche Kameras (z. B. L515) liefern andere Einheiten (z. B. 0.25). Faktor = bekannte Banddistanz / median-Wert im Debug-Bild.",
+      "parameter_name": "depth_scale_to_mm",
+      "parameter_type": "double",
+      "default_value": "1.0",
+      "dynamic": true
+    },
+    {
       "display_name": "Kalibrierung X (m)",
       "description": "Extrinsik Kamera→Roboter: Translation x in m. Werte vom alten Aufbau — nach Neumontage nachkalibrieren!",
       "parameter_name": "cal_x",

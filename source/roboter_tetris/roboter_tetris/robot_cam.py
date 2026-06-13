@@ -55,6 +55,10 @@ class RobotCam(LifecycleComponent):
             "Gleitender Mittelwert der Band-Distanz über die letzten N Frames "
             "(1 = aus). Mittelung gegen den ungenauen Tiefensensor.")
         self.add_parameter(
+            sr.Parameter("depth_scale_to_mm", 1.0, sr.ParameterType.DOUBLE),
+            "mm pro Tiefen-Rohwert (16UC1-Bild). 1.0 = bereits mm (D400-Serie); für "
+            "Kameras mit anderer Tiefen-Einheit entsprechend setzen.")
+        self.add_parameter(
             sr.Parameter("debug_enable", False, sr.ParameterType.BOOL),
             "Debug-Bild erzeugen und publizieren (kostet Rechenzeit).")
 
@@ -151,7 +155,16 @@ class RobotCam(LifecycleComponent):
     # -- Periodic processing -------------------------------------------------------
 
     def on_step_callback(self):
-        if self._depth_msg.width == 0 or len(self._info_msg.k) < 9:
+        if self._depth_msg.width == 0:
+            self._handle_stale()
+            return
+        if len(self._info_msg.k) < 9 or self._info_msg.k[0] <= 0.0 or self._info_msg.k[4] <= 0.0:
+            # Depth is arriving but the intrinsics are not. A default CameraInfo()
+            # has an all-zero k of length 9, so the length check alone misses it —
+            # this almost always means color_camera_info is not wired.
+            self._log_error_throttled(
+                "Warte auf gültige color_camera_info (fx=0) — ist der "
+                "CameraInfo-Eingang mit dem Kamera-Topic verdrahtet?")
             self._handle_stale()
             return
 
@@ -168,15 +181,13 @@ class RobotCam(LifecycleComponent):
             cx = self._info_msg.k[2]
             fy = self._info_msg.k[4]
             cy = self._info_msg.k[5]
-            if fx <= 0.0 or fy <= 0.0:
-                self._log_error_throttled("Invalid camera intrinsics (fx/fy <= 0)")
-                return
 
             depth_img = self._bridge.imgmsg_to_cv2(self._depth_msg, desired_encoding="passthrough")
             if depth_img.dtype == np.float32:
-                depth_mm = depth_img * 1000.0  # 32FC1 in meters
+                depth_mm = depth_img * 1000.0  # 32FC1 already in meters
             else:
-                depth_mm = depth_img.astype(np.float32)  # 16UC1 in mm
+                depth_mm = depth_img.astype(np.float32) \
+                    * self.get_parameter("depth_scale_to_mm").get_value()  # 16UC1 -> mm
 
             result = detect_object(depth_mm, fx, fy, cx, cy, self._params(), self._belt_filter)
 

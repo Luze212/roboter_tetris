@@ -119,6 +119,27 @@ def compute_robust_orientation_2d(box_px: np.ndarray, corners_xy: np.ndarray) ->
     return float("nan")
 
 
+def roi_bounds(depth_shape, params: DetectionParams):
+    """Clamp the configured ROI to the frame; zero area means full frame."""
+    full_h, full_w = depth_shape[:2]
+    rx0, ry0, rw, rh = params.roi
+    if rw <= 0 or rh <= 0:
+        rx0, ry0, rw, rh = 0, 0, full_w, full_h
+    rx0 = max(0, min(rx0, full_w - 1))
+    ry0 = max(0, min(ry0, full_h - 1))
+    rw = min(rw, full_w - rx0)
+    rh = min(rh, full_h - ry0)
+    return rx0, ry0, rw, rh
+
+
+def conveyor_mask(depth_roi: np.ndarray, params: DetectionParams) -> np.ndarray:
+    """Binary mask of pixels at conveyor-object height (vectorized; for aligned
+    depth the depth value *is* the camera-z, so depth thresholds suffice)."""
+    upper = params.conveyor_z_dist - params.min_obj_height - params.z_offset
+    lower = params.conveyor_z_dist - params.max_obj_height_mm
+    return ((depth_roi > 0) & (depth_roi < upper) & (depth_roi > lower)).astype(np.uint8) * 255
+
+
 def detect_objects(color_bgr: np.ndarray, depth_mm: np.ndarray,
                    fx: float, fy: float, cx: float, cy: float,
                    params: DetectionParams):
@@ -128,23 +149,13 @@ def detect_objects(color_bgr: np.ndarray, depth_mm: np.ndarray,
     :class:`TrackedObject` (robot frame, mm) and :class:`DebugInfo`.
     """
     full_h, full_w = depth_mm.shape[:2]
-    rx0, ry0, rw, rh = params.roi
-    if rw <= 0 or rh <= 0:
-        rx0, ry0, rw, rh = 0, 0, full_w, full_h
-    rx0 = max(0, min(rx0, full_w - 1))
-    ry0 = max(0, min(ry0, full_h - 1))
-    rw = min(rw, full_w - rx0)
-    rh = min(rh, full_h - ry0)
+    rx0, ry0, rw, rh = roi_bounds(depth_mm.shape, params)
 
     depth_roi = depth_mm[ry0:ry0 + rh, rx0:rx0 + rw]
     color_roi = color_bgr[ry0:ry0 + rh, rx0:rx0 + rw]
     hsv_roi = cv2.cvtColor(color_roi, cv2.COLOR_BGR2HSV)
 
-    # Vectorized conveyor-height mask (the C++ per-pixel deprojection loop:
-    # for aligned depth, point[2] == depth value, so depth thresholds suffice).
-    upper = params.conveyor_z_dist - params.min_obj_height - params.z_offset
-    lower = params.conveyor_z_dist - params.max_obj_height_mm
-    mask = ((depth_roi > 0) & (depth_roi < upper) & (depth_roi > lower)).astype(np.uint8) * 255
+    mask = conveyor_mask(depth_roi, params)
 
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
