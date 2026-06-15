@@ -66,7 +66,7 @@ class BaseCam(LifecycleComponent):
                            "mm pro Tiefen-Rohwert (16UC1-Bild). 1.0 = Werte sind bereits in mm "
                            "(D400-Serie). Manche Kameras (z. B. L515) liefern andere Einheiten "
                            "(z. B. 0.25). Faktor = bekannte Banddistanz / median im Debug-Bild.")
-        self.add_parameter(sr.Parameter("erosion_px", 3, sr.ParameterType.INT),
+        self.add_parameter(sr.Parameter("erosion_px", 5, sr.ParameterType.INT),
                            "Erosion der Footprint-Maske (px) nur für Länge/Breite gegen den "
                            "verrauschten Tiefen-Rand. 0 = aus. Höhe/Position bleiben unberührt.")
 

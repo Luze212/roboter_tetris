@@ -142,7 +142,7 @@
       "description": "Erosion der Footprint-Maske nur für Länge/Breite, um den verrauschten Tiefen-Rand an Objektkanten abzutragen (sonst Maße zu groß). 0 = aus. Höhe, Position und Orientierung bleiben unberührt (Höhen-Kalibrierung intakt).",
       "parameter_name": "erosion_px",
       "parameter_type": "int",
-      "default_value": "3",
+      "default_value": "5",
       "dynamic": true
     },
     {
