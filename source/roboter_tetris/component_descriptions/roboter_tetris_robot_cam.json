@@ -23,10 +23,31 @@
     },
     {
       "display_name": "Depth Image",
-      "description": "Tiefenbild der Arm-Kamera (aligned), 16UC1 in mm oder 32FC1 in m",
+      "description": "Tiefenbild der Arm-Kamera (unregistriert), 16UC1 in mm oder 32FC1 in m",
       "signal_name": "depth_image",
       "signal_type": "other",
       "custom_signal_type": "sensor_msgs::msg::Image"
+    },
+    {
+      "display_name": "Depth Camera Info",
+      "description": "Kamera-Intrinsics für das nicht registrierte Tiefenbild (optional, wird nur verwendet wenn color_camera_info nicht verfügbar ist)",
+      "signal_name": "depth_camera_info",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::CameraInfo"
+    },
+    {
+      "display_name": "Aligned Depth Image",
+      "description": "Zu Farbe registriertes Tiefenbild der Arm-Kamera, 16UC1 in mm oder 32FC1 in m",
+      "signal_name": "aligned_depth_image",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::Image"
+    },
+    {
+      "display_name": "Aligned Depth Camera Info",
+      "description": "Kamera-Intrinsics für das registrierte Tiefenbild (optional, wird nur verwendet wenn color_camera_info nicht verfügbar ist)",
+      "signal_name": "aligned_depth_camera_info",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::CameraInfo"
     }
   ],
   "outputs": [

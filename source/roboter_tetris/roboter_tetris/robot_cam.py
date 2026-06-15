@@ -65,10 +65,16 @@ class RobotCam(LifecycleComponent):
         # -- Inputs (endeffector RealSense only) ----------------------------------
         self._depth_msg = Image()
         self.add_input("depth_image", "_depth_msg", Image)
+        self._aligned_depth_msg = Image()
+        self.add_input("aligned_depth_image", "_aligned_depth_msg", Image)
         self._color_msg = Image()
         self.add_input("color_image", "_color_msg", Image)
         self._info_msg = CameraInfo()
         self.add_input("color_camera_info", "_info_msg", CameraInfo)
+        self._depth_camera_info_msg = CameraInfo()
+        self.add_input("depth_camera_info", "_depth_camera_info_msg", CameraInfo)
+        self._aligned_info_msg = CameraInfo()
+        self.add_input("aligned_depth_camera_info", "_aligned_info_msg", CameraInfo)
 
         # -- Outputs ---------------------------------------------------------------
         # std_msgs signals are plain Python values: list -> Float64MultiArray.
@@ -114,6 +120,12 @@ class RobotCam(LifecycleComponent):
         self._belt_filter.reset()
         self._last_stamp = None
         self._last_frame_walltime = None
+        self._depth_msg = Image()
+        self._aligned_depth_msg = Image()
+        self._color_msg = Image()
+        self._info_msg = CameraInfo()
+        self._depth_camera_info_msg = CameraInfo()
+        self._aligned_info_msg = CameraInfo()
         self._object_position = []
         self.set_predicate("is_object_visible", False)
         self.set_predicate("is_receiving_frames", False)
@@ -155,20 +167,24 @@ class RobotCam(LifecycleComponent):
     # -- Periodic processing -------------------------------------------------------
 
     def on_step_callback(self):
-        if self._depth_msg.width == 0:
+        depth_msg = self._aligned_depth_msg if self._aligned_depth_msg.width > 0 else self._depth_msg
+        if depth_msg.width == 0:
             self._handle_stale()
             return
-        if len(self._info_msg.k) < 9 or self._info_msg.k[0] <= 0.0 or self._info_msg.k[4] <= 0.0:
-            # Depth is arriving but the intrinsics are not. A default CameraInfo()
-            # has an all-zero k of length 9, so the length check alone misses it —
-            # this almost always means color_camera_info is not wired.
+
+        info_msg = self._info_msg
+        if not (len(info_msg.k) >= 9 and info_msg.k[0] > 0.0 and info_msg.k[4] > 0.0):
+            info_msg = self._aligned_info_msg
+        if not (len(info_msg.k) >= 9 and info_msg.k[0] > 0.0 and info_msg.k[4] > 0.0):
+            info_msg = self._depth_camera_info_msg
+        if not (len(info_msg.k) >= 9 and info_msg.k[0] > 0.0 and info_msg.k[4] > 0.0):
             self._log_error_throttled(
-                "Warte auf gültige color_camera_info (fx=0) — ist der "
+                "Warte auf gültige CameraInfo (fx=0) — ist der "
                 "CameraInfo-Eingang mit dem Kamera-Topic verdrahtet?")
             self._handle_stale()
             return
 
-        stamp = (self._depth_msg.header.stamp.sec, self._depth_msg.header.stamp.nanosec)
+        stamp = (depth_msg.header.stamp.sec, depth_msg.header.stamp.nanosec)
         if stamp == self._last_stamp:
             self._handle_stale()
             return
@@ -177,12 +193,12 @@ class RobotCam(LifecycleComponent):
         self.set_predicate("is_receiving_frames", True)
 
         try:
-            fx = self._info_msg.k[0]
-            cx = self._info_msg.k[2]
-            fy = self._info_msg.k[4]
-            cy = self._info_msg.k[5]
+            fx = info_msg.k[0]
+            cx = info_msg.k[2]
+            fy = info_msg.k[4]
+            cy = info_msg.k[5]
 
-            depth_img = self._bridge.imgmsg_to_cv2(self._depth_msg, desired_encoding="passthrough")
+            depth_img = self._bridge.imgmsg_to_cv2(depth_msg, desired_encoding="passthrough")
             if depth_img.dtype == np.float32:
                 depth_mm = depth_img * 1000.0  # 32FC1 already in meters
             else:
