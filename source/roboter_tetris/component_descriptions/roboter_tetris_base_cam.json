@@ -62,7 +62,7 @@
       "description": "Bildausschnitt: x-Offset in px. ROI 0/0/0/0 = Vollbild.",
       "parameter_name": "roi_x",
       "parameter_type": "int",
-      "default_value": "130",
+      "default_value": "360",
       "dynamic": true
     },
     {
@@ -70,7 +70,7 @@
       "description": "Bildausschnitt: y-Offset in px",
       "parameter_name": "roi_y",
       "parameter_type": "int",
-      "default_value": "0",
+      "default_value": "60",
       "dynamic": true
     },
     {
@@ -78,7 +78,7 @@
       "description": "Bildausschnitt: Breite in px",
       "parameter_name": "roi_width",
       "parameter_type": "int",
-      "default_value": "420",
+      "default_value": "800",
       "dynamic": true
     },
     {
@@ -86,7 +86,7 @@
       "description": "Bildausschnitt: Höhe in px",
       "parameter_name": "roi_height",
       "parameter_type": "int",
-      "default_value": "415",
+      "default_value": "580",
       "dynamic": true
     },
     {
@@ -94,7 +94,7 @@
       "description": "Distanz von der Kamera zum Fließband in mm",
       "parameter_name": "conveyor_z_dist",
       "parameter_type": "double",
-      "default_value": "865.0",
+      "default_value": "853.0",
       "dynamic": true
     },
     {
@@ -126,7 +126,7 @@
       "description": "Mindestfläche in Pixeln",
       "parameter_name": "min_contour_area",
       "parameter_type": "double",
-      "default_value": "500.0",
+      "default_value": "1500.0",
       "dynamic": true
     },
     {
