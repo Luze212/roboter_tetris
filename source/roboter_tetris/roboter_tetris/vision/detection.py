@@ -48,6 +48,7 @@ class DetectionParams:
     y_offset_mm: float = 0.0
     search_area_y_min: float = -1.0e9    # mm, robot frame; wide open = off
     search_area_y_max: float = 1.0e9
+    erosion_px: int = 3                   # erode footprint for L/W (0 = off)
 
 
 @dataclass
@@ -161,6 +162,24 @@ def detect_objects(color_bgr: np.ndarray, depth_mm: np.ndarray,
 
     transform = params.cam_to_robot if params.cam_to_robot is not None else np.eye(4)
 
+    def deproject_box(box_roi):
+        """Deproject 4 ROI box points to robot-frame 3D (m); None if any invalid."""
+        cc = np.full((4, 3), np.nan)
+        for k in range(4):
+            px = rx0 + int(round(box_roi[k][0]))
+            py = ry0 + int(round(box_roi[k][1]))
+            if px < 0 or py < 0 or px >= full_w or py >= full_h:
+                continue
+            d_mm = float(depth_mm[py, px])
+            if d_mm <= 0.0:
+                continue
+            d_m = d_mm / 1000.0
+            cc[k] = ((px - cx) * d_m / fx, (py - cy) * d_m / fy, d_m)
+        if not np.all(np.isfinite(cc)):
+            return None
+        ones = np.ones((4, 1))
+        return (transform @ np.hstack([cc, ones]).T).T[:, :3]
+
     detections: List[TrackedObject] = []
     debug_infos: List[DebugInfo] = []
 
@@ -177,30 +196,17 @@ def detect_objects(color_bgr: np.ndarray, depth_mm: np.ndarray,
         rrect = cv2.minAreaRect(cnt)
         box_px_roi = cv2.boxPoints(rrect)  # 4x2 float, ROI coords
 
-        # Deproject the 4 box corners using the depth at each corner pixel.
-        corners_cam_m = np.full((4, 3), np.nan)
-        for k in range(4):
-            px = rx0 + int(round(box_px_roi[k][0]))
-            py = ry0 + int(round(box_px_roi[k][1]))
-            if px < 0 or py < 0 or px >= full_w or py >= full_h:
-                continue
-            d_mm = float(depth_mm[py, px])
-            if d_mm <= 0.0:
-                continue
-            d_m = d_mm / 1000.0
-            corners_cam_m[k] = ((px - cx) * d_m / fx, (py - cy) * d_m / fy, d_m)
-        if not np.all(np.isfinite(corners_cam_m)):
+        # Deproject the full footprint corners (drives center, orientation; the
+        # height calibration relies on the full contour, so it is NOT eroded).
+        corners_robot_m = deproject_box(box_px_roi)
+        if corners_robot_m is None:
             # C++ propagates NaN corners into a NaN center, which the final
             # validation drops — requiring all four corners is equivalent.
             continue
 
-        # Camera → robot frame (homogeneous, meters).
-        ones = np.ones((4, 1))
-        corners_robot_m = (transform @ np.hstack([corners_cam_m, ones]).T).T[:, :3]
-
         center_m = corners_robot_m.mean(axis=0)
 
-        # Mean object-top depth over the contour (bbox crop, not full frame).
+        # Mean object-top depth over the FULL contour (bbox crop, not full frame).
         c_mask = np.zeros((bh, bw), dtype=np.uint8)
         cv2.drawContours(c_mask, [cnt - (bx, by)], -1, 255, cv2.FILLED)
         depth_patch = depth_roi[by:by + bh, bx:bx + bw]
@@ -210,14 +216,33 @@ def detect_objects(color_bgr: np.ndarray, depth_mm: np.ndarray,
         mean_z_mm = float(valid.mean())
         height_mm = params.conveyor_z_dist - mean_z_mm + HEIGHT_BIAS_MM
 
-        # 3D edge lengths between robot-frame corners (mm), long side first.
-        length_mm = float(np.linalg.norm(corners_robot_m[0] - corners_robot_m[1])) * 1000.0
-        width_mm = float(np.linalg.norm(corners_robot_m[1] - corners_robot_m[2])) * 1000.0
-        if length_mm < width_mm:
-            length_mm, width_mm = width_mm, length_mm
-
         orientation = compute_robust_orientation_2d(
             np.asarray(box_px_roi), corners_robot_m[:, :2])
+
+        # Length/width from an ERODED footprint to shed the noisy depth border at
+        # object edges (which otherwise inflates the measured size). Decoupled from
+        # height/position/orientation so the conveyor_z_dist calibration is intact.
+        dim_corners = corners_robot_m
+        if params.erosion_px > 0:
+            # Pad first so the erosion has a black border to eat into (the mask
+            # fills its own bbox, otherwise edge pixels survive at the image border).
+            pad = params.erosion_px + 1
+            padded = cv2.copyMakeBorder(c_mask, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=0)
+            ksz = 2 * params.erosion_px + 1
+            eroded = cv2.erode(padded, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (ksz, ksz)))
+            econtours, _ = cv2.findContours(eroded, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if econtours:
+                ebox = cv2.boxPoints(cv2.minAreaRect(max(econtours, key=cv2.contourArea)))
+                # padded coords -> bbox-crop -> ROI coords
+                ecorners = deproject_box(ebox + (bx - pad, by - pad))
+                if ecorners is not None:
+                    dim_corners = ecorners
+
+        # 3D edge lengths between robot-frame corners (mm), long side first.
+        length_mm = float(np.linalg.norm(dim_corners[0] - dim_corners[1])) * 1000.0
+        width_mm = float(np.linalg.norm(dim_corners[1] - dim_corners[2])) * 1000.0
+        if length_mm < width_mm:
+            length_mm, width_mm = width_mm, length_mm
 
         # Color: patch vote around the rect center (fallback: contour centroid).
         center_px_roi = (int(round(rrect[0][0])), int(round(rrect[0][1])))

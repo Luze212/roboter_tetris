@@ -43,13 +43,13 @@ class BaseCam(LifecycleComponent):
 
         # -- Geometry / detection parameters (defaults from config_cam_static.yml;
         #    neutral where the C++ binary did not apply the config value) --------
-        self.add_parameter(sr.Parameter("roi_x", 130, sr.ParameterType.INT),
+        self.add_parameter(sr.Parameter("roi_x", 360, sr.ParameterType.INT),
                            "ROI x-Offset in px (0/0/0/0 = Vollbild)")
-        self.add_parameter(sr.Parameter("roi_y", 0, sr.ParameterType.INT),
+        self.add_parameter(sr.Parameter("roi_y", 60, sr.ParameterType.INT),
                            "ROI y-Offset in px")
-        self.add_parameter(sr.Parameter("roi_width", 420, sr.ParameterType.INT),
+        self.add_parameter(sr.Parameter("roi_width", 800, sr.ParameterType.INT),
                            "ROI Breite in px")
-        self.add_parameter(sr.Parameter("roi_height", 415, sr.ParameterType.INT),
+        self.add_parameter(sr.Parameter("roi_height", 580, sr.ParameterType.INT),
                            "ROI Höhe in px")
         self.add_parameter(sr.Parameter("conveyor_z_dist", 865.0, sr.ParameterType.DOUBLE),
                            "Abstand Kamera→Fließband in mm")
@@ -60,12 +60,15 @@ class BaseCam(LifecycleComponent):
         self.add_parameter(sr.Parameter("z_offset", 0.0, sr.ParameterType.DOUBLE),
                            "Reflexions-Offset Fließband in mm (alte Config: 15; das alte "
                            "C++ wandte ihn nicht an, daher Default 0)")
-        self.add_parameter(sr.Parameter("min_contour_area", 500.0, sr.ParameterType.DOUBLE),
+        self.add_parameter(sr.Parameter("min_contour_area", 1500.0, sr.ParameterType.DOUBLE),
                            "Mindest-Konturfläche in px")
         self.add_parameter(sr.Parameter("depth_scale_to_mm", 1.0, sr.ParameterType.DOUBLE),
                            "mm pro Tiefen-Rohwert (16UC1-Bild). 1.0 = Werte sind bereits in mm "
                            "(D400-Serie). Manche Kameras (z. B. L515) liefern andere Einheiten "
                            "(z. B. 0.25). Faktor = bekannte Banddistanz / median im Debug-Bild.")
+        self.add_parameter(sr.Parameter("erosion_px", 3, sr.ParameterType.INT),
+                           "Erosion der Footprint-Maske (px) nur für Länge/Breite gegen den "
+                           "verrauschten Tiefen-Rand. 0 = aus. Höhe/Position bleiben unberührt.")
 
         # -- Extrinsic calibration camera→robot (old rig values as defaults; "
         #    re-calibrate after remounting the camera!) ---------------------------
@@ -207,6 +210,7 @@ class BaseCam(LifecycleComponent):
             y_offset_mm=self.get_parameter("y_offset_mm").get_value(),
             search_area_y_min=self.get_parameter("search_area_y_min").get_value(),
             search_area_y_max=self.get_parameter("search_area_y_max").get_value(),
+            erosion_px=int(self.get_parameter("erosion_px").get_value()),
         )
 
     def _sync_tracker_params(self) -> None:

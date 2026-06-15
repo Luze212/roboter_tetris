@@ -107,7 +107,7 @@ def _intrinsics():
 def test_detection_finds_object_with_expected_height_and_color():
     color, depth = _synthetic_scene(obj_height_mm=50.0)
     fx, fy, cx, cy = _intrinsics()
-    params = DetectionParams(cam_to_robot=np.eye(4))
+    params = DetectionParams(cam_to_robot=np.eye(4), erosion_px=0)
     detections, infos = detect_objects(color, depth, fx, fy, cx, cy, params)
     assert len(detections) == 1
     det = detections[0]
@@ -144,6 +144,21 @@ def test_detection_applies_transform_and_offsets():
     assert len(detections) == 1
     # Centered object: camera x ~ 0 -> robot x ~ 1000 mm, plus offset -35.
     assert abs(detections[0].x - 965.0) < 10.0
+
+
+def test_erosion_shrinks_footprint_not_height():
+    color, depth = _synthetic_scene(obj_height_mm=50.0, size_px=60)
+    fx, fy, cx, cy = _intrinsics()
+    d0, _ = detect_objects(color, depth, fx, fy, cx, cy,
+                           DetectionParams(cam_to_robot=np.eye(4), erosion_px=0))
+    d3, _ = detect_objects(color, depth, fx, fy, cx, cy,
+                           DetectionParams(cam_to_robot=np.eye(4), erosion_px=3))
+    assert len(d0) == 1 and len(d3) == 1
+    # Erosion shrinks the measured footprint (sheds the outer ring)...
+    assert d3[0].length < d0[0].length
+    assert d3[0].width < d0[0].width
+    # ...but height comes from the full contour and stays put (decoupled).
+    assert abs(d3[0].height - d0[0].height) < 1.0
 
 
 def test_detection_search_area_filter():

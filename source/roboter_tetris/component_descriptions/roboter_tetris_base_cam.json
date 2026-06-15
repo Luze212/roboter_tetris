@@ -94,7 +94,7 @@
       "description": "Distanz von der Kamera zum Fließband in mm",
       "parameter_name": "conveyor_z_dist",
       "parameter_type": "double",
-      "default_value": "853.0",
+      "default_value": "865.0",
       "dynamic": true
     },
     {
@@ -135,6 +135,14 @@
       "parameter_name": "depth_scale_to_mm",
       "parameter_type": "double",
       "default_value": "1.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Masken-Erosion (px)",
+      "description": "Erosion der Footprint-Maske nur für Länge/Breite, um den verrauschten Tiefen-Rand an Objektkanten abzutragen (sonst Maße zu groß). 0 = aus. Höhe, Position und Orientierung bleiben unberührt (Höhen-Kalibrierung intakt).",
+      "parameter_name": "erosion_px",
+      "parameter_type": "int",
+      "default_value": "3",
       "dynamic": true
     },
     {
