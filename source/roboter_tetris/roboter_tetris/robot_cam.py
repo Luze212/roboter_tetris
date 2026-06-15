@@ -199,19 +199,36 @@ class RobotCam(LifecycleComponent):
                 self.set_predicate("is_object_visible", True)
 
             if self.get_parameter("debug_enable").get_value():
-                self._publish_debug(result)
+                self._publish_debug(depth_mm, result)
 
         except Exception as exc:
             self._log_error_throttled(f"robot_cam pipeline error: {exc}")
 
-    def _publish_debug(self, result) -> None:
+    def _publish_debug(self, depth_mm, result) -> None:
         if self._color_msg.width == 0:
             return
         debug_img = self._bridge.imgmsg_to_cv2(self._color_msg, "bgr8").copy()
+
+        # Diagnostics: how much of the frame is a depth "hole" (== 0, i.e. too
+        # close for the sensor — what the trick needs) and the valid depth range.
+        n_holes = int(np.count_nonzero(depth_mm == 0))
+        valid = depth_mm[depth_mm > 0]
+        dmin = float(valid.min()) if valid.size else 0.0
+        dmax = float(valid.max()) if valid.size else 0.0
+        dmed = float(np.median(valid)) if valid.size else 0.0
+        cv2.putText(
+            debug_img,
+            f"holes(px)={n_holes}  depth[min/med/max]={dmin:.0f}/{dmed:.0f}/{dmax:.0f}mm",
+            (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
+
         if result is not None:
             cv2.drawContours(debug_img, [result.contour], 0, (0, 255, 0), 2)
             cv2.circle(debug_img, result.ref_px, 5, (0, 0, 255), -1)        # reference point
             cv2.circle(debug_img, result.belt_px, 4, (255, 0, 0), -1)       # belt sample point
-            cv2.putText(debug_img, f"z_band={result.z_band_mm:.0f}mm", (10, 25),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            cv2.putText(debug_img,
+                        f"z_band={result.z_band_mm:.0f}mm  x={result.x_mm:.0f} y={result.y_mm:.0f}",
+                        (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
+        else:
+            cv2.putText(debug_img, "NO OBJECT (kein Tiefen-Loch >= min area)", (10, 50),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 255), 2)
         self._debug_msg = self._bridge.cv2_to_imgmsg(debug_img, "bgr8")
