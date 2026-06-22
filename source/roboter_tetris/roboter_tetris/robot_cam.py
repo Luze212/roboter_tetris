@@ -164,23 +164,38 @@ class RobotCam(LifecycleComponent):
             self._clear_outputs()
             self.set_predicate("is_receiving_frames", False)
 
+    @staticmethod
+    def _valid_info(info) -> bool:
+        return len(info.k) >= 9 and info.k[0] > 0.0 and info.k[4] > 0.0
+
+    def _pick_info(self, *candidates):
+        """First CameraInfo with valid intrinsics, or None."""
+        for info in candidates:
+            if self._valid_info(info):
+                return info
+        return None
+
     # -- Periodic processing -------------------------------------------------------
 
     def on_step_callback(self):
-        depth_msg = self._aligned_depth_msg if self._aligned_depth_msg.width > 0 else self._depth_msg
-        if depth_msg.width == 0:
+        # Depth source and its MATCHING intrinsics as a pair, so the back-projection
+        # is geometrically correct: aligned depth lives in the COLOR frame -> color
+        # (aligned) intrinsics; raw depth -> depth intrinsics. Aligned is preferred
+        # when wired (it overlays the color image), else raw depth is used.
+        if self._aligned_depth_msg.width > 0:
+            depth_msg = self._aligned_depth_msg
+            info_msg = self._pick_info(self._aligned_info_msg, self._info_msg)
+        elif self._depth_msg.width > 0:
+            depth_msg = self._depth_msg
+            info_msg = self._pick_info(self._depth_camera_info_msg)
+        else:
             self._handle_stale()
             return
 
-        info_msg = self._info_msg
-        if not (len(info_msg.k) >= 9 and info_msg.k[0] > 0.0 and info_msg.k[4] > 0.0):
-            info_msg = self._aligned_info_msg
-        if not (len(info_msg.k) >= 9 and info_msg.k[0] > 0.0 and info_msg.k[4] > 0.0):
-            info_msg = self._depth_camera_info_msg
-        if not (len(info_msg.k) >= 9 and info_msg.k[0] > 0.0 and info_msg.k[4] > 0.0):
+        if info_msg is None:
             self._log_error_throttled(
-                "Warte auf gültige CameraInfo (fx=0) — ist der "
-                "CameraInfo-Eingang mit dem Kamera-Topic verdrahtet?")
+                "Warte auf gültige CameraInfo zur gewählten Tiefenquelle (fx=0) — "
+                "ist die passende CameraInfo verdrahtet (aligned→color/aligned, roh→depth)?")
             self._handle_stale()
             return
 
