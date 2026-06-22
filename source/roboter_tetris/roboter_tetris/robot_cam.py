@@ -92,6 +92,7 @@ class RobotCam(LifecycleComponent):
         self._last_stamp = None
         self._last_frame_walltime = None
         self._last_error_walltime = None
+        self._logged_shapes = False
 
     # -- Validation ----------------------------------------------------------------
 
@@ -120,6 +121,7 @@ class RobotCam(LifecycleComponent):
         self._belt_filter.reset()
         self._last_stamp = None
         self._last_frame_walltime = None
+        self._logged_shapes = False
         self._depth_msg = Image()
         self._aligned_depth_msg = Image()
         self._color_msg = Image()
@@ -220,6 +222,23 @@ class RobotCam(LifecycleComponent):
                 depth_mm = depth_img.astype(np.float32) \
                     * self.get_parameter("depth_scale_to_mm").get_value()  # 16UC1 -> mm
 
+            # The intrinsics must match the depth image grid. If the camera_info
+            # resolution differs from the depth image (e.g. aligned depth not at
+            # color resolution), scale fx/fy/cx/cy to the depth resolution so the
+            # back-projection stays correct.
+            dh, dw = depth_mm.shape[:2]
+            iw, ih = int(getattr(info_msg, "width", 0)), int(getattr(info_msg, "height", 0))
+            mismatch = iw > 0 and ih > 0 and (dw != iw or dh != ih)
+            if not self._logged_shapes:
+                self.get_logger().info(
+                    f"robot_cam: Tiefe {dw}x{dh}, CameraInfo {iw}x{ih}"
+                    + ("  -> Auflösungen weichen ab, Intrinsik wird skaliert." if mismatch
+                       else "  -> Auflösungen passen."))
+                self._logged_shapes = True
+            if mismatch:
+                sx, sy = dw / iw, dh / ih
+                fx, cx, fy, cy = fx * sx, cx * sx, fy * sy, cy * sy
+
             result = detect_object(depth_mm, fx, fy, cx, cy, self._params(), self._belt_filter)
 
             if result is None:
@@ -236,21 +255,22 @@ class RobotCam(LifecycleComponent):
             self._log_error_throttled(f"robot_cam pipeline error: {exc}")
 
     def _publish_debug(self, depth_mm, result) -> None:
-        if self._color_msg.width == 0:
-            return
-        debug_img = self._bridge.imgmsg_to_cv2(self._color_msg, "bgr8").copy()
-
-        # Diagnostics: how much of the frame is a depth "hole" (== 0, i.e. too
-        # close for the sensor — what the trick needs) and the valid depth range.
-        n_holes = int(np.count_nonzero(depth_mm == 0))
+        # Draw on a colorized version of the depth used for detection, so the
+        # contour always overlays exactly — independent of any depth/color
+        # resolution mismatch (the earlier "shifted/cut off" overlay artifact).
         valid = depth_mm[depth_mm > 0]
-        dmin = float(valid.min()) if valid.size else 0.0
-        dmax = float(valid.max()) if valid.size else 0.0
+        lo = float(valid.min()) if valid.size else 0.0
+        hi = float(valid.max()) if valid.size else 1.0
+        norm = np.clip((depth_mm - lo) / max(hi - lo, 1.0) * 255.0, 0, 255).astype(np.uint8)
+        debug_img = cv2.applyColorMap(norm, cv2.COLORMAP_JET)
+        debug_img[depth_mm == 0] = (0, 0, 0)  # holes (no depth) -> black
+
+        n_holes = int(np.count_nonzero(depth_mm == 0))
         dmed = float(np.median(valid)) if valid.size else 0.0
         cv2.putText(
             debug_img,
-            f"holes(px)={n_holes}  depth[min/med/max]={dmin:.0f}/{dmed:.0f}/{dmax:.0f}mm",
-            (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
+            f"holes(px)={n_holes}  depth[min/med/max]={lo:.0f}/{dmed:.0f}/{hi:.0f}mm",
+            (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
 
         if result is not None:
             cv2.drawContours(debug_img, [result.contour], 0, (0, 255, 0), 2)
@@ -258,8 +278,8 @@ class RobotCam(LifecycleComponent):
             cv2.circle(debug_img, result.belt_px, 4, (255, 0, 0), -1)       # belt sample point
             cv2.putText(debug_img,
                         f"z_band={result.z_band_mm:.0f}mm  x={result.x_mm:.0f} y={result.y_mm:.0f}",
-                        (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
+                        (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
         else:
             cv2.putText(debug_img, "NO OBJECT (kein Tiefen-Loch >= min area)", (10, 50),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 255), 2)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
         self._debug_msg = self._bridge.cv2_to_imgmsg(debug_img, "bgr8")
