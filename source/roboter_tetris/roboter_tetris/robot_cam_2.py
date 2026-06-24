@@ -1,21 +1,10 @@
-"""AICA lifecycle component: fine-localization from the endeffector RealSense.
+"""AICA lifecycle component: endeffector fine-localization via EDGE detection.
 
-Thin shell around :mod:`roboter_tetris.vision.robot_detection`. It produces a
-time-stamped stream of the grasp object's position and orientation under the
-gripper and nothing else — intentionally decoupled from the base camera and from
-any pick/motion logic (those belong to a separate processing component).
-
-Detection is **color-based**: the green belt is masked out in the color image and
-the remaining matte block top face is localized; the aligned depth is used only
-as a near-gate (rejecting belt reflections) and to measure the live belt distance
-``z`` (the arm camera changes height while it tracks the object).
-
-Output ``object_position`` is a flat double array ``[t, x, y, z, orientation]``:
-``t`` = frame stamp in seconds, ``x``/``y`` = block center in mm in the **camera
-frame**, ``z`` = measured **belt distance** in mm (camera -> conveyor surface, NOT
-the grasp height — correct downstream with the object height from the base
-camera), ``orientation`` = top-face angle in rad [0, pi). Empty when nothing is
-visible.
+Drop-in alternative to :class:`roboter_tetris.robot_cam.RobotCam` for A/B testing
+on the robot: identical inputs, output ``[t, x, y, z, orientation]`` and
+predicates, but the block footprint is found from image **edges** (Canny) instead
+of the green-belt color region. See
+:mod:`roboter_tetris.vision.robot_detection_edge`.
 """
 
 import math
@@ -28,54 +17,55 @@ import state_representation as sr
 from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import Image, CameraInfo
 
-from .vision.robot_detection import (
-    BeltDistanceFilter, RobotDetectionParams, detect_object,
-    belt_candidate_mask, near_mask,
+from .vision.robot_detection import BeltDistanceFilter, near_mask
+from .vision.robot_detection_edge import (
+    EdgeDetectionParams, color_edge_map, depth_edge_map,
+    detect_object_edges, edge_candidate_mask,
 )
 
 STALE_TIMEOUT_S = 1.0
 ERROR_LOG_PERIOD_S = 1.0
 
 
-class RobotCam(LifecycleComponent):
+class RobotCam2(LifecycleComponent):
     def __init__(self, node_name: str, *args, **kwargs):
         super().__init__(node_name, *args, **kwargs)
         self._bridge = CvBridge()
 
         # -- Parameters (operator-facing descriptions) ----------------------------
         self.add_parameter(
-            sr.Parameter("belt_h_min", 35, sr.ParameterType.INT),
-            "Grünes Band im HSV-Farbton (OpenCV-H 0-179, Grün liegt um 60), untere "
-            "Grenze. Alles außerhalb dieses Bereichs gilt als Block-Kandidat. Zu eng "
-            "→ Bandreste werden als Block erkannt (weiten); zu weit → grünstichige "
-            "Blöcke verschwinden (einengen). Im Debug-Bild prüfen.")
+            sr.Parameter("canny_low", 50, sr.ParameterType.INT),
+            "Untere Canny-Schwelle (Hysterese). Schwächere Kanten als dieser Wert "
+            "werden verworfen. Zu hoch → Blockkanten fehlen (Umriss bricht auf); "
+            "zu niedrig → viele Störkanten. Typisch ~1/3 der oberen Schwelle.")
         self.add_parameter(
-            sr.Parameter("belt_h_max", 85, sr.ParameterType.INT),
-            "Grünes Band im HSV-Farbton (OpenCV-H 0-179, Grün liegt um 60), obere "
-            "Grenze. Spannt mit 'belt_h_min' den Grünbereich auf — gleiche Hinweise.")
+            sr.Parameter("canny_high", 150, sr.ParameterType.INT),
+            "Obere Canny-Schwelle (Hysterese). Startpunkte starker Kanten. Zu hoch "
+            "→ schwache Blockkanten fehlen; zu niedrig → verrauschte Kanten.")
         self.add_parameter(
-            sr.Parameter("belt_s_min", 60, sr.ParameterType.INT),
-            "Grünes Band: Mindestsättigung (S, 0-255). Entsättigte Spiegelungen "
-            "fallen aus der Band-Maske und werden zu Kandidaten — das Nah-Gate "
-            "sortiert sie über die Tiefe aus.")
+            sr.Parameter("blur_ksize", 5, sr.ParameterType.INT),
+            "Weichzeichnung vor Canny (ungerader Kernel in px) gegen Bildrauschen. "
+            "Größer → glattere, aber unschärfere Kanten. 1 = aus.")
         self.add_parameter(
-            sr.Parameter("belt_v_min", 40, sr.ParameterType.INT),
-            "Grünes Band: Mindesthelligkeit (V, 0-255). Dunklere Bandbereiche/Schatten "
-            "darunter werden zu Block-Kandidaten — das Nah-Gate fängt sie ab. Höher "
-            "setzen, wenn dunkle Bandstellen fälschlich als Block durchkommen.")
+            sr.Parameter("use_depth_edges", True, sr.ParameterType.BOOL),
+            "Tiefenstufe (Block↔Band-Rand) als zweite Kantenquelle dazunehmen "
+            "(ODER mit den Farb-Kanten). Schließt den Umriss auch bei schwachem "
+            "Helligkeitskontrast (z. B. weiß auf grün). Nicht das rohe Tiefenbild, "
+            "sondern der Rand der Nah-Region (rauschrobust). Aus = reine Farb-Kanten.")
         self.add_parameter(
             sr.Parameter("min_contour_area", 500.0, sr.ParameterType.DOUBLE),
-            "Mindest-Blobfläche in px; kleinere Farbflächen gelten als Rauschen.")
+            "Mindest-Blobfläche in px; kleinere geschlossene Kantenflächen gelten "
+            "als Rauschen.")
         self.add_parameter(
             sr.Parameter("morph_kernel_size", 15, sr.ParameterType.INT),
-            "Glättet die Block-Maske (Morphologie-Open, elliptischer Kernel in px): "
-            "entfernt kleine Störflecken. Zu klein → Rauschen bleibt; zu groß → "
-            "schmale Blockkanten/Details werden weggefressen. 0/1 = aus.")
+            "Schließt den (oft unterbrochenen) Kantenumriss zu einer Fläche "
+            "(Morphologie-Close, elliptischer Kernel in px). Zu klein → Umriss "
+            "bleibt offen, keine Fläche; zu groß → benachbarte Objekte verschmelzen.")
         self.add_parameter(
             sr.Parameter("use_depth_gate", True, sr.ParameterType.BOOL),
-            "Nah-Gate: behalte nur Farb-Blobs, die ein Tiefen-Loch / eine "
-            "Erhebung über dem Band überlappen. Killt Band-Spiegelungen "
-            "(weißer Block bleibt). Zum reinen Farb-Test abschaltbar.")
+            "Nah-Gate: behalte nur Kanten-Blobs, die ein Tiefen-Loch / eine "
+            "Erhebung über dem Band überlappen. Verwirft Hintergrund-/Bandkanten. "
+            "Zum reinen Kanten-Test abschaltbar.")
         self.add_parameter(
             sr.Parameter("depth_search_radius_px", 2, sr.ParameterType.INT),
             "Suchradius (px) um den Band-Messpunkt für einen gültigen Tiefenwert.")
@@ -124,11 +114,8 @@ class RobotCam(LifecycleComponent):
         if parameter.is_empty():
             self.get_logger().warn(f"{name} must not be empty")
             return False
-        if name in ("belt_h_min", "belt_h_max") and not (0 <= parameter.get_value() <= 179):
-            self.get_logger().warn(f"{name} must be in [0, 179]")
-            return False
-        if name in ("belt_s_min", "belt_v_min") and not (0 <= parameter.get_value() <= 255):
-            self.get_logger().warn(f"{name} must be in [0, 255]")
+        if name in ("canny_low", "canny_high") and parameter.get_value() < 0:
+            self.get_logger().warn(f"{name} must be >= 0")
             return False
         if name == "min_contour_area" and parameter.get_value() <= 0.0:
             self.get_logger().warn("min_contour_area must be positive")
@@ -158,12 +145,12 @@ class RobotCam(LifecycleComponent):
 
     # -- Helpers -------------------------------------------------------------------
 
-    def _params(self) -> RobotDetectionParams:
-        return RobotDetectionParams(
-            belt_h_min=int(self.get_parameter("belt_h_min").get_value()),
-            belt_h_max=int(self.get_parameter("belt_h_max").get_value()),
-            belt_s_min=int(self.get_parameter("belt_s_min").get_value()),
-            belt_v_min=int(self.get_parameter("belt_v_min").get_value()),
+    def _params(self) -> EdgeDetectionParams:
+        return EdgeDetectionParams(
+            canny_low=int(self.get_parameter("canny_low").get_value()),
+            canny_high=int(self.get_parameter("canny_high").get_value()),
+            blur_ksize=int(self.get_parameter("blur_ksize").get_value()),
+            use_depth_edges=bool(self.get_parameter("use_depth_edges").get_value()),
             min_contour_area=self.get_parameter("min_contour_area").get_value(),
             morph_kernel_size=int(self.get_parameter("morph_kernel_size").get_value()),
             use_depth_gate=bool(self.get_parameter("use_depth_gate").get_value()),
@@ -197,7 +184,7 @@ class RobotCam(LifecycleComponent):
 
     def on_step_callback(self):
         # Color is the primary detection source; aligned depth (in the color frame)
-        # gates reflections and gives the live belt distance. Both are required.
+        # gates background edges and gives the live belt distance. Both required.
         if self._color_msg.width == 0 or self._aligned_depth_msg.width == 0:
             self._handle_stale()
             return
@@ -228,14 +215,10 @@ class RobotCam(LifecycleComponent):
                 depth_mm = depth_img.astype(np.float32) \
                     * self.get_parameter("depth_scale_to_mm").get_value()  # 16UC1 -> mm
 
-            # The aligned depth lives in the color frame but may arrive at a
-            # different resolution; resize it (nearest, to preserve the zero
-            # holes) onto the color grid so the gate overlays pixel-exact.
             dh, dw = depth_mm.shape[:2]
             if (dw, dh) != (cw, ch):
                 depth_mm = cv2.resize(depth_mm, (cw, ch), interpolation=cv2.INTER_NEAREST)
 
-            # Color intrinsics, scaled to the (color == working) image resolution.
             iw = int(getattr(self._info_msg, "width", 0)) or cw
             ih = int(getattr(self._info_msg, "height", 0)) or ch
             sx, sy = cw / iw, ch / ih
@@ -246,12 +229,12 @@ class RobotCam(LifecycleComponent):
 
             if not self._logged_shapes:
                 self.get_logger().info(
-                    f"robot_cam: Farbe {cw}x{ch}, aligned Depth {dw}x{dh}, "
+                    f"robot_cam_2 (edge): Farbe {cw}x{ch}, aligned Depth {dw}x{dh}, "
                     f"CameraInfo {iw}x{ih}")
                 self._logged_shapes = True
 
-            result = detect_object(color_bgr, depth_mm, fx, fy, cx, cy,
-                                   self._params(), self._belt_filter)
+            result = detect_object_edges(color_bgr, depth_mm, fx, fy, cx, cy,
+                                         self._params(), self._belt_filter)
 
             if result is None:
                 self._clear_outputs()
@@ -265,34 +248,41 @@ class RobotCam(LifecycleComponent):
                 self._publish_debug(color_bgr, depth_mm, result)
 
         except Exception as exc:
-            self._log_error_throttled(f"robot_cam pipeline error: {exc}")
+            self._log_error_throttled(f"robot_cam_2 pipeline error: {exc}")
 
     def _publish_debug(self, color_bgr, depth_mm, result) -> None:
-        # Overlay built on the COLOR image so the operator sees both the result and
-        # *why* the segmentation decided what it did:
-        #   - blue tint  = depth near-gate region (object / elevated above belt)
-        #   - gray lines = block candidates that did NOT win (exposes belt-mask leaks)
-        #   - green      = detected contour, yellow = oriented box,
-        #     red        = center + orientation line, blue dot = belt sample point
+        # Overlay on the COLOR image so the operator sees the result and *why*:
+        #   - blue tint   = depth near-gate region
+        #   - cyan        = color Canny edges (raw, before closing)
+        #   - orange      = depth-step edges (fused 2nd source, if enabled)
+        #   - gray lines  = closed edge blobs that did NOT win
+        #   - green       = detected contour, yellow = oriented box,
+        #     red         = center + orientation line, blue dot = belt sample point
         params = self._params()
         debug_img = color_bgr.copy()
 
-        # 1. Depth near-gate region (only relevant when the gate is on).
+        # 1. Depth near-gate region.
         if params.use_depth_gate:
             near = near_mask(depth_mm)
             if near.any():
                 tint = debug_img.copy()
-                tint[near] = (255, 90, 0)  # BGR blue
+                tint[near] = (255, 90, 0)
                 cv2.addWeighted(tint, 0.25, debug_img, 0.75, 0, debug_img)
 
-        # 2. All block candidates over min area; the loser(s) in thin gray.
-        candidate = belt_candidate_mask(color_bgr, params)
+        # 2. Color Canny edges (cyan) and the fused depth-step edges (orange), so
+        #    the operator sees which source carries the outline.
+        debug_img[color_edge_map(color_bgr, params) > 0] = (255, 255, 0)
+        if params.use_depth_edges:
+            debug_img[depth_edge_map(depth_mm) > 0] = (0, 140, 255)
+
+        # 3. All closed candidate blobs over min area; loser(s) in thin gray.
+        candidate = edge_candidate_mask(color_bgr, depth_mm, params)
         cnts, _ = cv2.findContours(candidate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         for c in cnts:
             if cv2.contourArea(c) >= params.min_contour_area:
                 cv2.drawContours(debug_img, [c], 0, (160, 160, 160), 1)
 
-        # 3. The winning detection.
+        # 4. The winning detection.
         if result is not None:
             cv2.drawContours(debug_img, [result.contour], 0, (0, 255, 0), 2)
             box = cv2.boxPoints(cv2.minAreaRect(result.contour)).astype(np.int32)
@@ -301,21 +291,23 @@ class RobotCam(LifecycleComponent):
             cv2.drawMarker(debug_img, (rx, ry), (0, 0, 255), cv2.MARKER_CROSS, 18, 2)
             ex = int(rx + 45 * math.cos(result.orientation_rad))
             ey = int(ry + 45 * math.sin(result.orientation_rad))
-            cv2.line(debug_img, (rx, ry), (ex, ey), (0, 0, 255), 2)   # orientation
-            cv2.circle(debug_img, result.belt_px, 4, (255, 0, 0), -1)  # belt sample
+            cv2.line(debug_img, (rx, ry), (ex, ey), (0, 0, 255), 2)
+            cv2.circle(debug_img, result.belt_px, 4, (255, 0, 0), -1)
             status = (f"z_band={result.z_band_mm:.0f}mm  x={result.x_mm:.0f}  "
                       f"y={result.y_mm:.0f}  ang={math.degrees(result.orientation_rad):.0f}deg")
         else:
-            status = "NO OBJECT (kein Block-Blob >= min area / Gate)"
+            status = "NO OBJECT (kein Kanten-Blob >= min area / Gate)"
 
-        # 4. Readout + color legend on a dark strip, readable over any background.
+        # 5. Readout + legend on a dark strip.
         h, w = debug_img.shape[:2]
         cv2.rectangle(debug_img, (0, 0), (w, 50), (0, 0, 0), -1)
         cv2.putText(debug_img, status, (8, 19),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
-        legend = "gruen=Detektion gelb=Box rot=Mitte/Winkel blau=Bandpunkt grau=verworfen"
+        legend = "cyan=Farbkante gruen=Detektion gelb=Box rot=Mitte/Winkel blau=Bandpunkt grau=verworfen"
+        if params.use_depth_edges:
+            legend += " orange=Tiefenkante"
         if params.use_depth_gate:
             legend += " blaue-Flaeche=Nah-Gate"
         cv2.putText(debug_img, legend, (8, 40),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.40, (200, 200, 200), 1)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.38, (200, 200, 200), 1)
         self._debug_msg = self._bridge.cv2_to_imgmsg(debug_img, "bgr8")

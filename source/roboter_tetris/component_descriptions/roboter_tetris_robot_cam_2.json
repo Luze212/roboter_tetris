@@ -1,15 +1,15 @@
 {
-  "name": "Roboter Kamera",
+  "name": "Roboter Kamera 2 (Kanten)",
   "description": {
-    "brief": "Feinortung des Greifobjekts durch die Endeffektor-Kamera (Farb-Region)",
-    "details": "Ortet den Block direkt unter dem Greifer über die am Roboterarm montierte RealSense und liefert einen zeitgestempelten Koordinaten- und Orientierungsstrom. Detektion ist farbbasiert: das grüne Förderband wird im HSV ausmaskiert, die verbleibende matte Block-Oberseite wird lokalisiert. Das registrierte Tiefenbild dient nur als Nah-Gate (Band-Spiegelungen werden verworfen) und zur Messung der Live-Band-Distanz. Bewusst eigenständig: keine Klassifikation (Farbe kommt von der Basiskamera), kein Tracking, keine Basis-Frame-Transformation — diese Logik gehört in eine separate Verarbeitungskomponente."
+    "brief": "Feinortung des Greifobjekts durch die Endeffektor-Kamera (Edge-Detection)",
+    "details": "Alternative zu 'Roboter Kamera' für den direkten A/B-Vergleich am Roboter: identische Ein-/Ausgänge und Predicates, aber der Block-Umriss wird aus Bildkanten (Canny) statt aus der grünen Band-Farbregion gewonnen. Optional wird die Tiefenstufe (Block↔Band-Rand, Rand der Nah-Region — nicht das verrauschte Rohbild) als zweite Kantenquelle dazu fusioniert, was den Umriss auch bei schwachem Helligkeitskontrast schließt (z. B. weiß auf grün). Die fusionierten Kanten werden zu einer Fläche geschlossen, über das Tiefenbild als Nah-Gate plausibilisiert (Hintergrund-/Bandkanten verworfen) und dieselbe Band-Distanz/Rückprojektion wie in 'Roboter Kamera' angewandt. Keine Klassifikation, kein Tracking, keine Basis-Frame-Transformation."
   },
-  "registration": "roboter_tetris::RobotCam",
+  "registration": "roboter_tetris::RobotCam2",
   "inherits": "modulo_components::LifecycleComponent",
   "inputs": [
     {
       "display_name": "Color Image",
-      "description": "Farbbild der Arm-Kamera — primäre Detektionsquelle (Farb-Region).",
+      "description": "Farbbild der Arm-Kamera — primäre Detektionsquelle (Kanten).",
       "signal_name": "color_image",
       "signal_type": "other",
       "custom_signal_type": "sensor_msgs::msg::Image"
@@ -38,7 +38,7 @@
     },
     {
       "display_name": "Debug Image",
-      "description": "Visualisierung auf dem Farbbild: erkannte Kontur (grün), orientierte Box (gelb), Mittelpunkt + Orientierungslinie (rot), Band-Messpunkt (blau), verworfene Kandidaten (grau), Nah-Gate-Bereich (blau eingefärbt). Kopfzeile mit z_band/x/y/Winkel und Farb-Legende. Nur wenn Debug aktiviert.",
+      "description": "Visualisierung auf dem Farbbild: Farb-Canny-Kanten (cyan), Tiefenkanten (orange, wenn fusioniert), erkannte Kontur (grün), orientierte Box (gelb), Mittelpunkt + Orientierungslinie (rot), Band-Messpunkt (blau), verworfene Kandidaten (grau), Nah-Gate-Bereich (blau eingefärbt). Kopfzeile mit z_band/x/y/Winkel und Farb-Legende. Nur wenn Debug aktiviert.",
       "signal_name": "debug_image",
       "signal_type": "other",
       "custom_signal_type": "sensor_msgs::msg::Image"
@@ -47,7 +47,7 @@
   "predicates": [
     {
       "display_name": "Object Visible",
-      "description": "True, wenn im aktuellen Frame ein gültiger Block-Blob über der Mindestfläche (und ggf. dem Nah-Gate) gefunden wurde.",
+      "description": "True, wenn im aktuellen Frame ein gültiger Kanten-Blob über der Mindestfläche (und ggf. dem Nah-Gate) gefunden wurde.",
       "predicate_name": "is_object_visible"
     },
     {
@@ -58,48 +58,48 @@
   ],
   "parameters": [
     {
-      "display_name": "Band Farbton min (H)",
-      "description": "Grünes Band im HSV-Farbton (OpenCV-H 0-179, Grün liegt um 60), untere Grenze. Alles außerhalb dieses Bereichs gilt als Block-Kandidat. Bereich so wählen, dass das Band sicher ausmaskiert wird: zu eng → Bandreste werden als Block erkannt (weiten); zu weit → grünstichige Blöcke verschwinden (einengen). Im Debug-Bild prüfen.",
-      "parameter_name": "belt_h_min",
+      "display_name": "Canny Schwelle unten",
+      "description": "Untere Canny-Schwelle (Hysterese). Schwächere Kanten als dieser Wert werden verworfen. Zu hoch → Blockkanten fehlen (Umriss bricht auf); zu niedrig → viele Störkanten. Typisch ~1/3 der oberen Schwelle. Im Debug-Bild (cyan = Kanten) prüfen.",
+      "parameter_name": "canny_low",
       "parameter_type": "int",
-      "default_value": "35",
+      "default_value": "50",
       "dynamic": true
     },
     {
-      "display_name": "Band Farbton max (H)",
-      "description": "Grünes Band im HSV-Farbton (OpenCV-H 0-179, Grün liegt um 60), obere Grenze. Zusammen mit 'Band Farbton min' den Grünbereich aufspannen — gleiche Tuning-Hinweise.",
-      "parameter_name": "belt_h_max",
+      "display_name": "Canny Schwelle oben",
+      "description": "Obere Canny-Schwelle (Hysterese). Startpunkte starker Kanten. Zu hoch → schwache Blockkanten fehlen; zu niedrig → verrauschte Kanten.",
+      "parameter_name": "canny_high",
       "parameter_type": "int",
-      "default_value": "85",
+      "default_value": "150",
       "dynamic": true
     },
     {
-      "display_name": "Band Sättigung min (S)",
-      "description": "Grünes Band: Mindestsättigung. Entsättigte Spiegelungen fallen aus der Band-Maske und bleiben somit Kandidat — das Nah-Gate sortiert sie über die Tiefe aus.",
-      "parameter_name": "belt_s_min",
+      "display_name": "Weichzeichnung (px)",
+      "description": "Weichzeichnung vor Canny (ungerader Kernel in px) gegen Bildrauschen. Größer → glattere, aber unschärfere Kanten. 1 = aus.",
+      "parameter_name": "blur_ksize",
       "parameter_type": "int",
-      "default_value": "60",
+      "default_value": "5",
       "dynamic": true
     },
     {
-      "display_name": "Band Helligkeit min (V)",
-      "description": "Grünes Band: Mindesthelligkeit (V, 0-255). Dunklere Bandbereiche/Schatten unter diesem Wert fallen aus der Band-Maske und werden zu Block-Kandidaten — das Nah-Gate fängt sie über die Tiefe ab. Höher setzen, wenn dunkle Bandstellen fälschlich als Block durchkommen.",
-      "parameter_name": "belt_v_min",
-      "parameter_type": "int",
-      "default_value": "40",
+      "display_name": "Tiefenkanten fusionieren",
+      "description": "Tiefenstufe (Block↔Band-Rand) als zweite Kantenquelle dazunehmen (ODER mit den Farb-Kanten). Schließt den Umriss auch bei schwachem Helligkeitskontrast (z. B. weiß auf grün). Es wird NICHT das rohe (verrauschte) Tiefenbild kantengefiltert, sondern der saubere Rand der Nah-Region genutzt. Aus = reine Farb-Kanten (Baseline-Vergleich).",
+      "parameter_name": "use_depth_edges",
+      "parameter_type": "bool",
+      "default_value": "true",
       "dynamic": true
     },
     {
       "display_name": "Min Blobfläche (px)",
-      "description": "Mindest-Blobfläche in px; kleinere Farbflächen gelten als Rauschen.",
+      "description": "Mindest-Blobfläche in px; kleinere geschlossene Kantenflächen gelten als Rauschen.",
       "parameter_name": "min_contour_area",
       "parameter_type": "double",
       "default_value": "500.0",
       "dynamic": true
     },
     {
-      "display_name": "Masken-Glättung (px)",
-      "description": "Glättet die Block-Maske (Morphologie-Open, elliptischer Kernel in px): entfernt kleine Störflecken. Zu klein → Rauschen bleibt; zu groß → schmale Blockkanten/Details werden weggefressen. 0/1 = aus.",
+      "display_name": "Kanten-Schließen (px)",
+      "description": "Schließt den (oft unterbrochenen) Kantenumriss zu einer Fläche (Morphologie-Close, elliptischer Kernel in px). Zu klein → Umriss bleibt offen, keine Fläche; zu groß → benachbarte Objekte verschmelzen.",
       "parameter_name": "morph_kernel_size",
       "parameter_type": "int",
       "default_value": "15",
@@ -107,7 +107,7 @@
     },
     {
       "display_name": "Nah-Gate aktivieren",
-      "description": "Behalte nur Farb-Blobs, die ein Tiefen-Loch / eine Erhebung über dem Band überlappen. Killt Band-Spiegelungen (weißer Block bleibt). Zum reinen Farb-Test abschaltbar.",
+      "description": "Behalte nur Kanten-Blobs, die ein Tiefen-Loch / eine Erhebung über dem Band überlappen. Verwirft Hintergrund-/Bandkanten. Zum reinen Kanten-Test abschaltbar.",
       "parameter_name": "use_depth_gate",
       "parameter_type": "bool",
       "default_value": "true",
