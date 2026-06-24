@@ -1,8 +1,8 @@
 {
   "name": "Board Detection",
   "description": {
-    "brief": "Erkennt ein Board aus Markern in einem Farbbild.",
-    "details": "Detektiert ArUco-Markierungen und liefert Board-Eckinformationen. Diese Komponente ist auf reine Board-Erkennung ausgelegt, ohne Kamera-zu-Roboter-Transformation."
+    "brief": "Erkennt ein ChArUco-Board in einem Farbbild.",
+    "details": "Detektiert ArUco-Markierungen eines ChArUco-Boards und liefert interpolierte Board-Eckinformationen. Diese Komponente ist auf reine Board-Erkennung ausgelegt, ohne Kamera-zu-Roboter-Transformation."
   },
   "registration": "roboter_tetris::BoardDetection",
   "inherits": "modulo_components::LifecycleComponent",
@@ -25,13 +25,13 @@
   "outputs": [
     {
       "display_name": "Board-Ecken",
-      "description": "Flaches Array [id, x, y] pro erkannter Board-Ecke oder Marker; x/y in Pixeln im Farbbild. Leer, wenn kein Board erkannt wird.",
+      "description": "Flaches Array [id, x, y] pro erkannter ChArUco-Board-Ecke; x/y in Pixeln im Farbbild. Leer, wenn kein Board erkannt wird.",
       "signal_name": "board_corners",
       "signal_type": "double_array"
     },
     {
       "display_name": "Debug Image",
-      "description": "Farbbild mit eingezeichneten ArUco-Markern und detektierten Board-Ecken, nur wenn Debug aktiviert.",
+      "description": "Farbbild mit eingezeichneten ArUco-Markern und detektierten ChArUco-Board-Ecken, nur wenn Debug aktiviert.",
       "signal_name": "debug_image",
       "signal_type": "other",
       "custom_signal_type": "sensor_msgs::msg::Image"
@@ -51,56 +51,43 @@
   ],
   "parameters": [
     {
-      "display_name": "Board Type",
-      "description": "false=CHARUCO | true=GRID/AprilGrid",
-      "parameter_name": "board_type",
-      "parameter_type": "bool",
-      "default_value": "false",
-      "dynamic": true
-    },
-    {
-      "display_name": "ArUco/AprilTag Dictionary",
-      "description": "Wird automatisch basierend auf Board Type gesetzt.",
+      "display_name": "ArUco Dictionary",
+      "description": "ArUco-Dictionary für das ChArUco-Board, z.B. DICT_5X5_250.",
       "parameter_name": "aruco_dictionary",
       "parameter_type": "string",
       "default_value": "DICT_5X5_250",
-      "internal": true,
       "dynamic": true
     },
     {
       "display_name": "Board Rows",
-      "description": "Wird automatisch basierend auf Board Type gesetzt.",
+      "description": "Anzahl der Marker in Y-Richtung des ChArUco-Boards.",
       "parameter_name": "board_rows",
       "parameter_type": "int",
       "default_value": "5",
-      "internal": true,
       "dynamic": true
     },
     {
       "display_name": "Board Cols",
-      "description": "Wird automatisch basierend auf Board Type gesetzt.",
+      "description": "Anzahl der Marker in X-Richtung des ChArUco-Boards.",
       "parameter_name": "board_cols",
       "parameter_type": "int",
       "default_value": "7",
-      "internal": true,
       "dynamic": true
     },
     {
       "display_name": "Marker Spacing (m)",
-      "description": "Für CHARUCO: Abstand zwischen Markerrand und Quadratseite (Checker-Size minus Marker-Size). Für GRID: Abstand zwischen Tag-Kanten.",
+      "description": "Abstand zwischen Marker-Kante und Checker-Feld-Kante. Checker-Feldgröße = marker_length_m + marker_spacing_m.",
       "parameter_name": "marker_spacing_m",
       "parameter_type": "double",
       "default_value": "0.009",
-      "internal": true,
       "dynamic": true
     },
     {
       "display_name": "Marker Length (m)",
-      "description": "Wird automatisch basierend auf Board Type gesetzt.",
+      "description": "Markerlänge in Metern, z.B. 0.026 für 26 mm.",
       "parameter_name": "marker_length_m",
       "parameter_type": "double",
       "default_value": "0.026",
-      "internal": true,
       "dynamic": true
     },
     {
@@ -109,7 +96,6 @@
       "parameter_name": "min_detected_markers",
       "parameter_type": "int",
       "default_value": "4",
-      "internal": true,
       "dynamic": true
     },
     {

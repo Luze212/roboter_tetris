@@ -1,11 +1,10 @@
-"""AICA lifecycle component: board detection for roboter_tetris.
+"""AICA lifecycle component: ChArUco board detection for roboter_tetris.
 
-The component detects CHARUCO or GRID boards in a color image and returns
-marker/corner positions without any robot-frame transformation.
+The component detects a ChArUco board in a color image and returns corner
+positions without any robot-frame transformation.
 """
 
 import cv2
-import numpy as np
 from cv_bridge import CvBridge
 from modulo_components.lifecycle_component import LifecycleComponent
 import state_representation as sr
@@ -27,28 +26,24 @@ class BoardDetection(LifecycleComponent):
         self._bridge = CvBridge()
 
         self.add_parameter(
-            sr.Parameter("board_type", False, sr.ParameterType.BOOL),
-            "Board-Typ: false=CHARUCO (5x7), true=GRID/AprilGrid (7x11). Setzt automatisch alle anderen Parameter."
-        )
-        self.add_parameter(
-            sr.Parameter("aruco_dictionary", "DICT_6X6_250", sr.ParameterType.STRING),
-            "ArUco- oder AprilTag-Dictionary, z.B. DICT_6X6_250 oder t36h11."
+            sr.Parameter("aruco_dictionary", "DICT_5X5_250", sr.ParameterType.STRING),
+            "ArUco-Dictionary für das Charuco-Board, z.B. DICT_5X5_250."
         )
         self.add_parameter(
             sr.Parameter("board_rows", 5, sr.ParameterType.INT),
-            "Anzahl der Quadrate bzw. Marker in Y-Richtung."
+            "Anzahl der Marker in Y-Richtung des Charuco-Boards."
         )
         self.add_parameter(
             sr.Parameter("board_cols", 7, sr.ParameterType.INT),
-            "Anzahl der Quadrate bzw. Marker in X-Richtung."
+            "Anzahl der Marker in X-Richtung des Charuco-Boards."
         )
         self.add_parameter(
-            sr.Parameter("marker_spacing_m", 0.04, sr.ParameterType.DOUBLE),
-            "Abstand zwischen Markern in Metern (für GRID) bzw. Quadratseitenlänge = Marke + Abstand (für CHARUCO)."
+            sr.Parameter("marker_spacing_m", 0.009, sr.ParameterType.DOUBLE),
+            "Abstand zwischen Marker-Kanten im Charuco-Board. Gesamtgröße eines Checker-Felds = marker_length_m + marker_spacing_m."
         )
         self.add_parameter(
-            sr.Parameter("marker_length_m", 0.02, sr.ParameterType.DOUBLE),
-            "Markerlänge in Metern, z.B. 0.020 für 20 mm."
+            sr.Parameter("marker_length_m", 0.026, sr.ParameterType.DOUBLE),
+            "Markerlänge in Metern, z.B. 0.026 für 26 mm."
         )
         self.add_parameter(
             sr.Parameter("min_detected_markers", 4, sr.ParameterType.INT),
@@ -84,34 +79,6 @@ class BoardDetection(LifecycleComponent):
         if parameter.is_empty():
             self.get_logger().warn(f"{name} must not be empty")
             return False
-        
-        # Apply defaults based on board_type selection (bool: false=CHARUCO, true=GRID)
-        if name == "board_type":
-            is_grid = parameter.get_value()  # bool
-            if is_grid:
-                # GRID/AprilGrid defaults: 7 rows x 11 cols
-                try:
-                    self.get_parameter("board_rows").set_value(4)
-                    self.get_parameter("board_cols").set_value(6)
-                    self.get_parameter("aruco_dictionary").set_value("t36h11")
-                    self.get_parameter("marker_spacing_m").set_value(0.011)
-                    self.get_parameter("marker_length_m").set_value(0.035)
-                    self.get_logger().info("Board type=GRID: set 4x6, t36h11, spacing=0.011m, marker=0.035m")
-                except Exception as e:
-                    self.get_logger().warn(f"Could not auto-set GRID defaults: {e}")
-            else:
-                # CHARUCO defaults: 5 rows x 7 cols
-                try:
-                    self.get_parameter("board_rows").set_value(5)
-                    self.get_parameter("board_cols").set_value(7)
-                    self.get_parameter("aruco_dictionary").set_value("DICT_5X5_250")
-                    self.get_parameter("marker_spacing_m").set_value(0.009)
-                    self.get_parameter("marker_length_m").set_value(0.026)
-                    self.get_logger().info("Board type=CHARUCO: set 5x7, DICT_5X5_250, checker=0.035m, marker=0.026m")
-                except Exception as e:
-                    self.get_logger().warn(f"Could not auto-set CHARUCO defaults: {e}")
-        
-        # Validate internal parameters
         if name == "board_rows" or name == "board_cols":
             if parameter.get_value() <= 0:
                 self.get_logger().warn(f"{name} must be positive")
@@ -144,9 +111,6 @@ class BoardDetection(LifecycleComponent):
         return True
 
     def _params(self) -> BoardParams:
-        is_grid = self.get_parameter("board_type").get_value()
-        board_type = "GRID" if is_grid else "CHARUCO"
-        # Read current parameter values (may not have been auto-updated by UI)
         aruco_dictionary = self.get_parameter("aruco_dictionary").get_value()
         board_rows = int(self.get_parameter("board_rows").get_value())
         board_cols = int(self.get_parameter("board_cols").get_value())
@@ -154,34 +118,18 @@ class BoardDetection(LifecycleComponent):
         marker_length_m = self.get_parameter("marker_length_m").get_value()
         min_detected_markers = int(self.get_parameter("min_detected_markers").get_value())
 
-        # Apply local (non-persistent) defaults if UI didn't actually change the internal params.
-        # This avoids relying on `Parameter.set_value()` being available in the runtime.
-        if board_type == "GRID":
-            if aruco_dictionary is None or "6X6" in str(aruco_dictionary).upper():
-                aruco_dictionary = "t36h11"
-            if board_rows <= 0:
-                board_rows = 4
-            if board_cols <= 0:
-                board_cols = 6
-            # detect unmodified CHARUCO defaults and replace with GRID defaults
-            if float(marker_spacing_m) == 0.04 or float(marker_spacing_m) == 0.16:
-                marker_spacing_m = 0.011
-            if float(marker_length_m) == 0.02 or float(marker_length_m) == 0.025:
-                marker_length_m = 0.035
-        else:
-            if aruco_dictionary is None or ("APRILTAG" in str(aruco_dictionary).upper() or "T36" in str(aruco_dictionary).upper()):
-                aruco_dictionary = "DICT_5X5_250"
-            if board_rows <= 0:
-                board_rows = 5
-            if board_cols <= 0:
-                board_cols = 7
-            if float(marker_spacing_m) == 0.16 or float(marker_spacing_m) == 0.011:
-                marker_spacing_m = 0.009
-            if float(marker_length_m) == 0.035:
-                marker_length_m = 0.026
+        if aruco_dictionary is None:
+            aruco_dictionary = "DICT_5X5_250"
+        if board_rows <= 0:
+            board_rows = 5
+        if board_cols <= 0:
+            board_cols = 7
+        if float(marker_spacing_m) == 0.0:
+            marker_spacing_m = 0.009
+        if float(marker_length_m) == 0.0:
+            marker_length_m = 0.026
 
         return BoardParams(
-            board_type=board_type,
             aruco_dictionary=aruco_dictionary,
             board_rows=board_rows,
             board_cols=board_cols,
@@ -209,7 +157,6 @@ class BoardDetection(LifecycleComponent):
     def _ensure_board(self):
         params = self._params()
         board_hash = (
-            params.board_type,
             params.aruco_dictionary,
             params.board_rows,
             params.board_cols,
@@ -239,7 +186,7 @@ class BoardDetection(LifecycleComponent):
         try:
             color_img = self._bridge.imgmsg_to_cv2(self._color_msg, "bgr8")
             params, board, dictionary = self._ensure_board()
-            detection = detect_board(color_img, board, dictionary, params.board_type)
+            detection = detect_board(color_img, board, dictionary, "CHARUCO")
 
             if detection is None:
                 self._board_corners = []
@@ -247,42 +194,27 @@ class BoardDetection(LifecycleComponent):
             else:
                 marker_corners, marker_ids, board_corners, board_ids = detection
                 self._board_corners = []
-                try:
-                    if board_ids is not None and len(board_ids) > 0:
-                        # CHARUCO: use interpolated board corners
-                        for marker_id, corner in zip(board_ids, board_corners):
-                            self._board_corners.extend([float(int(marker_id)), float(corner[0]), float(corner[1])])
-                    else:
-                        # GRID: use marker centroids
-                        if marker_corners is not None and len(marker_corners) > 0:
-                            for i, marker_id in enumerate(marker_ids.flatten()):
-                                # Handle different possible formats from cv2.aruco.detectMarkers
-                                corners = marker_corners[i]
-                                if len(corners.shape) == 3:  # Shape (1, 4, 2)
-                                    corners = corners[0]
-                                # corners should now be (4, 2) - 4 corners with x,y coords
-                                center = np.mean(corners, axis=0)
-                                self._board_corners.extend([float(int(marker_id)), float(center[0]), float(center[1])])
-                    self.set_predicate("has_board", len(marker_ids) >= params.min_detected_markers)
-                except Exception as grid_err:
-                    self.get_logger().error(f"GRID processing error: {grid_err}")
-                    self._board_corners = []
-                    self.set_predicate("has_board", False)
+                for corner_id, corner in zip(board_ids, board_corners):
+                    self._board_corners.extend([
+                        float(int(corner_id)),
+                        float(corner[0]),
+                        float(corner[1]),
+                    ])
+                self.set_predicate("has_board", len(marker_ids) >= params.min_detected_markers)
 
             if self.get_parameter("debug_enable").get_value():
-                self._publish_debug(color_img, detection, params.board_type)
+                self._publish_debug(color_img, detection)
 
         except Exception as exc:
             self._log_error_throttled(f"board_detection pipeline error: {exc}")
 
-    def _publish_debug(self, color_img, detection, board_type):
+    def _publish_debug(self, color_img, detection):
         debug_img = color_img.copy()
         if detection is not None:
             marker_corners, marker_ids, board_corners, board_ids = detection
             debug_img = draw_board_debug(
                 debug_img, marker_corners, marker_ids, board_corners, board_ids)
-            label = f"{board_type} board detected"
-            cv2.putText(debug_img, label, (10, 25),
+            cv2.putText(debug_img, "CHARUCO board detected", (10, 25),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2)
         else:
             cv2.putText(debug_img, "NO BOARD detected", (10, 25),
