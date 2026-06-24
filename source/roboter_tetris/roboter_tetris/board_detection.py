@@ -27,8 +27,8 @@ class BoardDetection(LifecycleComponent):
         self._bridge = CvBridge()
 
         self.add_parameter(
-            sr.Parameter("board_type", "CHARUCO", sr.ParameterType.STRING),
-            "Board-Typ: CHARUCO oder GRID. GRID ist für AprilGrid/AprilTag-Arrays geeignet."
+            sr.Parameter("board_type", False, sr.ParameterType.BOOL),
+            "Board-Typ: false=CHARUCO (5x7), true=GRID/AprilGrid (7x11). Setzt automatisch alle anderen Parameter."
         )
         self.add_parameter(
             sr.Parameter("aruco_dictionary", "DICT_6X6_250", sr.ParameterType.STRING),
@@ -84,6 +84,34 @@ class BoardDetection(LifecycleComponent):
         if parameter.is_empty():
             self.get_logger().warn(f"{name} must not be empty")
             return False
+        
+        # Apply defaults based on board_type selection (bool: false=CHARUCO, true=GRID)
+        if name == "board_type":
+            is_grid = parameter.get_value()  # bool
+            if is_grid:
+                # GRID/AprilGrid defaults: 7 rows x 11 cols
+                try:
+                    self.get_parameter("board_rows").set_value(4)
+                    self.get_parameter("board_cols").set_value(6)
+                    self.get_parameter("aruco_dictionary").set_value("t36h11")
+                    self.get_parameter("marker_spacing_m").set_value(0.011)
+                    self.get_parameter("marker_length_m").set_value(0.035)
+                    self.get_logger().info("Board type=GRID: set 4x6, t36h11, spacing=0.011m, marker=0.035m")
+                except Exception as e:
+                    self.get_logger().warn(f"Could not auto-set GRID defaults: {e}")
+            else:
+                # CHARUCO defaults: 5 rows x 7 cols
+                try:
+                    self.get_parameter("board_rows").set_value(5)
+                    self.get_parameter("board_cols").set_value(7)
+                    self.get_parameter("aruco_dictionary").set_value("DICT_5X5_250")
+                    self.get_parameter("marker_spacing_m").set_value(0.009)
+                    self.get_parameter("marker_length_m").set_value(0.026)
+                    self.get_logger().info("Board type=CHARUCO: set 5x7, DICT_5X5_250, checker=0.035m, marker=0.026m")
+                except Exception as e:
+                    self.get_logger().warn(f"Could not auto-set CHARUCO defaults: {e}")
+        
+        # Validate internal parameters
         if name == "board_rows" or name == "board_cols":
             if parameter.get_value() <= 0:
                 self.get_logger().warn(f"{name} must be positive")
@@ -116,14 +144,50 @@ class BoardDetection(LifecycleComponent):
         return True
 
     def _params(self) -> BoardParams:
+        is_grid = self.get_parameter("board_type").get_value()
+        board_type = "GRID" if is_grid else "CHARUCO"
+        # Read current parameter values (may not have been auto-updated by UI)
+        aruco_dictionary = self.get_parameter("aruco_dictionary").get_value()
+        board_rows = int(self.get_parameter("board_rows").get_value())
+        board_cols = int(self.get_parameter("board_cols").get_value())
+        marker_spacing_m = self.get_parameter("marker_spacing_m").get_value()
+        marker_length_m = self.get_parameter("marker_length_m").get_value()
+        min_detected_markers = int(self.get_parameter("min_detected_markers").get_value())
+
+        # Apply local (non-persistent) defaults if UI didn't actually change the internal params.
+        # This avoids relying on `Parameter.set_value()` being available in the runtime.
+        if board_type == "GRID":
+            if aruco_dictionary is None or "6X6" in str(aruco_dictionary).upper():
+                aruco_dictionary = "t36h11"
+            if board_rows <= 0:
+                board_rows = 4
+            if board_cols <= 0:
+                board_cols = 6
+            # detect unmodified CHARUCO defaults and replace with GRID defaults
+            if float(marker_spacing_m) == 0.04 or float(marker_spacing_m) == 0.16:
+                marker_spacing_m = 0.011
+            if float(marker_length_m) == 0.02 or float(marker_length_m) == 0.025:
+                marker_length_m = 0.035
+        else:
+            if aruco_dictionary is None or ("APRILTAG" in str(aruco_dictionary).upper() or "T36" in str(aruco_dictionary).upper()):
+                aruco_dictionary = "DICT_5X5_250"
+            if board_rows <= 0:
+                board_rows = 5
+            if board_cols <= 0:
+                board_cols = 7
+            if float(marker_spacing_m) == 0.16 or float(marker_spacing_m) == 0.011:
+                marker_spacing_m = 0.009
+            if float(marker_length_m) == 0.035:
+                marker_length_m = 0.026
+
         return BoardParams(
-            board_type=self.get_parameter("board_type").get_value(),
-            aruco_dictionary=self.get_parameter("aruco_dictionary").get_value(),
-            board_rows=int(self.get_parameter("board_rows").get_value()),
-            board_cols=int(self.get_parameter("board_cols").get_value()),
-            marker_spacing_m=self.get_parameter("marker_spacing_m").get_value(),
-            marker_length_m=self.get_parameter("marker_length_m").get_value(),
-            min_detected_markers=int(self.get_parameter("min_detected_markers").get_value()),
+            board_type=board_type,
+            aruco_dictionary=aruco_dictionary,
+            board_rows=board_rows,
+            board_cols=board_cols,
+            marker_spacing_m=marker_spacing_m,
+            marker_length_m=marker_length_m,
+            min_detected_markers=min_detected_markers,
         )
 
     def _log_error_throttled(self, message: str) -> None:

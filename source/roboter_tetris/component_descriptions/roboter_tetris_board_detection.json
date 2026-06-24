@@ -52,58 +52,64 @@
   "parameters": [
     {
       "display_name": "Board Type",
-      "description": "Board-Typ: CHARUCO für Charuco-Boards oder GRID für AprilGrid/AprilTag-Arrays.",
+      "description": "false=CHARUCO | true=GRID/AprilGrid",
       "parameter_name": "board_type",
-      "parameter_type": "string",
-      "default_value": "CHARUCO",
+      "parameter_type": "bool",
+      "default_value": "false",
       "dynamic": true
     },
     {
       "display_name": "ArUco/AprilTag Dictionary",
-      "description": "Auswahl des Dictionaries, z. B. DICT_6X6_250 oder t36h11.",
+      "description": "Wird automatisch basierend auf Board Type gesetzt.",
       "parameter_name": "aruco_dictionary",
       "parameter_type": "string",
-      "default_value": "DICT_6X6_250",
+      "default_value": "DICT_5X5_250",
+      "internal": true,
       "dynamic": true
     },
     {
       "display_name": "Board Rows",
-      "description": "Anzahl der Quadrate bzw. Marker in Y-Richtung.",
+      "description": "Wird automatisch basierend auf Board Type gesetzt.",
       "parameter_name": "board_rows",
       "parameter_type": "int",
       "default_value": "5",
+      "internal": true,
       "dynamic": true
     },
     {
       "display_name": "Board Cols",
-      "description": "Anzahl der Quadrate bzw. Marker in X-Richtung.",
+      "description": "Wird automatisch basierend auf Board Type gesetzt.",
       "parameter_name": "board_cols",
       "parameter_type": "int",
       "default_value": "7",
+      "internal": true,
       "dynamic": true
     },
     {
       "display_name": "Marker Spacing (m)",
-      "description": "Abstand zwischen Markern in Metern (für GRID) bzw. Quadratseitenlänge minus Markerlänge für CHARUCO.",
+      "description": "Für CHARUCO: Abstand zwischen Markerrand und Quadratseite (Checker-Size minus Marker-Size). Für GRID: Abstand zwischen Tag-Kanten.",
       "parameter_name": "marker_spacing_m",
       "parameter_type": "double",
-      "default_value": "0.04",
+      "default_value": "0.009",
+      "internal": true,
       "dynamic": true
     },
     {
       "display_name": "Marker Length (m)",
-      "description": "Markerlänge in Metern, z. B. 0.02 für 20 mm.",
+      "description": "Wird automatisch basierend auf Board Type gesetzt.",
       "parameter_name": "marker_length_m",
       "parameter_type": "double",
-      "default_value": "0.02",
+      "default_value": "0.026",
+      "internal": true,
       "dynamic": true
     },
     {
       "display_name": "Minimale Marker",
-      "description": "Minimale Anzahl erkannter Marker, damit eine Board-Detektion als gültig gilt.",
+      "description": "Minimale Anzahl erkannter Marker für gültige Detektion.",
       "parameter_name": "min_detected_markers",
       "parameter_type": "int",
       "default_value": "4",
+      "internal": true,
       "dynamic": true
     },
     {

@@ -13,25 +13,25 @@ Usage:
     - marker_spacing_m: spacing between marker centers (not including marker size)
 """
 
-# Example 1: Charuco board 6x6 250
-CHARUCO_6x6 = {
+# Example 1: Charuco board 5x7 with 35mm checker squares and 26mm markers
+CHARUCO_5x7 = {
     "board_type": "CHARUCO",
-    "aruco_dictionary": "DICT_6X6_250",
+    "aruco_dictionary": "DICT_5X5_250",
     "board_rows": 5,
     "board_cols": 7,
-    "marker_length_m": 0.02,  # Marker size 20mm
-    "marker_spacing_m": 0.04,  # Spacing (total square = marker + spacing = 6cm)
+    "marker_length_m": 0.026,  # Marker size 26mm
+    "marker_spacing_m": 0.009,  # Checker square = marker + spacing = 35mm
     "min_detected_markers": 4,
 }
 
-# Example 2: AprilGrid 36h11
-APRILGRID_36H11 = {
+# Example 2: AprilGrid 4x6, tag size 35mm, spacing 11mm
+APRILGRID_4x6 = {
     "board_type": "GRID",
     "aruco_dictionary": "t36h11",
-    "board_rows": 5,
-    "board_cols": 7,
-    "marker_length_m": 0.05,   # Marker size 50mm
-    "marker_spacing_m": 0.06,  # Spacing between markers 60mm
+    "board_rows": 4,
+    "board_cols": 6,
+    "marker_length_m": 0.035,   # Tag size 35mm
+    "marker_spacing_m": 0.011,  # Spacing between tag edges 11mm
     "min_detected_markers": 4,
 }
 
