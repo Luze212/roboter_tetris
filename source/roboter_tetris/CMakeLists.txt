@@ -24,6 +24,9 @@ ament_auto_find_build_dependencies()
 # install component description JSON files
 install(DIRECTORY ./component_descriptions DESTINATION .)
 
+# Ship calibration data separately from the task components.
+install(DIRECTORY ./roboter_tetris/Calibration DESTINATION .)
+
 # install Python modules
 ament_python_install_package(${PROJECT_NAME} SCRIPTS_DESTINATION lib/${PROJECT_NAME})
 

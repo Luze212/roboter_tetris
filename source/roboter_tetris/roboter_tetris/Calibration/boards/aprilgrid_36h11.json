@@ -1,0 +1,11 @@
+{
+  "board_type": "GRID",
+  "aruco_dictionary": "DICT_APRILTAG_36H11",
+  "board_rows": 11,
+  "board_cols": 7,
+  "marker_length_m": 0.02,
+  "marker_spacing_m": 0.006,
+  "min_detected_markers": 4,
+  "usage": "Offline-Boarddefinition für Kalibrierungswerkzeuge auf Basis von roboter_tetris.vision.board.",
+  "notes": "Die aktuelle AICA-Komponente BoardDetection unterstützt ausschließlich ChArUco und liest diese GRID-Konfiguration nicht."
+}

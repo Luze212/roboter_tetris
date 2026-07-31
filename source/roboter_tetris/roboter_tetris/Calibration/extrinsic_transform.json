@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "status": "legacy_initial_values",
+  "description": "Extrinsische Transformation der fest montierten Basis-Kamera in den Roboter-Base-Frame. Nach jeder Änderung der Kameramontage neu bestimmen.",
+  "source_frame": "camera_frame",
+  "target_frame": "robot_base",
+  "units": {
+    "translation": "m",
+    "rotation": "deg"
+  },
+  "convention": {
+    "transform": "p_robot = T_robot_camera @ p_camera",
+    "matrix_layout": "row-major",
+    "rotation": "R = Rz(yaw) @ Ry(pitch) @ Rx(roll)"
+  },
+  "translation_m": {
+    "x": 0.6118,
+    "y": -0.782,
+    "z": 0.8902
+  },
+  "rotation_rpy_deg": {
+    "roll": 176.26,
+    "pitch": -8.27,
+    "yaw": -12.94
+  },
+  "homogeneous_matrix": [
+    [0.964470412362, -0.23259781691, 0.125280003382, 0.6118],
+    [-0.22160197254, -0.970428496473, -0.095713630164, -0.782],
+    [0.143838066745, 0.064550668484, -0.987493707197, 0.8902],
+    [0.0, 0.0, 0.0, 1.0]
+  ],
+  "validation": {
+    "measured_at": null,
+    "operator": null,
+    "method": null,
+    "sample_count": null,
+    "position_rmse_mm": null,
+    "rotation_rmse_deg": null,
+    "notes": "Initiale Werte aus dem bisherigen Aufbau; noch keine dokumentierte Validierung."
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "board_type": "CHARUCO",
+  "aruco_dictionary": "DICT_5X5_250",
+  "board_rows": 5,
+  "board_cols": 7,
+  "marker_length_m": 0.026,
+  "marker_spacing_m": 0.009,
+  "min_detected_markers": 4,
+  "usage": "Unterstützte Konfiguration für die AICA-Komponente BoardDetection.",
+  "notes": "Die Schachbrettfeldgröße ist marker_length_m + marker_spacing_m."
+}
