@@ -1,15 +1,15 @@
 {
   "name": "Move To Pose (Test)",
   "description": {
-    "brief": "Bewegt den Arm zu einer manuell konfigurierten (x, y)-Koordinate.",
-    "details": "Test-Baustein für den 'Bewegung zu Zielkoordinate'-Schritt der zukünftigen Perception -> Target Selection -> Pick Sequencer Pipeline. Broadcastet die konfigurierte Zielpose als TF-Frame und löst bei steigender Flanke von 'Move Trigger' den JTC-Service 'set_trajectory' auf diesen Frame aus. Z-Höhe und Orientierung sind feste Defaults; X/Y sind live im UI änderbar."
+    "brief": "Broadcastet eine manuell konfigurierte (x, y)-Zielkoordinate als TF-Frame.",
+    "details": "Test-Baustein für den 'Bewegung zu Zielkoordinate'-Schritt der zukünftigen Perception -> Target Selection -> Pick Sequencer Pipeline. Broadcastet die konfigurierte Zielpose laufend als TF-Frame und pulst bei steigender Flanke von 'Move Trigger' das Prädikat 'Move Requested'. Das eigentliche Anfahren erfolgt NICHT aus dieser Komponente heraus: 'Move Requested' wird in AICA Studio per Event-Pfeil mit dem 'Set trajectory'-Event des Joint Trajectory Controllers verbunden, dort auf den gebroadcasteten Frame konfiguriert. Z-Höhe und Orientierung sind feste Defaults; X/Y sind live im UI änderbar."
   },
   "registration": "roboter_tetris::MoveToPoseTest",
   "inherits": "modulo_components::LifecycleComponent",
   "inputs": [
     {
       "display_name": "Move Trigger",
-      "description": "Löst bei steigender Flanke (False -> True) eine Bewegung zur aktuell konfigurierten Zielpose aus.",
+      "description": "Löst bei steigender Flanke (False -> True) einen einmaligen Puls von 'Move Requested' aus.",
       "signal_name": "move_trigger",
       "signal_type": "bool"
     }
@@ -72,42 +72,17 @@
     },
     {
       "display_name": "Target Frame Name",
-      "description": "Name des TF-Frames, der für die Zielpose gebroadcastet wird.",
+      "description": "Name des TF-Frames, der für die Zielpose gebroadcastet wird. Muss beim Verdrahten des 'Set trajectory'-Events in AICA Studio als Cartesian-Frame ausgewählt werden.",
       "parameter_name": "target_frame_name",
       "parameter_type": "string",
       "default_value": "test_target"
-    },
-    {
-      "display_name": "Move Duration",
-      "description": "Trajektoriendauer (s), die dem 'set_trajectory'-Service übergeben wird.",
-      "parameter_name": "move_duration_s",
-      "parameter_type": "double",
-      "default_value": "3.0",
-      "dynamic": true
-    },
-    {
-      "display_name": "Set Trajectory Service",
-      "description": "Service-Name des JTC 'set_trajectory' (StringTrigger).",
-      "parameter_name": "set_trajectory_service",
-      "parameter_type": "string",
-      "default_value": "/set_trajectory"
     }
   ],
   "predicates": [
     {
-      "display_name": "Is Moving",
-      "description": "True, während auf die Antwort des 'set_trajectory'-Service-Calls gewartet wird.",
-      "predicate_name": "is_moving"
-    },
-    {
-      "display_name": "Move Succeeded",
-      "description": "True, wenn der letzte 'set_trajectory'-Aufruf erfolgreich war.",
-      "predicate_name": "has_move_succeeded"
-    },
-    {
-      "display_name": "Move Failed",
-      "description": "True, wenn der letzte 'set_trajectory'-Aufruf abgelehnt wurde oder fehlschlug.",
-      "predicate_name": "has_move_failed"
+      "display_name": "Move Requested",
+      "description": "Pulst einmalig auf True bei steigender Flanke von 'Move Trigger'. In AICA Studio per Event-Pfeil mit dem JTC-Event 'Set trajectory' verbinden. Erfolg/Fehlschlag der Bewegung selbst werden über die Prädikate des JTC beobachtet ('Has Trajectory Succeeded'/'Has Trajectory Failed'), nicht über diese Komponente.",
+      "predicate_name": "move_requested"
     }
   ]
 }

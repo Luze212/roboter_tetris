@@ -9,18 +9,22 @@ minimal for now:
 * ``target_x``/``target_y`` are live, ``dynamic`` AICA UI parameters rather than
   a signal input. The later production component (``target_selection``) will
   replace this parameter read with a ``CartesianPose`` signal input; the
-  motion-triggering logic below (broadcast a target TF frame, then call
-  ``set_trajectory``) is written so that swap only touches *where the target
-  pose comes from*, not how it is used.
+  motion-triggering logic below (broadcast a target TF frame, pulse a trigger
+  predicate) is written so that swap only touches *where the target pose comes
+  from*, not how it is used.
 
-Motion path ("Weg 2" from ARCHITECTURE.md): broadcast a TF frame named
-``target_frame_name`` at the configured pose via ``tf2_ros``, then trigger the
-JTC's ``set_trajectory`` service (``modulo_interfaces.srv.StringTrigger``)
-referencing that frame name. The service call follows the non-blocking
-call_async + add_done_callback rule for service calls in ``on_step_callback``.
+Motion path: this component only broadcasts a TF frame named
+``target_frame_name`` at the configured pose via ``tf2_ros`` and pulses the
+``move_requested`` predicate on a rising edge of ``move_trigger``. The actual
+``set_trajectory`` call is *not* made from Python — the JTC exposes "Set
+trajectory" as a graph Event (Cartesian-frame variant), wired directly in AICA
+Studio from ``move_requested`` (event edge, rising-edge triggered) to that
+JTC transition. Frame selection and duration are configured on that event edge
+in Studio, not sent as a service payload from here. Watch the JTC's own
+``has_trajectory_succeeded``/``has_trajectory_failed`` predicates in Studio to
+observe the outcome — this component has no visibility into it.
 """
 
-import json
 import math
 
 import state_representation as sr
@@ -28,7 +32,6 @@ from modulo_components.lifecycle_component import LifecycleComponent
 from std_msgs.msg import Bool
 from geometry_msgs.msg import TransformStamped
 from tf2_ros import TransformBroadcaster
-from modulo_interfaces.srv import StringTrigger
 
 
 def quaternion_from_euler_deg(roll_deg: float, pitch_deg: float, yaw_deg: float):
@@ -52,7 +55,10 @@ class MoveTriggerLogic:
     """Rising-edge detector for the ``move_trigger`` input.
 
     No I/O — fully unit-testable without the modulo runtime, same pattern as
-    ``GripperTargetLogic`` in ``robotiq_gripper.py``.
+    ``GripperTargetLogic`` in ``robotiq_gripper.py``. ``update()`` returns True
+    for exactly one step per False->True transition, which is also exactly the
+    one-step pulse shape AICA Events need (predicates trigger events only on
+    their own rising edge).
     """
 
     def __init__(self) -> None:
@@ -69,10 +75,13 @@ class MoveTriggerLogic:
 
 
 class MoveToPoseTest(LifecycleComponent):
-    """Broadcasts a configurable target TF frame and triggers ``set_trajectory`` to it.
+    """Broadcasts a configurable target TF frame and pulses a trigger predicate.
 
     Wire a bool into ``move_trigger`` (e.g. the existing ``true_signal``/
-    ``toggle_signal`` components) to fire the move on its rising edge.
+    ``toggle_signal`` components) to arm a move on its rising edge. In AICA
+    Studio, wire the ``move_requested`` predicate (event edge) to the JTC's
+    "Set trajectory" transition, configured there to use the
+    ``target_frame_name`` frame this component broadcasts.
     ``target_x``/``target_y`` are live UI parameters; ``z_height`` and the
     orientation stay at their configured defaults.
     """
@@ -112,15 +121,9 @@ class MoveToPoseTest(LifecycleComponent):
         )
         self.add_parameter(
             sr.Parameter("target_frame_name", "test_target", sr.ParameterType.STRING),
-            "Name des TF-Frames, der für die Zielpose gebroadcastet wird.",
-        )
-        self.add_parameter(
-            sr.Parameter("move_duration_s", 3.0, sr.ParameterType.DOUBLE),
-            "Trajektoriendauer (s), die dem 'set_trajectory'-Service übergeben wird.",
-        )
-        self.add_parameter(
-            sr.Parameter("set_trajectory_service", "/set_trajectory", sr.ParameterType.STRING),
-            "Service-Name des JTC 'set_trajectory' (StringTrigger).",
+            "Name des TF-Frames, der für die Zielpose gebroadcastet wird. Muss beim "
+            "Verdrahten des 'Set trajectory'-Events in AICA Studio als Cartesian-Frame "
+            "ausgewählt werden.",
         )
 
         # -- Inputs -----------------------------------------------------------------
@@ -128,13 +131,13 @@ class MoveToPoseTest(LifecycleComponent):
         self.add_input("move_trigger", "_move_trigger", Bool)
 
         # -- Predicates ---------------------------------------------------------------
-        self.add_predicate("is_moving", False)
-        self.add_predicate("has_move_succeeded", False)
-        self.add_predicate("has_move_failed", False)
+        # Rising edge -> wire as an event edge to the JTC's "Set trajectory"
+        # transition in AICA Studio. This component cannot observe whether the
+        # resulting motion succeeds; watch the JTC's own predicates for that.
+        self.add_predicate("move_requested", False)
 
         # -- State ----------------------------------------------------------------------
         self._tf_broadcaster = None
-        self._trajectory_client = None
         self._trigger_logic = MoveTriggerLogic()
 
     # -- Validation -------------------------------------------------------------------
@@ -144,25 +147,18 @@ class MoveToPoseTest(LifecycleComponent):
         if parameter.is_empty():
             self.get_logger().warn(f"{name} must not be empty")
             return False
-        if name == "move_duration_s" and parameter.get_value() <= 0.0:
-            self.get_logger().warn("move_duration_s must be positive")
-            return False
         return True
 
     # -- Lifecycle ----------------------------------------------------------------------
 
     def on_configure_callback(self) -> bool:
         self._tf_broadcaster = TransformBroadcaster(self)
-        self._trajectory_client = self.create_client(
-            StringTrigger, self.get_parameter("set_trajectory_service").get_value())
         return True
 
     def on_activate_callback(self) -> bool:
         self._move_trigger = False
         self._trigger_logic.reset()
-        self.set_predicate("is_moving", False)
-        self.set_predicate("has_move_succeeded", False)
-        self.set_predicate("has_move_failed", False)
+        self.set_predicate("move_requested", False)
         return True
 
     def on_deactivate_callback(self) -> bool:
@@ -176,8 +172,9 @@ class MoveToPoseTest(LifecycleComponent):
         # of whether a move is actually triggered.
         self._broadcast_target_frame()
 
-        if self._trigger_logic.update(self._move_trigger):
-            self._send_move_request()
+        # Pulse exactly one step on a move_trigger rising edge, then drop back to
+        # False so the predicate has a clean rising edge for the Event wiring.
+        self.set_predicate("move_requested", self._trigger_logic.update(self._move_trigger))
 
     def _broadcast_target_frame(self) -> None:
         qx, qy, qz, qw = quaternion_from_euler_deg(
@@ -197,38 +194,3 @@ class MoveToPoseTest(LifecycleComponent):
         t.transform.rotation.z = qz
         t.transform.rotation.w = qw
         self._tf_broadcaster.sendTransform(t)
-
-    def _send_move_request(self) -> None:
-        if not self._trajectory_client.service_is_ready():
-            self.get_logger().warn("set_trajectory Service nicht erreichbar.")
-            self.set_predicate("has_move_failed", True)
-            return
-
-        # JSON is a valid subset of YAML, so this satisfies either a strict JSON
-        # or a YAML-flavoured payload parser on the receiving end.
-        payload = json.dumps({
-            "frames": [self.get_parameter("target_frame_name").get_value()],
-            "durations": [self.get_parameter("move_duration_s").get_value()],
-        })
-        request = StringTrigger.Request()
-        request.payload = payload
-
-        self.set_predicate("is_moving", True)
-        self.set_predicate("has_move_succeeded", False)
-        self.set_predicate("has_move_failed", False)
-
-        future = self._trajectory_client.call_async(request)
-        future.add_done_callback(self._on_move_response)
-
-    def _on_move_response(self, future) -> None:
-        self.set_predicate("is_moving", False)
-        try:
-            response = future.result()
-            if response.success:
-                self.set_predicate("has_move_succeeded", True)
-            else:
-                self.get_logger().warn(f"set_trajectory abgelehnt: {response.message}")
-                self.set_predicate("has_move_failed", True)
-        except Exception as exc:
-            self.get_logger().error(f"set_trajectory Service-Call fehlgeschlagen: {exc}")
-            self.set_predicate("has_move_failed", True)
