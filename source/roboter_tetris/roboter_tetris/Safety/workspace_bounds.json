@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "status": "placeholder_not_yet_defined",
+  "description": "Erlaubter kartesischer Bewegungsbereich des Roboterflansches (Sicherheitsgrenze, keine Kalibrierung im messtechnischen Sinn). Zielposen ausserhalb dieses Bereichs duerfen nicht per set_trajectory angefahren werden. Alle Werte sind Platzhalter (null) und MUESSEN vor produktivem Einsatz durch eine dokumentierte Festlegung ersetzt werden.",
+  "reference_frame": "world",
+  "units": {
+    "position": "m"
+  },
+  "bounds_m": {
+    "x_min": null,
+    "x_max": null,
+    "y_min": null,
+    "y_max": null,
+    "z_min": null,
+    "z_max": null
+  },
+  "basis": {
+    "method": null,
+    "notes": "TBD: entweder aus der Hersteller-Reichweite (Datenblatt) minus Sicherheitsmarge ableiten, oder direkt am Aufbau (Foerderband-/Ablagebereich, Hindernisse) vermessen. Bis 'method' gesetzt ist, duerfen 'bounds_m' nicht als sicherheitsrelevante Grenze in einer Komponente uebernommen werden."
+  },
+  "validation": {
+    "defined_at": null,
+    "operator": null,
+    "safety_margin_m": null,
+    "notes": "Noch nicht festgelegt/validiert."
+  },
+  "runtime_parameters": {
+    "note": "Diese Datei ist die dokumentierte Quelle der Wahrheit, nicht die Laufzeit-Konfiguration. Die Werte werden manuell in die entsprechenden AICA-Parameter (z. B. workspace_x_min/x_max/y_min/y_max/z_min/z_max) der bewegungsausloesenden Komponente(n) uebernommen, analog zu cal_x/cal_y/cal_z aus Calibration/extrinsic_transform.json."
+  }
+}

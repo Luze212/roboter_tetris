@@ -27,6 +27,9 @@ install(DIRECTORY ./component_descriptions DESTINATION .)
 # Ship calibration data separately from the task components.
 install(DIRECTORY ./roboter_tetris/Calibration DESTINATION .)
 
+# Ship safety configuration (workspace bounds) separately from the task components.
+install(DIRECTORY ./roboter_tetris/Safety DESTINATION .)
+
 # install Python modules
 ament_python_install_package(${PROJECT_NAME} SCRIPTS_DESTINATION lib/${PROJECT_NAME})
 
