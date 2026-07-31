@@ -32,7 +32,7 @@ source = "./source/roboter_tetris"
 ## these packages will be available during the build but also in the final image,
 ## so they are useful for dynamic libraries
 [build.packages.roboter-tetris.dependencies.apt]
-python3-opencv = "*"
+# OpenCV is installed via pip in requirements.txt to avoid apt resolver issues.
 
 ## by default, we will install any pip packages in `${package_source}/requirements.txt`
 ## but you can customize the name of the requirements file, e.g.
