@@ -72,7 +72,7 @@ class BaseCam(LifecycleComponent):
 
         # -- Extrinsic calibration camera→robot ----------------------------------
         # The versioned source of truth and measurement notes live separately in
-        # Calibration/extrinsic_transform.json. Keep these AICA runtime defaults
+        # Calibration/calibration.json. Keep these AICA runtime defaults
         # aligned with that file; the UI parameters permit controlled fine-tuning.
         self.add_parameter(sr.Parameter("cal_x", 0.6118, sr.ParameterType.DOUBLE),
                            "Extrinsik: Translation x in m (Kamera→Roboter)")

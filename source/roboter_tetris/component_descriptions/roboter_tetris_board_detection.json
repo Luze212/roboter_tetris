@@ -16,7 +16,7 @@
     },
     {
       "display_name": "Color Camera Info",
-      "description": "Optional: Kamera-Intrinsics für spätere Pose-Schätzung. Aktuell wird das Board allein aus dem Bild detektiert.",
+      "description": "Kamera-Intrinsics und Verzerrungskoeffizienten. Erforderlich für die Pose-Schätzung des ChArUco-Boards.",
       "signal_name": "color_camera_info",
       "signal_type": "other",
       "custom_signal_type": "sensor_msgs::msg::CameraInfo"
@@ -30,8 +30,14 @@
       "signal_type": "double_array"
     },
     {
+      "display_name": "Board-Pose im Kamera-Frame",
+      "description": "Flaches Array [tx, ty, tz, rx, ry, rz]. Translation in Metern und Rodrigues-Rotationsvektor in Radiant; beschreibt die Transformation vom Board-Koordinatensystem (Ursprung: erste Board-Ecke) in den Kamera-Frame. Leer ohne gültige Pose oder Kamera-Intrinsics.",
+      "signal_name": "board_pose",
+      "signal_type": "double_array"
+    },
+    {
       "display_name": "Debug Image",
-      "description": "Farbbild mit eingezeichneten ArUco-Markern und detektierten ChArUco-Board-Ecken, nur wenn Debug aktiviert.",
+      "description": "Farbbild mit Markern, ChArUco-Ecken und dem Koordinatensystem am Board-Ursprung, nur wenn Debug aktiviert.",
       "signal_name": "debug_image",
       "signal_type": "other",
       "custom_signal_type": "sensor_msgs::msg::Image"
@@ -44,6 +50,11 @@
       "predicate_name": "has_board"
     },
     {
+      "display_name": "Pose geschätzt",
+      "description": "True, wenn aus ChArUco-Ecken und CameraInfo eine gültige Board-Pose geschätzt wurde.",
+      "predicate_name": "has_pose"
+    },
+    {
       "display_name": "Receiving Frames",
       "description": "True, solange frische Kamera-Frames ankommen (False nach ~1 s ohne neuen Frame).",
       "predicate_name": "is_receiving_frames"
@@ -52,10 +63,10 @@
   "parameters": [
     {
       "display_name": "ArUco Dictionary",
-      "description": "ArUco-Dictionary für das ChArUco-Board, z.B. DICT_5X5_250.",
+      "description": "ArUco-Dictionary für das ChArUco-Board, z.B. DICT_6x6_250.",
       "parameter_name": "aruco_dictionary",
       "parameter_type": "string",
-      "default_value": "DICT_5X5_250",
+      "default_value": "DICT_6x6_250",
       "dynamic": true
     },
     {
@@ -75,17 +86,17 @@
       "dynamic": true
     },
     {
-      "display_name": "Marker Spacing (m)",
-      "description": "Abstand zwischen Marker-Kante und Checker-Feld-Kante. Checker-Feldgröße = marker_length_m + marker_spacing_m.",
-      "parameter_name": "marker_spacing_m",
+      "display_name": "Checker Size (m)",
+      "description": "Kantenlänge eines Checker-Felds des ChArUco-Boards in Metern.",
+      "parameter_name": "checker_size_m",
       "parameter_type": "double",
-      "default_value": "0.009",
+      "default_value": "0.035",
       "dynamic": true
     },
     {
-      "display_name": "Marker Length (m)",
-      "description": "Markerlänge in Metern, z.B. 0.026 für 26 mm.",
-      "parameter_name": "marker_length_m",
+      "display_name": "Marker Size (m)",
+      "description": "Kantenlänge eines ArUco-Markers des ChArUco-Boards in Metern.",
+      "parameter_name": "marker_size_m",
       "parameter_type": "double",
       "default_value": "0.026",
       "dynamic": true

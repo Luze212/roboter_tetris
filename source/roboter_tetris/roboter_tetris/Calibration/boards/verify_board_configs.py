@@ -13,15 +13,16 @@ sys.path.insert(0, str(PACKAGE_SOURCE))
 from roboter_tetris.vision.board import BoardParams, build_board  # noqa: E402
 
 
-PARAMETER_KEYS = (
-    "board_type", "aruco_dictionary", "board_rows", "board_cols",
-    "marker_length_m", "marker_spacing_m", "min_detected_markers",
-)
-
-
 def load_params(config_path: Path) -> BoardParams:
     config = json.loads(config_path.read_text(encoding="utf-8"))
-    return BoardParams(**{key: config[key] for key in PARAMETER_KEYS})
+    return BoardParams(
+        aruco_dictionary=config["aruco_dictionary"],
+        board_rows=config["board_rows"],
+        board_cols=config["board_cols"],
+        marker_length_m=config["marker_size_m"],
+        marker_spacing_m=config["checker_size_m"] - config["marker_size_m"],
+        min_detected_markers=config["min_detected_markers"],
+    )
 
 
 def main() -> None:
