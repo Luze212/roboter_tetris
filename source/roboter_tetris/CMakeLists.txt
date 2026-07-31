@@ -24,7 +24,7 @@ ament_auto_find_build_dependencies()
 # install component description JSON files
 install(DIRECTORY ./component_descriptions DESTINATION .)
 
-# Ship calibration data separately from the task components.
+# Ship calibration assets and the board-detection component.
 install(DIRECTORY ./roboter_tetris/Calibration DESTINATION .)
 
 # Ship safety configuration (workspace bounds) separately from the task components.

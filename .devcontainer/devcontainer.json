@@ -1,6 +1,9 @@
 {
   "name": "roboter-tetris",
   "containerUser": "ros2",
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ],
   "initializeCommand": [
     "docker",
     "build",

@@ -147,7 +147,7 @@
     },
     {
       "display_name": "Kalibrierung X (m)",
-      "description": "Extrinsik Kamera→Roboter: Translation x in m. Versionierte Quelle: Calibration/extrinsic_transform.json; nach Neumontage neu kalibrieren.",
+      "description": "Extrinsik Kamera→Roboter: Translation x in m. Versionierte Quelle: Calibration/calibration.json; nach Neumontage neu kalibrieren.",
       "parameter_name": "cal_x",
       "parameter_type": "double",
       "default_value": "0.6118",

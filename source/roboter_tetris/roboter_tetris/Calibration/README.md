@@ -4,7 +4,7 @@ Dieser Ordner ist bewusst von der Objekterkennung, dem Tracking und der Greifauf
 
 ## Quelle der Kalibrierwerte
 
-`extrinsic_transform.json` ist die versionierbare Ablage für die Kamera-zu-Roboter-Transformation. Sie beschreibt die aktive Konvention eindeutig:
+`calibration.json` ist die versionierbare Ablage für die Kamera-zu-Roboter-Transformation. Sie beschreibt die aktive Konvention eindeutig:
 
 ```
 p_robot = T_robot_camera @ p_camera
@@ -30,3 +30,21 @@ Intrinsik, Tiefenskalierung, Förderbandhöhe und affine Korrekturen sind keine 
 ## Änderungsregel
 
 Keine Werte ohne Messprotokoll überschreiben. Bei jeder Änderung `measured_at`, `operator`, `method`, Fehlerwerte und eine kurze Notiz ergänzen. Dadurch bleibt nachvollziehbar, welcher Aufbau mit welcher AICA-Konfiguration betrieben wurde.
+
+
+## ChArUco-Board-Erkennung in AICA
+
+`board_detection.py` ist die AICA-Komponente für die reine Erkennung von **ChArUco-Boards**. Sie unterstützt ausschließlich ChArUco-Boards. Für jedes verwendete Board werden die folgenden dynamischen AICA-Parameter gesetzt:
+
+| Parameter | Bedeutung |
+| --- | --- |
+| `aruco_dictionary` | ArUco-Dictionary, z. B. `DICT_5X5_250` |
+| `board_rows` / `board_cols` | Anzahl der Marker in Y- bzw. X-Richtung |
+| `checker_size_m` | Kantenlänge eines Schachbrettfelds in Metern |
+| `marker_size_m` | Kantenlänge eines ArUco-Markers in Metern |
+
+`checker_size_m` muss größer als `marker_size_m` sein. Der für OpenCV benötigte Abstand wird intern als `checker_size_m - marker_size_m` berechnet.
+
+## Pose-Schätzung
+
+Wenn `color_camera_info` gültige Kamera-Intrinsics und Verzerrungskoeffizienten liefert, bestimmt die Komponente zusätzlich die Pose mit `cv2.aruco.estimatePoseCharucoBoard`. Die Ausgabe `board_pose` ist `[tx, ty, tz, rx, ry, rz]`: Translation in Metern und Rodrigues-Rotationsvektor in Radiant für die Transformation **Board → Kamera**. Der Ursprung des Board-Koordinatensystems liegt an der ersten Ecke des ChArUco-Boards. `has_pose` ist nur bei gültiger Schätzung gesetzt. Bei aktiviertem Debug wird ein Achsenkreuz mit drei Checker-Feldlängen gezeichnet.

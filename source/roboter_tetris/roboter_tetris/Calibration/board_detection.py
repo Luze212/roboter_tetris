@@ -5,13 +5,14 @@ positions without any robot-frame transformation.
 """
 
 import cv2
+import numpy as np
 from cv_bridge import CvBridge
 from modulo_components.lifecycle_component import LifecycleComponent
 import state_representation as sr
 from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import Image, CameraInfo
 
-from .vision.board import (
+from ..vision.board import (
     BoardParams, build_board,
     detect_board, draw_board_debug,
 )
@@ -26,8 +27,8 @@ class BoardDetection(LifecycleComponent):
         self._bridge = CvBridge()
 
         self.add_parameter(
-            sr.Parameter("aruco_dictionary", "DICT_5X5_250", sr.ParameterType.STRING),
-            "ArUco-Dictionary für das Charuco-Board, z.B. DICT_5X5_250."
+            sr.Parameter("aruco_dictionary", "DICT_6x6_250", sr.ParameterType.STRING),
+            "ArUco-Dictionary für das Charuco-Board, z.B. DICT_6x6_250."
         )
         self.add_parameter(
             sr.Parameter("board_rows", 5, sr.ParameterType.INT),
@@ -38,12 +39,12 @@ class BoardDetection(LifecycleComponent):
             "Anzahl der Marker in X-Richtung des Charuco-Boards."
         )
         self.add_parameter(
-            sr.Parameter("marker_spacing_m", 0.009, sr.ParameterType.DOUBLE),
-            "Abstand zwischen Marker-Kanten im Charuco-Board. Gesamtgröße eines Checker-Felds = marker_length_m + marker_spacing_m."
+            sr.Parameter("checker_size_m", 0.035, sr.ParameterType.DOUBLE),
+            "Kantenlänge eines Checker-Felds des ChArUco-Boards in Metern, z.B. 0.035 für 35 mm."
         )
         self.add_parameter(
-            sr.Parameter("marker_length_m", 0.026, sr.ParameterType.DOUBLE),
-            "Markerlänge in Metern, z.B. 0.026 für 26 mm."
+            sr.Parameter("marker_size_m", 0.026, sr.ParameterType.DOUBLE),
+            "Kantenlänge eines ArUco-Markers des ChArUco-Boards in Metern, z.B. 0.026 für 26 mm."
         )
         self.add_parameter(
             sr.Parameter("min_detected_markers", 4, sr.ParameterType.INT),
@@ -61,10 +62,14 @@ class BoardDetection(LifecycleComponent):
 
         self._board_corners = []
         self.add_output("board_corners", "_board_corners", Float64MultiArray)
+        # [tx, ty, tz, rx, ry, rz]: board origin in the camera frame.
+        self._board_pose = []
+        self.add_output("board_pose", "_board_pose", Float64MultiArray)
         self._debug_msg = Image()
         self.add_output("debug_image", "_debug_msg", Image)
 
         self.add_predicate("has_board", False)
+        self.add_predicate("has_pose", False)
         self.add_predicate("is_receiving_frames", False)
 
         self._last_stamp = None
@@ -83,7 +88,7 @@ class BoardDetection(LifecycleComponent):
             if parameter.get_value() <= 0:
                 self.get_logger().warn(f"{name} must be positive")
                 return False
-        if name == "marker_length_m" or name == "marker_spacing_m":
+        if name == "checker_size_m" or name == "marker_size_m":
             if parameter.get_value() <= 0.0:
                 self.get_logger().warn(f"{name} must be positive")
                 return False
@@ -100,7 +105,9 @@ class BoardDetection(LifecycleComponent):
         self._last_frame_walltime = None
         self._debug_msg = Image()
         self._board_corners = []
+        self._board_pose = []
         self.set_predicate("has_board", False)
+        self.set_predicate("has_pose", False)
         self.set_predicate("is_receiving_frames", False)
         self._board_params_hash = None
         self._board = None
@@ -114,27 +121,29 @@ class BoardDetection(LifecycleComponent):
         aruco_dictionary = self.get_parameter("aruco_dictionary").get_value()
         board_rows = int(self.get_parameter("board_rows").get_value())
         board_cols = int(self.get_parameter("board_cols").get_value())
-        marker_spacing_m = self.get_parameter("marker_spacing_m").get_value()
-        marker_length_m = self.get_parameter("marker_length_m").get_value()
+        checker_size_m = self.get_parameter("checker_size_m").get_value()
+        marker_size_m = self.get_parameter("marker_size_m").get_value()
         min_detected_markers = int(self.get_parameter("min_detected_markers").get_value())
 
         if aruco_dictionary is None:
-            aruco_dictionary = "DICT_5X5_250"
+            aruco_dictionary = "DICT_6x6_250"
         if board_rows <= 0:
             board_rows = 5
         if board_cols <= 0:
             board_cols = 7
-        if float(marker_spacing_m) == 0.0:
-            marker_spacing_m = 0.009
-        if float(marker_length_m) == 0.0:
-            marker_length_m = 0.026
+        if float(checker_size_m) == 0.0:
+            checker_size_m = 0.035
+        if float(marker_size_m) == 0.0:
+            marker_size_m = 0.026
+        if checker_size_m <= marker_size_m:
+            raise ValueError("checker_size_m must be greater than marker_size_m")
 
         return BoardParams(
             aruco_dictionary=aruco_dictionary,
             board_rows=board_rows,
             board_cols=board_cols,
-            marker_spacing_m=marker_spacing_m,
-            marker_length_m=marker_length_m,
+            marker_spacing_m=checker_size_m - marker_size_m,
+            marker_length_m=marker_size_m,
             min_detected_markers=min_detected_markers,
         )
 
@@ -151,7 +160,9 @@ class BoardDetection(LifecycleComponent):
         age_s = (self.get_clock().now() - self._last_frame_walltime).nanoseconds / 1e9
         if age_s > STALE_TIMEOUT_S:
             self._board_corners = []
+            self._board_pose = []
             self.set_predicate("has_board", False)
+            self.set_predicate("has_pose", False)
             self.set_predicate("is_receiving_frames", False)
 
     def _ensure_board(self):
@@ -168,6 +179,29 @@ class BoardDetection(LifecycleComponent):
             self._board, self._dictionary = build_board(params)
             self._board_params_hash = board_hash
         return params, self._board, self._dictionary
+
+    def _camera_parameters(self):
+        if len(self._info_msg.k) != 9 or not any(self._info_msg.k):
+            return None
+        camera_matrix = np.asarray(self._info_msg.k, dtype=np.float64).reshape(3, 3)
+        distortion = np.asarray(self._info_msg.d, dtype=np.float64).reshape(-1, 1)
+        if distortion.size == 0:
+            distortion = np.zeros((5, 1), dtype=np.float64)
+        return camera_matrix, distortion
+
+    def _estimate_pose(self, board_corners, board_ids, board):
+        camera_parameters = self._camera_parameters()
+        if camera_parameters is None or len(board_ids) < 4:
+            return None
+
+        camera_matrix, distortion = camera_parameters
+        valid, rvec, tvec = cv2.aruco.estimatePoseCharucoBoard(
+            board_corners.reshape(-1, 1, 2).astype(np.float32),
+            board_ids.reshape(-1, 1).astype(np.int32),
+            board, camera_matrix, distortion, None, None)
+        if not valid:
+            return None
+        return rvec.reshape(3), tvec.reshape(3), camera_matrix, distortion
 
     def on_step_callback(self):
         if self._color_msg.width == 0:
@@ -186,11 +220,14 @@ class BoardDetection(LifecycleComponent):
         try:
             color_img = self._bridge.imgmsg_to_cv2(self._color_msg, "bgr8")
             params, board, dictionary = self._ensure_board()
-            detection = detect_board(color_img, board, dictionary, "CHARUCO")
+            detection = detect_board(color_img, board, dictionary)
+            pose = None
 
             if detection is None:
                 self._board_corners = []
+                self._board_pose = []
                 self.set_predicate("has_board", False)
+                self.set_predicate("has_pose", False)
             else:
                 marker_corners, marker_ids, board_corners, board_ids = detection
                 self._board_corners = []
@@ -202,18 +239,34 @@ class BoardDetection(LifecycleComponent):
                     ])
                 self.set_predicate("has_board", len(marker_ids) >= params.min_detected_markers)
 
+                pose = self._estimate_pose(board_corners, board_ids, board)
+                if pose is None:
+                    self._board_pose = []
+                    self.set_predicate("has_pose", False)
+                else:
+                    rvec, tvec, _, _ = pose
+                    self._board_pose = [*map(float, tvec), *map(float, rvec)]
+                    self.set_predicate("has_pose", True)
+
             if self.get_parameter("debug_enable").get_value():
-                self._publish_debug(color_img, detection)
+                self._publish_debug(color_img, detection, pose, params.marker_length_m + params.marker_spacing_m)
 
         except Exception as exc:
+            self._board_pose = []
+            self.set_predicate("has_pose", False)
             self._log_error_throttled(f"board_detection pipeline error: {exc}")
 
-    def _publish_debug(self, color_img, detection):
+    def _publish_debug(self, color_img, detection, pose, checker_size_m):
         debug_img = color_img.copy()
         if detection is not None:
             marker_corners, marker_ids, board_corners, board_ids = detection
             debug_img = draw_board_debug(
                 debug_img, marker_corners, marker_ids, board_corners, board_ids)
+            if pose is not None:
+                rvec, tvec, camera_matrix, distortion = pose
+                cv2.drawFrameAxes(
+                    debug_img, camera_matrix, distortion, rvec, tvec,
+                    float(3.0 * checker_size_m), 2)
             cv2.putText(debug_img, "CHARUCO board detected", (10, 25),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2)
         else:
