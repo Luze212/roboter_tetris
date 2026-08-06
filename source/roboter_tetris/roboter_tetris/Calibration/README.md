@@ -40,10 +40,10 @@ Keine Werte ohne Messprotokoll überschreiben. Bei jeder Änderung `measured_at`
 | --- | --- |
 | `aruco_dictionary` | ArUco-Dictionary, z. B. `DICT_5X5_250` |
 | `board_rows` / `board_cols` | Anzahl der Marker in Y- bzw. X-Richtung |
-| `checker_size_m` | Kantenlänge eines Schachbrettfelds in Metern |
-| `marker_size_m` | Kantenlänge eines ArUco-Markers in Metern |
+| `checker_size_mm` | Kantenlänge eines Schachbrettfelds in Millimetern (z. B. `35.0`) |
+| `marker_size_mm` | Kantenlänge eines ArUco-Markers in Millimetern (z. B. `26.0`) |
 
-`checker_size_m` muss größer als `marker_size_m` sein. Der für OpenCV benötigte Abstand wird intern als `checker_size_m - marker_size_m` berechnet.
+`checker_size_mm` muss größer als `marker_size_mm` sein. Der für OpenCV benötigte Abstand wird intern berechnet.
 
 ## Pose-Schätzung
 
