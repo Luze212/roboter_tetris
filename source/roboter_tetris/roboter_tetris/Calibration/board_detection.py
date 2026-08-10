@@ -51,7 +51,7 @@ class BoardDetection(LifecycleComponent):
             "Minimale Anzahl erkannter Marker, damit eine Detektion als gültig gilt."
         )
         self.add_parameter(
-            sr.Parameter("debug_enable", True, sr.ParameterType.BOOL),
+            sr.Parameter("debug_enable", False, sr.ParameterType.BOOL),
             "Debug-Bild erzeugen und publizieren."
         )
 
@@ -257,7 +257,19 @@ class BoardDetection(LifecycleComponent):
         except Exception as exc:
             self._board_pose = []
             self.set_predicate("has_pose", False)
+            if self.get_parameter("debug_enable").get_value() and 'color_img' in locals():
+                self._publish_error_debug(color_img, exc)
             self._log_error_throttled(f"board_detection pipeline error: {exc}")
+
+    def _publish_error_debug(self, color_img, exc):
+        debug_img = color_img.copy()
+        cv2.putText(debug_img, "BOARD DETECTION ERROR", (10, 25),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+        cv2.putText(debug_img, str(exc), (10, 55),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 1)
+        self._debug_msg = self._bridge.cv2_to_imgmsg(debug_img, "bgr8")
+        self._debug_msg.header = self._color_msg.header
+        self.publish_output("debug_image")
 
     def _publish_debug(self, color_img, detection, pose, checker_size_m):
         debug_img = color_img.copy()

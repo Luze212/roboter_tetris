@@ -9,4 +9,4 @@ pyrobotiqgripper==2.1.0
 #   numpy     -> pinned below to keep the ROS image compatible with the C extensions
 #   cv_bridge -> provided by the ROS base image; no extra pip package is required
 numpy<2
-opencv-python-headless
+opencv-contrib-python-headless>=4.7.0,<4.8.0

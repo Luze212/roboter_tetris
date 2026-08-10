@@ -22,18 +22,55 @@ def _get_aruco_dictionary(name: str) -> cv2.aruco_Dictionary:
     name = name.strip().upper()
     if not name.startswith("DICT_") or not hasattr(cv2.aruco, name):
         raise ValueError(f"Unsupported ArUco dictionary {name!r}.")
-    return cv2.aruco.Dictionary_get(getattr(cv2.aruco, name))
+    dictionary_id = getattr(cv2.aruco, name)
+    if hasattr(cv2.aruco, "getPredefinedDictionary"):
+        return cv2.aruco.getPredefinedDictionary(dictionary_id)
+    if hasattr(cv2.aruco, "Dictionary_get"):
+        return cv2.aruco.Dictionary_get(dictionary_id)
+    raise RuntimeError(
+        "Unsupported OpenCV ArUco API: no dictionary factory available."
+    )
+
+
+def _create_charuco_board(params: BoardParams, dictionary: cv2.aruco_Dictionary) -> object:
+    if hasattr(cv2.aruco, "CharucoBoard_create"):
+        return cv2.aruco.CharucoBoard_create(
+            params.board_cols,
+            params.board_rows,
+            float(params.marker_length_m + params.marker_spacing_m),
+            float(params.marker_length_m),
+            dictionary,
+        )
+
+    board_cls = getattr(cv2.aruco, "CharucoBoard", None)
+    if board_cls is not None and hasattr(board_cls, "create"):
+        return board_cls.create(
+            params.board_cols,
+            params.board_rows,
+            float(params.marker_length_m + params.marker_spacing_m),
+            float(params.marker_length_m),
+            dictionary,
+        )
+
+    raise RuntimeError(
+        "OpenCV ArUco API does not support CharucoBoard creation. "
+        "Install opencv-contrib-python-headless or a matching OpenCV contrib build."
+    )
+
+
+def _detect_markers(gray: np.ndarray, dictionary: cv2.aruco_Dictionary) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    if hasattr(cv2.aruco, "ArucoDetector"):
+        detector_params = cv2.aruco.DetectorParameters_create()
+        detector = cv2.aruco.ArucoDetector(dictionary, detector_params)
+        return detector.detectMarkers(gray)
+
+    detector_params = cv2.aruco.DetectorParameters_create()
+    return cv2.aruco.detectMarkers(gray, dictionary, parameters=detector_params)
 
 
 def build_board(params: BoardParams) -> Tuple[object, cv2.aruco_Dictionary]:
     dictionary = _get_aruco_dictionary(params.aruco_dictionary)
-    board = cv2.aruco.CharucoBoard_create(
-        params.board_cols,
-        params.board_rows,
-        float(params.marker_length_m + params.marker_spacing_m),
-        float(params.marker_length_m),
-        dictionary,
-    )
+    board = _create_charuco_board(params, dictionary)
     return board, dictionary
 
 
@@ -43,15 +80,25 @@ def detect_board(
         dictionary: cv2.aruco_Dictionary,
 ) -> Optional[Tuple[np.ndarray, np.ndarray, Optional[np.ndarray], Optional[np.ndarray]]]:
     gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
-    detector_params = cv2.aruco.DetectorParameters_create()
-    marker_corners, marker_ids, _ = cv2.aruco.detectMarkers(
-        gray, dictionary, parameters=detector_params)
+    if hasattr(cv2.aruco, "ArucoDetector"):
+        detector_params = cv2.aruco.DetectorParameters_create()
+        detector = cv2.aruco.ArucoDetector(dictionary, detector_params)
+        marker_corners, marker_ids, _ = detector.detectMarkers(gray)
+    else:
+        detector_params = cv2.aruco.DetectorParameters_create()
+        marker_corners, marker_ids, _ = cv2.aruco.detectMarkers(
+            gray, dictionary, parameters=detector_params)
 
     if marker_ids is None or len(marker_ids) == 0:
         return None
 
-    _, board_corners, board_ids = cv2.aruco.interpolateCornersCharuco(
-        marker_corners, marker_ids, gray, board)
+    if hasattr(cv2.aruco, "interpolateCornersCharuco"):
+        _, board_corners, board_ids = cv2.aruco.interpolateCornersCharuco(
+            marker_corners, marker_ids, gray, board)
+    else:
+        _, board_corners, board_ids = cv2.aruco.interpolateCornersCharuco(
+            marker_corners, marker_ids, gray, board)
+
     if board_ids is None or board_corners is None or len(board_ids) == 0:
         return None
     return marker_corners, marker_ids, board_corners.reshape(-1, 2), board_ids.flatten().astype(int)
