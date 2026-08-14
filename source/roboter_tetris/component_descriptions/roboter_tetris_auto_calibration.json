@@ -21,12 +21,18 @@
     },
     {
       "display_name": "Robot EE Pose",
-      "description": "Endeffektor-Pose (Cartesian Pose/State) im Roboter-Base-Frame.",
+      "description": "Endeffektor-Pose im Roboter-Base-Frame.",
       "signal_name": "robot_ee_pose",
-      "signal_type": "encoded_state"
+      "signal_type": "cartesian_pose"
     }
   ],
   "outputs": [
+    {
+      "display_name": "Target EE Pose",
+      "description": "Kartesische Zielpose des Endeffektors (Cartesian Pose) für die Bewegungssteuerung.",
+      "signal_name": "target_ee_pose",
+      "signal_type": "cartesian_pose"
+    },
     {
       "display_name": "Kalibriermatrix",
       "description": "Flaches 4x4 Array der berechneten homogenen Transformationsmatrix (BaseCam -> Robot Base).",
