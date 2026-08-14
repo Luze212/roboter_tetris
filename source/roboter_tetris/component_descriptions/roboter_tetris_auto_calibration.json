@@ -1,0 +1,94 @@
+{
+  "name": "Auto Calibration",
+  "description": {
+    "brief": "Automatische extrinsische Kalibrierung für Roboter und Kameras.",
+    "details": "Steuert automatisiert Kalibrier-Posen an, erfasst ChArUco-Board-Erkennungen der Eye-in-Hand-Kamera (robot_cam) sowie der Basis-Kamera (base_cam), berechnet die extrinsische Kamera-zu-Roboter Transformation und speichert das Ergebnis in calibration.json."
+  },
+  "registration": "roboter_tetris::AutoCalibration",
+  "inherits": "modulo_components::LifecycleComponent",
+  "inputs": [
+    {
+      "display_name": "Base Cam Board Pose",
+      "description": "Board-Pose aus der statischen BaseCam [tx, ty, tz, rx, ry, rz].",
+      "signal_name": "base_cam_board_pose",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Robot Cam Board Pose",
+      "description": "Board-Pose aus der Eye-in-Hand RobotCam [tx, ty, tz, rx, ry, rz].",
+      "signal_name": "robot_cam_board_pose",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Robot EE Pose",
+      "description": "Endeffektor-Pose (Cartesian State) im Roboter-Base-Frame.",
+      "signal_name": "robot_ee_pose",
+      "signal_type": "cartesian_state"
+    }
+  ],
+  "outputs": [
+    {
+      "display_name": "Kalibriermatrix",
+      "description": "Flaches 4x4 Array der berechneten homogenen Transformationsmatrix (BaseCam -> Robot Base).",
+      "signal_name": "calibration_matrix",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Kalibrierung RPY",
+      "description": "Roll, Pitch, Yaw Winkel der berechneten Transformation in Grad [roll, pitch, yaw].",
+      "signal_name": "calibration_rpy",
+      "signal_type": "double_array"
+    }
+  ],
+  "predicates": [
+    {
+      "display_name": "Kalibrierung läuft",
+      "description": "True während der Ausführung des automatischen Bewegungs- und Messablaufs.",
+      "predicate_name": "is_running"
+    },
+    {
+      "display_name": "Kalibriert",
+      "description": "True nach erfolgreicher Berechnung und Abspeicherung der calibration.json.",
+      "predicate_name": "is_calibrated"
+    },
+    {
+      "display_name": "Fehlgeschlagen",
+      "description": "True, falls während des Ablaufs oder der Berechnung ein Fehler aufgetreten ist.",
+      "predicate_name": "has_failed"
+    }
+  ],
+  "parameters": [
+    {
+      "display_name": "Kalibrierdateipfad",
+      "description": "Pfad zum Speichern der erzeugten calibration.json.",
+      "parameter_name": "calibration_file_path",
+      "parameter_type": "string",
+      "default_value": "/home/tetripick/Desktop/AICA/roboter_tetris/source/roboter_tetris/roboter_tetris/Calibration/calibration.json",
+      "dynamic": true
+    },
+    {
+      "display_name": "Beruhigungszeit (s)",
+      "description": "Wartezeit nach Anfahren einer Pose vor der Bildaufnahme in Sekunden.",
+      "parameter_name": "settle_time_s",
+      "parameter_type": "double",
+      "default_value": "0.8",
+      "dynamic": true
+    },
+    {
+      "display_name": "Samples pro Wegpunkt",
+      "description": "Anzahl zu mittelnder Detektionen pro Wegpunkt.",
+      "parameter_name": "samples_per_waypoint",
+      "parameter_type": "int",
+      "default_value": "5",
+      "dynamic": true
+    },
+    {
+      "display_name": "Kalibrierung Starten",
+      "description": "Trigger: Auf True setzen, um die automatische Kalibrierung zu starten.",
+      "parameter_name": "start_calibration",
+      "parameter_type": "bool",
+      "default_value": "false",
+      "dynamic": true
+    }
+  ]
+}

@@ -86,19 +86,19 @@
       "dynamic": true
     },
     {
-      "display_name": "Checker Size (m)",
-      "description": "Kantenlänge eines Checker-Felds des ChArUco-Boards in Metern.",
-      "parameter_name": "checker_size_m",
+      "display_name": "Checker Size (mm)",
+      "description": "Kantenlänge eines Checker-Felds des ChArUco-Boards in Millimetern.",
+      "parameter_name": "checker_size_mm",
       "parameter_type": "double",
-      "default_value": "0.035",
+      "default_value": "35.0",
       "dynamic": true
     },
     {
-      "display_name": "Marker Size (m)",
-      "description": "Kantenlänge eines ArUco-Markers des ChArUco-Boards in Metern.",
-      "parameter_name": "marker_size_m",
+      "display_name": "Marker Size (mm)",
+      "description": "Kantenlänge eines ArUco-Markers des ChArUco-Boards in Millimetern.",
+      "parameter_name": "marker_size_mm",
       "parameter_type": "double",
-      "default_value": "0.026",
+      "default_value": "26.0",
       "dynamic": true
     },
     {
@@ -114,7 +114,7 @@
       "description": "Debug-Bild erzeugen und publizieren.",
       "parameter_name": "debug_enable",
       "parameter_type": "bool",
-      "default_value": "false",
+      "default_value": "true",
       "dynamic": true
     }
   ]

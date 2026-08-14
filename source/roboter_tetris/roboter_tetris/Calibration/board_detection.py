@@ -39,19 +39,19 @@ class BoardDetection(LifecycleComponent):
             "Anzahl der Marker in X-Richtung des Charuco-Boards."
         )
         self.add_parameter(
-            sr.Parameter("checker_size_m", 0.035, sr.ParameterType.DOUBLE),
-            "Kantenlänge eines Checker-Felds des ChArUco-Boards in Metern, z.B. 0.035 für 35 mm."
+            sr.Parameter("checker_size_mm", 35.0, sr.ParameterType.DOUBLE),
+            "Kantenlänge eines Checker-Felds des ChArUco-Boards in Millimetern, z.B. 35.0 für 35 mm."
         )
         self.add_parameter(
-            sr.Parameter("marker_size_m", 0.026, sr.ParameterType.DOUBLE),
-            "Kantenlänge eines ArUco-Markers des ChArUco-Boards in Metern, z.B. 0.026 für 26 mm."
+            sr.Parameter("marker_size_mm", 26.0, sr.ParameterType.DOUBLE),
+            "Kantenlänge eines ArUco-Markers des ChArUco-Boards in Millimetern, z.B. 26.0 für 26 mm."
         )
         self.add_parameter(
             sr.Parameter("min_detected_markers", 4, sr.ParameterType.INT),
             "Minimale Anzahl erkannter Marker, damit eine Detektion als gültig gilt."
         )
         self.add_parameter(
-            sr.Parameter("debug_enable", False, sr.ParameterType.BOOL),
+            sr.Parameter("debug_enable", True, sr.ParameterType.BOOL),
             "Debug-Bild erzeugen und publizieren."
         )
 
@@ -88,7 +88,7 @@ class BoardDetection(LifecycleComponent):
             if parameter.get_value() <= 0:
                 self.get_logger().warn(f"{name} must be positive")
                 return False
-        if name == "checker_size_m" or name == "marker_size_m":
+        if name == "checker_size_mm" or name == "marker_size_mm":
             if parameter.get_value() <= 0.0:
                 self.get_logger().warn(f"{name} must be positive")
                 return False
@@ -121,8 +121,8 @@ class BoardDetection(LifecycleComponent):
         aruco_dictionary = self.get_parameter("aruco_dictionary").get_value()
         board_rows = int(self.get_parameter("board_rows").get_value())
         board_cols = int(self.get_parameter("board_cols").get_value())
-        checker_size_m = self.get_parameter("checker_size_m").get_value()
-        marker_size_m = self.get_parameter("marker_size_m").get_value()
+        checker_size_mm = float(self.get_parameter("checker_size_mm").get_value())
+        marker_size_mm = float(self.get_parameter("marker_size_mm").get_value())
         min_detected_markers = int(self.get_parameter("min_detected_markers").get_value())
 
         if aruco_dictionary is None:
@@ -131,12 +131,15 @@ class BoardDetection(LifecycleComponent):
             board_rows = 5
         if board_cols <= 0:
             board_cols = 7
-        if float(checker_size_m) == 0.0:
-            checker_size_m = 0.035
-        if float(marker_size_m) == 0.0:
-            marker_size_m = 0.026
-        if checker_size_m <= marker_size_m:
-            raise ValueError("checker_size_m must be greater than marker_size_m")
+        if checker_size_mm <= 0.0:
+            checker_size_mm = 35.0
+        if marker_size_mm <= 0.0:
+            marker_size_mm = 26.0
+        if checker_size_mm <= marker_size_mm:
+            raise ValueError("checker_size_mm must be greater than marker_size_mm")
+
+        checker_size_m = checker_size_mm / 1000.0
+        marker_size_m = marker_size_mm / 1000.0
 
         return BoardParams(
             aruco_dictionary=aruco_dictionary,
@@ -273,3 +276,5 @@ class BoardDetection(LifecycleComponent):
             cv2.putText(debug_img, "NO BOARD detected", (10, 25),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2)
         self._debug_msg = self._bridge.cv2_to_imgmsg(debug_img, "bgr8")
+        self._debug_msg.header = self._color_msg.header
+        self.publish_output("debug_image")
