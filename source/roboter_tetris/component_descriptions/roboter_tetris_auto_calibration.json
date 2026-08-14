@@ -21,9 +21,9 @@
     },
     {
       "display_name": "Robot EE Pose",
-      "description": "Endeffektor-Pose (Cartesian State) im Roboter-Base-Frame.",
+      "description": "Endeffektor-Pose (Cartesian Pose/State) im Roboter-Base-Frame.",
       "signal_name": "robot_ee_pose",
-      "signal_type": "cartesian_state"
+      "signal_type": "encoded_state"
     }
   ],
   "outputs": [
@@ -38,6 +38,13 @@
       "description": "Roll, Pitch, Yaw Winkel der berechneten Transformation in Grad [roll, pitch, yaw].",
       "signal_name": "calibration_rpy",
       "signal_type": "double_array"
+    }
+  ],
+  "services": [
+    {
+      "display_name": "Kalibrierung Starten",
+      "description": "Klicken um die automatische Kalibriersequenz zu starten.",
+      "service_name": "start_calibration"
     }
   ],
   "predicates": [
@@ -83,11 +90,11 @@
       "dynamic": true
     },
     {
-      "display_name": "Kalibrierung Starten",
-      "description": "Trigger: Auf True setzen, um die automatische Kalibrierung zu starten.",
-      "parameter_name": "start_calibration",
-      "parameter_type": "bool",
-      "default_value": "false",
+      "display_name": "JTC Service Name",
+      "description": "Service-Name des Joint Trajectory Controllers.",
+      "parameter_name": "jtc_service_name",
+      "parameter_type": "string",
+      "default_value": "/joint_trajectory_controller/set_trajectory",
       "dynamic": true
     }
   ]

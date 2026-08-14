@@ -1,0 +1,10 @@
+{
+  "aruco_dictionary": "DICT_4X4_250",
+  "board_rows": 5,
+  "board_cols": 7,
+  "checker_size_mm": 35.0,
+  "marker_size_mm": 26.0,
+  "min_detected_markers": 4,
+  "usage": "Unterstützte Konfiguration für die AICA-Komponente BoardDetection.",
+  "notes": "ChArUco 5x7 mit DICT_4X4_250 (35mm Checker, 26mm Marker)."
+}

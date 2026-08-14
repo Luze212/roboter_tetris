@@ -45,19 +45,21 @@ class AutoCalibration(LifecycleComponent):
             "Anzahl zu mittelnder Detektionen pro Wegpunkt"
         )
         self.add_parameter(
-            sr.Parameter("start_calibration", False, sr.ParameterType.BOOL),
-            "Trigger-Parameter: Auf True setzen, um die Kalibrierung zu starten"
+            sr.Parameter("jtc_service_name", "/joint_trajectory_controller/set_trajectory", sr.ParameterType.STRING),
+            "Service-Name des AICA JTC Controllers (z.B. /joint_trajectory_controller/set_trajectory)"
         )
-
         # -- Inputs --
-        self._base_cam_board_pose_msg = Float64MultiArray()
+        self._base_cam_board_pose_msg = []
         self.add_input("base_cam_board_pose", "_base_cam_board_pose_msg", Float64MultiArray)
 
-        self._robot_cam_board_pose_msg = Float64MultiArray()
+        self._robot_cam_board_pose_msg = []
         self.add_input("robot_cam_board_pose", "_robot_cam_board_pose_msg", Float64MultiArray)
 
-        self._robot_ee_pose = sr.CartesianState("end_effector", "robot_base")
-        self.add_input("robot_ee_pose", "_robot_ee_pose", sr.CartesianState)
+        self._robot_ee_pose = sr.CartesianPose("end_effector", "robot_base")
+        self.add_input("robot_ee_pose", "_robot_ee_pose", sr.CartesianPose)
+
+        # Internal target pose used for waypoint tracking / debugging.
+        self._target_pose = sr.CartesianPose("calibration_target", "robot_base")
 
         # -- Outputs --
         self._calibration_matrix = []
@@ -70,6 +72,12 @@ class AutoCalibration(LifecycleComponent):
         self.add_predicate("is_running", False)
         self.add_predicate("is_calibrated", False)
         self.add_predicate("has_failed", False)
+
+        # -- UI Trigger Service (optional) --
+        try:
+            self.add_service("start_calibration", StringTrigger, self._on_start_calibration_service)
+        except Exception:
+            pass  # Fallback: Kalibrierung per start_calibration Parameter starten
 
         # -- State machine internal variables --
         self._state = "IDLE"  # States: IDLE, MOVING, SETTLING, SAMPLING, SOLVING, FINISHED, FAILED
@@ -93,8 +101,8 @@ class AutoCalibration(LifecycleComponent):
         ]
 
     def on_configure_callback(self) -> bool:
-        # Non-blocking service client setup according to AICA architecture guidelines
-        self._jtc_client = self.create_client(StringTrigger, "/jtc/set_trajectory")
+        srv_name = self.get_parameter("jtc_service_name").get_value() or "/jtc/set_trajectory"
+        self._jtc_client = self.create_client(StringTrigger, srv_name)
         return True
 
     def on_activate_callback(self) -> bool:
@@ -113,32 +121,43 @@ class AutoCalibration(LifecycleComponent):
     def _get_current_ee_transform(self) -> np.ndarray:
         """Extract 4x4 matrix from sr.CartesianPose self._robot_ee_pose."""
         T = np.eye(4, dtype=np.float64)
-        pos = self._robot_ee_pose.get_position()
-        T[0, 3] = pos[0]
-        T[1, 3] = pos[1]
-        T[2, 3] = pos[2]
+        try:
+            pos = self._robot_ee_pose.get_position()
+            T[0, 3] = pos[0]
+            T[1, 3] = pos[1]
+            T[2, 3] = pos[2]
 
-        ori = self._robot_ee_pose.get_orientation()
-        # Quaternion [qx, qy, qz, qw] to R
-        # In state_representation, get_orientation returns numpy array [qx, qy, qz, qw] or matrix
-        if hasattr(ori, "to_rotation_matrix"):
-            T[:3, :3] = ori.to_rotation_matrix()
-        elif len(ori) == 4:
-            qx, qy, qz, qw = ori
-            T[:3, :3] = np.array([
-                [1 - 2*(qy**2 + qz**2), 2*(qx*qy - qz*qw), 2*(qx*qz + qy*qw)],
-                [2*(qx*qy + qz*qw), 1 - 2*(qx**2 + qz**2), 2*(qy*qz - qx*qw)],
-                [2*(qx*qz - qy*qw), 2*(qy*qz + qx*qw), 1 - 2*(qx**2 + qy**2)],
-            ], dtype=np.float64)
+            ori = self._robot_ee_pose.get_orientation()
+            if hasattr(ori, "to_rotation_matrix"):
+                T[:3, :3] = ori.to_rotation_matrix()
+            elif len(ori) == 4:
+                qx, qy, qz, qw = ori
+                T[:3, :3] = np.array([
+                    [1 - 2*(qy**2 + qz**2), 2*(qx*qy - qz*qw), 2*(qx*qz + qy*qw)],
+                    [2*(qx*qy + qz*qw), 1 - 2*(qx**2 + qz**2), 2*(qy*qz - qx*qw)],
+                    [2*(qx*qz - qy*qw), 2*(qy*qz + qx*qw), 1 - 2*(qx**2 + qy**2)],
+                ], dtype=np.float64)
+        except Exception as e:
+            self.get_logger().warn(f"Could not extract current robot_ee_pose: {e}")
         return T
 
-    def _send_waypoint_command(self, frame_name: str):
+    def _send_waypoint_command(self, waypoint_target):
         """Send trajectory command to JTC via StringTrigger non-blockingly."""
+        srv_name = self.get_parameter("jtc_service_name").get_value() or "/jtc/set_trajectory"
+        if not hasattr(self, "_jtc_client") or self._jtc_client is None:
+            self._jtc_client = self.create_client(StringTrigger, srv_name)
+
         if not self._jtc_client.service_is_ready():
-            self.get_logger().warn("JTC service /jtc/set_trajectory not ready.")
+            self.get_logger().error(f"JTC service '{srv_name}' is NOT ready. Please check if the Joint Trajectory Controller is loaded and active.")
             return False
 
-        payload = json.dumps({"frames": [frame_name], "durations": [2.5]})
+        if isinstance(waypoint_target, str):
+            payload = json.dumps({"frames": [waypoint_target], "durations": [2.5]})
+        elif isinstance(waypoint_target, dict):
+            payload = json.dumps(waypoint_target)
+        else:
+            payload = json.dumps({"frames": [str(waypoint_target)], "durations": [2.5]})
+
         req = StringTrigger.Request()
         req.payload = payload
 
@@ -154,22 +173,69 @@ class AutoCalibration(LifecycleComponent):
         except Exception as e:
             self.get_logger().error(f"JTC Service call failed: {e}")
 
-    def on_step_callback(self):
-        now_time = self.get_clock().now()
+    def _on_start_calibration_service(self, request: StringTrigger.Request) -> StringTrigger.Response:
+        """AICA Service handler - called when user clicks the 'Kalibrierung Starten' button."""
+        response = StringTrigger.Response()
+        if self._state not in ("IDLE", "FINISHED", "FAILED"):
+            response.success = False
+            response.message = f"Kalibrierung läuft bereits (Zustand: {self._state})."
+            return response
+        self._on_start_calibration()
+        response.success = True
+        response.message = "Kalibriersequenz gestartet."
+        return response
 
-        # Check for trigger start parameter
-        start_param = self.get_parameter("start_calibration").get_value()
-        if start_param and self._state == "IDLE":
-            self.set_parameter(sr.Parameter("start_calibration", False, sr.ParameterType.BOOL))
-            self.get_logger().info("Starting automatic calibration sequence...")
+    def _on_start_calibration(self):
+        """Callback triggered when the start_calibration Event button is clicked in AICA Studio."""
+        if self._state == "IDLE" or self._state == "FINISHED" or self._state == "FAILED":
+            self.get_logger().info("Starting automatic calibration sequence via UI Event Button...")
             self._state = "MOVING"
             self._current_waypoint_idx = 0
             self._collected_samples.clear()
             self.set_predicate("is_running", True)
             self.set_predicate("is_calibrated", False)
             self.set_predicate("has_failed", False)
+            self._start_ee_transform = self._get_current_ee_transform()
             self._send_next_waypoint()
-            return
+
+    def _send_next_waypoint(self):
+        target_frame = self._waypoints[self._current_waypoint_idx]
+        self.get_logger().info(f"Moving to waypoint {self._current_waypoint_idx + 1}/{len(self._waypoints)}: {target_frame}")
+
+        # Compute relative target pose from starting robot position
+        if hasattr(self, "_start_ee_transform") and self._start_ee_transform is not None:
+            offsets = [
+                [0.0, 0.0, 0.0],
+                [0.04, 0.0, 0.0],
+                [-0.04, 0.0, 0.0],
+                [0.0, 0.04, 0.02],
+                [0.0, -0.04, -0.02],
+            ]
+            idx = min(self._current_waypoint_idx, len(offsets) - 1)
+            dx, dy, dz = offsets[idx]
+
+            T_target = self._start_ee_transform.copy()
+            T_target[0, 3] += dx
+            T_target[1, 3] += dy
+            T_target[2, 3] += dz
+
+            try:
+                self._target_pose.set_position(T_target[:3, 3])
+                if hasattr(self._target_pose, "set_orientation"):
+                    self._target_pose.set_orientation(T_target[:3, :3])
+            except Exception as e:
+                self.get_logger().warn(f"Could not update target_pose signal: {e}")
+
+        # Also trigger JTC trajectory service
+        self._send_waypoint_command(target_frame)
+
+    def _send_next_waypoint(self):
+        target_frame = self._waypoints[self._current_waypoint_idx]
+        self.get_logger().info(f"Moving to waypoint {self._current_waypoint_idx + 1}: {target_frame}")
+        self._send_waypoint_command(target_frame)
+
+    def on_step_callback(self):
+        now_time = self.get_clock().now()
 
         if self._state == "IDLE":
             return
@@ -196,13 +262,25 @@ class AutoCalibration(LifecycleComponent):
         elif self._state == "SAMPLING":
             target_samples = int(self.get_parameter("samples_per_waypoint").get_value())
 
+            # Safely extract list from input
+            robot_cam_data = (
+                list(self._robot_cam_board_pose_msg.data)
+                if hasattr(self._robot_cam_board_pose_msg, "data")
+                else list(self._robot_cam_board_pose_msg)
+            )
+            base_cam_data = (
+                list(self._base_cam_board_pose_msg.data)
+                if hasattr(self._base_cam_board_pose_msg, "data")
+                else list(self._base_cam_board_pose_msg)
+            )
+
             # Collect robot_cam board pose if present
-            if len(self._robot_cam_board_pose_msg.data) >= 6:
-                self._sample_buffer_robot_cam.append(list(self._robot_cam_board_pose_msg.data))
+            if len(robot_cam_data) >= 6:
+                self._sample_buffer_robot_cam.append(robot_cam_data)
 
             # Collect base_cam board pose if present
-            if len(self._base_cam_board_pose_msg.data) >= 6:
-                self._sample_buffer_base_cam.append(list(self._base_cam_board_pose_msg.data))
+            if len(base_cam_data) >= 6:
+                self._sample_buffer_base_cam.append(base_cam_data)
 
             if len(self._sample_buffer_robot_cam) >= target_samples:
                 # Average readings
@@ -254,7 +332,3 @@ class AutoCalibration(LifecycleComponent):
             # Idle until next manual trigger
             pass
 
-    def _send_next_waypoint(self):
-        target_frame = self._waypoints[self._current_waypoint_idx]
-        self.get_logger().info(f"Moving to waypoint {self._current_waypoint_idx + 1}: {target_frame}")
-        self._send_waypoint_command(target_frame)

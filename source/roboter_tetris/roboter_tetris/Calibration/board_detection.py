@@ -277,4 +277,3 @@ class BoardDetection(LifecycleComponent):
                         cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2)
         self._debug_msg = self._bridge.cv2_to_imgmsg(debug_img, "bgr8")
         self._debug_msg.header = self._color_msg.header
-        self.publish_output("debug_image")
