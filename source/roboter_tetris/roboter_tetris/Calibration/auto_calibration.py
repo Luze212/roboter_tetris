@@ -29,11 +29,10 @@ class AutoCalibration(LifecycleComponent):
         self.add_parameter(
             sr.Parameter(
                 "calibration_file_path",
-                "/home/tetripick/Desktop/AICA/roboter_tetris/source/"
-                "roboter_tetris/roboter_tetris/Calibration/calibration.json",
+                "/tmp/calibration.json",
                 sr.ParameterType.STRING
             ),
-            "Zielpfad für die generierte calibration.json"
+            "Zielpfad für die generierte calibration.json (Standard: /tmp/calibration.json im Container)"
         )
         self.add_parameter(
             sr.Parameter("settle_time_s", 0.8, sr.ParameterType.DOUBLE),
@@ -44,12 +43,16 @@ class AutoCalibration(LifecycleComponent):
             "Anzahl zu mittelnder Detektionen pro Wegpunkt"
         )
         self.add_parameter(
-            sr.Parameter(
-                "jtc_service_name",
-                "/joint_trajectory_controller/set_trajectory",
-                sr.ParameterType.STRING
-            ),
-            "Service-Name des AICA JTC Controllers"
+            sr.Parameter("conveyor_offset_x_mm", -375.0, sr.ParameterType.DOUBLE),
+            "X-Offset des ChArUco Board-Ursprungs im conveyor_frame in mm"
+        )
+        self.add_parameter(
+            sr.Parameter("conveyor_offset_y_mm", 416.0, sr.ParameterType.DOUBLE),
+            "Y-Offset des ChArUco Board-Ursprungs im conveyor_frame in mm (Förderband-Laufrichtung)"
+        )
+        self.add_parameter(
+            sr.Parameter("conveyor_offset_z_mm", 0.0, sr.ParameterType.DOUBLE),
+            "Z-Offset des ChArUco Board-Ursprungs im conveyor_frame in mm (Höhe Förderband)"
         )
 
         # Inputs
@@ -67,9 +70,7 @@ class AutoCalibration(LifecycleComponent):
             Float64MultiArray
         )
 
-        self._robot_ee_pose = sr.CartesianPose(
-            "end_effector", "robot_base"
-        )
+        self._robot_ee_pose = sr.CartesianState("end_effector", "world")
         self.add_input(
             "robot_ee_pose",
             "_robot_ee_pose",
@@ -78,7 +79,7 @@ class AutoCalibration(LifecycleComponent):
 
         # Target EE pose
         self._target_pose = sr.CartesianPose(
-            "calibration_target", "robot_base"
+            "calibration_target", "world"
         )
         self.add_output(
             "target_ee_pose",
@@ -121,25 +122,29 @@ class AutoCalibration(LifecycleComponent):
         self._state = "IDLE"
         self._current_waypoint_idx = 0
         self._state_start_time = None
+        self._start_ee_transform = None
         self._collected_samples: List[CalibrationSample] = []
         self._sample_buffer_robot_cam: List[List[float]] = []
         self._sample_buffer_base_cam: List[List[float]] = []
-        self._jtc_client = None
 
-        self._waypoints = [
-            "calib_pose_center",
-            "calib_pose_tilt_left",
-            "calib_pose_tilt_right",
-            "calib_pose_high",
-            "calib_pose_low",
+        self._waypoint_labels = [
+            "center",
+            "tilt_left",
+            "tilt_right",
+            "high",
+            "low",
+        ]
+        self._waypoints = self._waypoint_labels
+        # XYZ offsets (in world frame) for each waypoint relative to start
+        self._waypoint_offsets = [
+            [0.00,  0.00,  0.00],
+            [0.04,  0.00,  0.00],
+            [-0.04, 0.00,  0.00],
+            [0.00,  0.04,  0.02],
+            [0.00, -0.04, -0.02],
         ]
 
     def on_configure_callback(self) -> bool:
-        srv_name = (
-            self.get_parameter("jtc_service_name").get_value()
-            or "/jtc/set_trajectory"
-        )
-        self._jtc_client = self.create_client(StringTrigger, srv_name)
         return True
 
     def on_activate_callback(self) -> bool:
@@ -152,7 +157,7 @@ class AutoCalibration(LifecycleComponent):
         self.set_predicate("is_calibrated", False)
         self.set_predicate("has_failed", False)
 
-        # Start calibration immediately after activation
+        # Trigger calibration sequence upon activation (via button / trigger event)
         self._on_start_calibration()
 
         return True
@@ -162,94 +167,34 @@ class AutoCalibration(LifecycleComponent):
 
     def _get_current_ee_transform(self) -> np.ndarray:
         T = np.eye(4, dtype=np.float64)
-
         try:
             pos = self._robot_ee_pose.get_position()
-            T[0, 3] = pos[0]
-            T[1, 3] = pos[1]
-            T[2, 3] = pos[2]
+            # pos may be a numpy array or a sr.Vector3d-like object
+            T[0, 3] = float(pos[0])
+            T[1, 3] = float(pos[1])
+            T[2, 3] = float(pos[2])
 
             ori = self._robot_ee_pose.get_orientation()
-
+            # ori is a state_representation Quaternion object
             if hasattr(ori, "to_rotation_matrix"):
-                T[:3, :3] = ori.to_rotation_matrix()
-            elif len(ori) == 4:
-                qx, qy, qz, qw = ori
+                T[:3, :3] = np.array(ori.to_rotation_matrix(), dtype=np.float64)
+            else:
+                # Extract .x .y .z .w directly from Quaternion object
+                qx = float(ori.x)
+                qy = float(ori.y)
+                qz = float(ori.z)
+                qw = float(ori.w)
                 T[:3, :3] = np.array([
-                    [
-                        1 - 2 * (qy**2 + qz**2),
-                        2 * (qx*qy - qz*qw),
-                        2 * (qx*qz + qy*qw),
-                    ],
-                    [
-                        2 * (qx*qy + qz*qw),
-                        1 - 2 * (qx**2 + qz**2),
-                        2 * (qy*qz - qx*qw),
-                    ],
-                    [
-                        2 * (qx*qz - qy*qw),
-                        2 * (qy*qz + qx*qw),
-                        1 - 2 * (qx**2 + qy**2),
-                    ],
-                ])
+                    [1 - 2*(qy**2 + qz**2), 2*(qx*qy - qz*qw), 2*(qx*qz + qy*qw)],
+                    [2*(qx*qy + qz*qw), 1 - 2*(qx**2 + qz**2), 2*(qy*qz - qx*qw)],
+                    [2*(qx*qz - qy*qw), 2*(qy*qz + qx*qw), 1 - 2*(qx**2 + qy**2)],
+                ], dtype=np.float64)
 
         except Exception as e:
-            self.get_logger().warn(
-                f"Could not extract current robot_ee_pose: {e}"
-            )
-
+            self.get_logger().warn(f"Could not extract current robot_ee_pose: {e}")
         return T
 
-    def _send_waypoint_command(self, waypoint_target):
-        srv_name = (
-            self.get_parameter("jtc_service_name").get_value()
-            or "/jtc/set_trajectory"
-        )
 
-        if self._jtc_client is None:
-            self._jtc_client = self.create_client(
-                StringTrigger, srv_name
-            )
-
-        if not self._jtc_client.service_is_ready():
-            self.get_logger().error(
-                f"JTC service '{srv_name}' is NOT ready. "
-                "Please check if the Joint Trajectory Controller is loaded "
-                "and active."
-            )
-            return False
-
-        if isinstance(waypoint_target, str):
-            payload = json.dumps({
-                "frames": [waypoint_target],
-                "durations": [2.5]
-            })
-        elif isinstance(waypoint_target, dict):
-            payload = json.dumps(waypoint_target)
-        else:
-            payload = json.dumps({
-                "frames": [str(waypoint_target)],
-                "durations": [2.5]
-            })
-
-        req = StringTrigger.Request()
-        req.payload = payload
-
-        future = self._jtc_client.call_async(req)
-        future.add_done_callback(self._jtc_response_callback)
-        return True
-
-    def _jtc_response_callback(self, future):
-        try:
-            res = future.result()
-            if not res.success:
-                self.get_logger().warn(
-                    f"JTC Rejected trajectory: {res.message}"
-                )
-        except Exception as e:
-            self.get_logger().error(
-                f"JTC Service call failed: {e}"
-            )
 
     def _on_start_calibration_service(
         self,
@@ -289,48 +234,38 @@ class AutoCalibration(LifecycleComponent):
             self._send_next_waypoint()
 
     def _send_next_waypoint(self):
-        target_frame = self._waypoints[self._current_waypoint_idx]
+        idx = self._current_waypoint_idx
+        label = self._waypoint_labels[idx]
+        dx, dy, dz = self._waypoint_offsets[idx]
 
         self.get_logger().info(
-            f"Moving to waypoint "
-            f"{self._current_waypoint_idx + 1}/"
-            f"{len(self._waypoints)}: {target_frame}"
+            f"Moving to waypoint {idx + 1}/{len(self._waypoint_labels)}: {label} "
+            f"(offset dx={dx:.3f} dy={dy:.3f} dz={dz:.3f})"
         )
 
-        offsets = [
-            [0.00, 0.00, 0.00],
-            [0.04, 0.00, 0.00],
-            [-0.04, 0.00, 0.00],
-            [0.00, 0.04, 0.02],
-            [0.00, -0.04, -0.02],
-        ]
+        if self._start_ee_transform is None:
+            self.get_logger().warn("No start EE transform available — cannot set target pose.")
+            return
 
-        if self._start_ee_transform is not None:
-            idx = min(
-                self._current_waypoint_idx,
-                len(offsets) - 1
+        T_target = self._start_ee_transform.copy()
+        T_target[0, 3] += dx
+        T_target[1, 3] += dy
+        T_target[2, 3] += dz
+
+        try:
+            pos = T_target[:3, 3].tolist()
+            self._target_pose.set_position(np.array(pos, dtype=np.float64))
+            
+            # Copy orientation directly from current robot EE pose to maintain exact current rotation
+            current_ori = self._robot_ee_pose.get_orientation()
+            self._target_pose.set_orientation(current_ori)
+            self.get_logger().info(
+                f"Target pose set: pos=({pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f})"
             )
+        except Exception as e:
+            self.get_logger().warn(f"Could not set target EE pose: {e}")
+        # Robot moves automatically via Signal Point Attractor → IK Velocity Controller
 
-            dx, dy, dz = offsets[idx]
-            T_target = self._start_ee_transform.copy()
-
-            T_target[0, 3] += dx
-            T_target[1, 3] += dy
-            T_target[2, 3] += dz
-
-            try:
-                self._target_pose.set_position(T_target[:3, 3])
-                self._target_pose.set_orientation(T_target[:3, :3])
-
-                self.get_logger().info(
-                    "Target EE Pose updated."
-                )
-            except Exception as e:
-                self.get_logger().warn(
-                    f"Could not update target EE pose: {e}"
-                )
-
-        self._send_waypoint_command(target_frame)
 
     def on_step_callback(self):
         now_time = self.get_clock().now()
@@ -441,8 +376,13 @@ class AutoCalibration(LifecycleComponent):
             )
 
             try:
+                off_x_m = float(self.get_parameter("conveyor_offset_x_mm").get_value()) / 1000.0
+                off_y_m = float(self.get_parameter("conveyor_offset_y_mm").get_value()) / 1000.0
+                off_z_m = float(self.get_parameter("conveyor_offset_z_mm").get_value()) / 1000.0
+
                 result: CalibrationResult = solve_eye_in_hand(
-                    self._collected_samples
+                    self._collected_samples,
+                    conveyor_offset_m=(off_x_m, off_y_m, off_z_m)
                 )
 
                 T = result.T_robot_base_cam

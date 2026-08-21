@@ -204,7 +204,20 @@ class BoardDetection(LifecycleComponent):
             board, camera_matrix, distortion, None, None)
         if not valid:
             return None
-        return rvec.reshape(3), tvec.reshape(3), camera_matrix, distortion
+        rvec = rvec.reshape(3)
+        tvec = tvec.reshape(3)
+
+        # Invert Y and Z axes by rotating 180 degrees around X axis so Z points out of board towards camera
+        R_board, _ = cv2.Rodrigues(rvec)
+        R_flip = np.array([
+            [1.0,  0.0,  0.0],
+            [0.0, -1.0,  0.0],
+            [0.0,  0.0, -1.0]
+        ], dtype=np.float64)
+        R_corrected = R_board @ R_flip
+        rvec_corrected, _ = cv2.Rodrigues(R_corrected)
+
+        return rvec_corrected.reshape(3), tvec, camera_matrix, distortion
 
     def on_step_callback(self):
         if self._color_msg.width == 0:

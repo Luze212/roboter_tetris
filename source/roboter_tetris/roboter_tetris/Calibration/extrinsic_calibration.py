@@ -101,7 +101,8 @@ class CalibrationResult:
 
 def solve_eye_in_hand(
     samples: List[CalibrationSample],
-    method: int = cv2.CALIB_HAND_EYE_TSAI
+    method: int = cv2.CALIB_HAND_EYE_TSAI,
+    conveyor_offset_m: Tuple[float, float, float] = (-0.375, 0.416, 0.0)
 ) -> CalibrationResult:
     """Solve Eye-in-Hand hand-eye calibration from a list of samples.
     
@@ -173,6 +174,17 @@ def solve_eye_in_hand(
     # Use first valid rotation as baseline
     T_robot_board[:3, :3] = T_base_target_list[0][:3, :3]
 
+    # Compute T_robot_conveyor from T_robot_board and conveyor_offset_m:
+    # board_origin_in_conveyor = [off_x, off_y, off_z]
+    # T_conveyor_board = eye(4) with translation = conveyor_offset_m
+    # T_robot_board = T_robot_conveyor @ T_conveyor_board
+    # => T_robot_conveyor = T_robot_board @ inv(T_conveyor_board)
+    T_conveyor_board = np.eye(4, dtype=np.float64)
+    T_conveyor_board[0, 3] = conveyor_offset_m[0]
+    T_conveyor_board[1, 3] = conveyor_offset_m[1]
+    T_conveyor_board[2, 3] = conveyor_offset_m[2]
+    T_robot_conveyor = T_robot_board @ np.linalg.inv(T_conveyor_board)
+
     # Calculate position RMSE of board estimation across poses
     errors = [np.linalg.norm(pos - mean_board_pos) for pos in board_positions]
     pos_rmse_mm = float(np.sqrt(np.mean(np.square(errors))) * 1000.0)
@@ -192,7 +204,7 @@ def solve_eye_in_hand(
 
     if T_robot_base_cam is None:
         # Fallback if no base_cam reading was attached
-        T_robot_base_cam = T_robot_board
+        T_robot_base_cam = T_robot_conveyor
 
     return CalibrationResult(
         T_robot_base_cam=T_robot_base_cam,

@@ -96,11 +96,27 @@
       "dynamic": true
     },
     {
-      "display_name": "JTC Service Name",
-      "description": "Service-Name des Joint Trajectory Controllers.",
-      "parameter_name": "jtc_service_name",
-      "parameter_type": "string",
-      "default_value": "/joint_trajectory_controller/set_trajectory",
+      "display_name": "Conveyor Offset X (mm)",
+      "description": "X-Offset des ChArUco Board-Ursprungs im conveyor_frame in mm.",
+      "parameter_name": "conveyor_offset_x_mm",
+      "parameter_type": "double",
+      "default_value": "-375.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Conveyor Offset Y (mm)",
+      "description": "Y-Offset des ChArUco Board-Ursprungs im conveyor_frame in mm (Förderband-Laufrichtung).",
+      "parameter_name": "conveyor_offset_y_mm",
+      "parameter_type": "double",
+      "default_value": "416.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Conveyor Offset Z (mm)",
+      "description": "Z-Offset des ChArUco Board-Ursprungs im conveyor_frame in mm (Höhe Förderband).",
+      "parameter_name": "conveyor_offset_z_mm",
+      "parameter_type": "double",
+      "default_value": "0.0",
       "dynamic": true
     }
   ]
