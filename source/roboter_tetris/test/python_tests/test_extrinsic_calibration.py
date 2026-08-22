@@ -109,11 +109,14 @@ def test_save_calibration_json():
         with open(json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        assert data["schema_version"] == 1
+        assert data["schema_version"] == 2
         assert data["status"] == "validated"
+        assert "last_calibrated_at" in data
         assert data["translation_m"]["x"] == 0.6118
         assert data["translation_m"]["y"] == -0.7820
         assert data["translation_m"]["z"] == 0.8902
+        assert "transformations" in data
+        assert "T_robot_base_cam" in data["transformations"]
         assert data["validation"]["sample_count"] == 5
         assert data["validation"]["position_rmse_mm"] == 1.23
         assert data["validation"]["operator"] == "pytest_unit_test"

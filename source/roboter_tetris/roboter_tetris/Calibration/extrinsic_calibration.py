@@ -94,6 +94,8 @@ class CalibrationResult:
     T_ee_robot_cam: Optional[np.ndarray] = None
     # Transformation from board (aligned with conveyor edge) to robot_base
     T_robot_board: Optional[np.ndarray] = None
+    # Transformation from conveyor_frame to robot_base (origin = conveyor center, Y = flow dir)
+    T_robot_conveyor: Optional[np.ndarray] = None
     position_rmse_mm: float = 0.0
     rotation_rmse_deg: float = 0.0
     sample_count: int = 0
@@ -210,6 +212,7 @@ def solve_eye_in_hand(
         T_robot_base_cam=T_robot_base_cam,
         T_ee_robot_cam=T_ee_cam,
         T_robot_board=T_robot_board,
+        T_robot_conveyor=T_robot_conveyor,
         position_rmse_mm=pos_rmse_mm,
         rotation_rmse_deg=0.0,
         sample_count=len(valid_samples)
@@ -222,40 +225,99 @@ def save_calibration_json(
     operator: str = "auto_calibration_component",
     notes: str = "Automatic extrinsic calibration via Eye-in-Hand ChArUco board detection"
 ) -> None:
-    """Save calibration results to json in the exact schema of calibration.json."""
-    T = result.T_robot_base_cam
-    roll_rad, pitch_rad, yaw_rad = rotation_matrix_to_rpy(T[:3, :3])
+    """Save calibration results to json with full explanations of all frame transformations and timestamp."""
+    T_cam = result.T_robot_base_cam
+    roll_cam, pitch_cam, yaw_cam = rotation_matrix_to_rpy(T_cam[:3, :3])
+
+    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+    transformations = {
+        "T_robot_base_cam": {
+            "description": "Transformation von statischer Base-Kamera zu Roboter-Basis (p_robot = T @ p_base_cam)",
+            "source_frame": "base_camera_frame",
+            "target_frame": "robot_base",
+            "translation_m": {
+                "x": round(float(T_cam[0, 3]), 6),
+                "y": round(float(T_cam[1, 3]), 6),
+                "z": round(float(T_cam[2, 3]), 6),
+            },
+            "rotation_rpy_deg": {
+                "roll": round(float(math.degrees(roll_cam)), 4),
+                "pitch": round(float(math.degrees(pitch_cam)), 4),
+                "yaw": round(float(math.degrees(yaw_cam)), 4),
+            },
+            "homogeneous_matrix": [
+                [round(float(val), 8) for val in row] for row in T_cam.tolist()
+            ],
+        }
+    }
+
+    if result.T_robot_conveyor is not None:
+        T_conv = result.T_robot_conveyor
+        roll_conv, pitch_conv, yaw_conv = rotation_matrix_to_rpy(T_conv[:3, :3])
+        transformations["T_robot_conveyor"] = {
+            "description": "Transformation von Förderband-Frame zu Roboter-Basis (Ursprung=Bandmitte, +Y=Laufrichtung, Z=0 Bandebene)",
+            "source_frame": "conveyor_frame",
+            "target_frame": "robot_base",
+            "translation_m": {
+                "x": round(float(T_conv[0, 3]), 6),
+                "y": round(float(T_conv[1, 3]), 6),
+                "z": round(float(T_conv[2, 3]), 6),
+            },
+            "rotation_rpy_deg": {
+                "roll": round(float(math.degrees(roll_conv)), 4),
+                "pitch": round(float(math.degrees(pitch_conv)), 4),
+                "yaw": round(float(math.degrees(yaw_conv)), 4),
+            },
+            "homogeneous_matrix": [
+                [round(float(val), 8) for val in row] for row in T_conv.tolist()
+            ],
+        }
+
+    if result.T_ee_robot_cam is not None:
+        T_ee_cam = result.T_ee_robot_cam
+        roll_ee, pitch_ee, yaw_ee = rotation_matrix_to_rpy(T_ee_cam[:3, :3])
+        transformations["T_ee_robot_cam"] = {
+            "description": "Eye-in-Hand Transformation von Roboter-Kamera zu Endeffektor/Gripper",
+            "source_frame": "robot_camera_frame",
+            "target_frame": "end_effector",
+            "translation_m": {
+                "x": round(float(T_ee_cam[0, 3]), 6),
+                "y": round(float(T_ee_cam[1, 3]), 6),
+                "z": round(float(T_ee_cam[2, 3]), 6),
+            },
+            "rotation_rpy_deg": {
+                "roll": round(float(math.degrees(roll_ee)), 4),
+                "pitch": round(float(math.degrees(pitch_ee)), 4),
+                "yaw": round(float(math.degrees(yaw_ee)), 4),
+            },
+            "homogeneous_matrix": [
+                [round(float(val), 8) for val in row] for row in T_ee_cam.tolist()
+            ],
+        }
 
     data = {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "validated",
-        "description": "Extrinsische Transformation der fest montierten Basis-Kamera in den Roboter-Base-Frame.",
-        "source_frame": "camera_frame",
-        "target_frame": "robot_base",
+        "last_calibrated_at": now_iso,
+        "description": "Extrinsische Kalibrierdaten für Roboter-Tetris (Kameras, Förderband & Endeffektor).",
         "units": {
             "translation": "m",
             "rotation": "deg"
         },
         "convention": {
-            "transform": "p_robot = T_robot_camera @ p_camera",
             "matrix_layout": "row-major",
             "rotation": "R = Rz(yaw) @ Ry(pitch) @ Rx(roll)"
         },
-        "translation_m": {
-            "x": round(float(T[0, 3]), 6),
-            "y": round(float(T[1, 3]), 6),
-            "z": round(float(T[2, 3]), 6),
-        },
-        "rotation_rpy_deg": {
-            "roll": round(float(math.degrees(roll_rad)), 4),
-            "pitch": round(float(math.degrees(pitch_rad)), 4),
-            "yaw": round(float(math.degrees(yaw_rad)), 4),
-        },
-        "homogeneous_matrix": [
-            [round(float(val), 8) for val in row] for row in T.tolist()
-        ],
+        "transformations": transformations,
+        # Backward compatibility top-level fields:
+        "source_frame": "camera_frame",
+        "target_frame": "robot_base",
+        "translation_m": transformations["T_robot_base_cam"]["translation_m"],
+        "rotation_rpy_deg": transformations["T_robot_base_cam"]["rotation_rpy_deg"],
+        "homogeneous_matrix": transformations["T_robot_base_cam"]["homogeneous_matrix"],
         "validation": {
-            "measured_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "measured_at": now_iso,
             "operator": operator,
             "method": "Eye-in-Hand ChArUco auto calibration",
             "sample_count": result.sample_count,

@@ -1,0 +1,78 @@
+{
+  "name": "Calibration Test Drive",
+
+  "description": {
+    "brief": "Testfahrt zur Validierung der Kalibrierung entlang der Förderband Y-Achse.",
+    "details": "Liest die kalibrierte Transformationsmatrix (T_robot_conveyor) aus calibration.json und steuert den Endeffektor vor und zurück entlang der Y-Achse des Förderbandes. Wird per Service/Trigger-Button in AICA Studio gestartet."
+  },
+
+  "registration": "roboter_tetris::CalibrationTestDrive",
+
+  "inherits": "modulo_components::LifecycleComponent",
+
+  "inputs": [
+    {
+      "display_name": "Robot EE Pose",
+      "description": "Endeffektor-Pose im Roboter-Base-Frame.",
+      "signal_name": "robot_ee_pose",
+      "signal_type": "cartesian_pose"
+    }
+  ],
+
+  "outputs": [
+    {
+      "display_name": "Target EE Pose",
+      "description": "Kartesische Zielpose des Endeffektors für die Bewegungssteuerung über den Signal Point Attractor.",
+      "signal_name": "target_ee_pose",
+      "signal_type": "cartesian_pose"
+    }
+  ],
+
+  "services": [
+    {
+      "display_name": "Testfahrt Starten",
+      "description": "Button zum manuellen Auslösen der Testfahrt entlang der Förderband-Y-Achse.",
+      "service_name": "start_test_drive"
+    }
+  ],
+
+  "predicates": [
+    {
+      "display_name": "Testfahrt läuft",
+      "description": "True während der Ausführung der Hin- und Rückfahrt.",
+      "predicate_name": "is_running"
+    },
+    {
+      "display_name": "Fehlgeschlagen",
+      "description": "True, falls calibration.json nicht gelesen werden konnte.",
+      "predicate_name": "has_failed"
+    }
+  ],
+
+  "parameters": [
+    {
+      "display_name": "Kalibrierdateipfad",
+      "description": "Pfad zur calibration.json Datei.",
+      "parameter_name": "calibration_file_path",
+      "parameter_type": "string",
+      "default_value": "/tmp/calibration.json",
+      "dynamic": true
+    },
+    {
+      "display_name": "Testdistanz Y (mm)",
+      "description": "Fahrstrecke entlang der Förderband Y-Achse in mm.",
+      "parameter_name": "test_distance_y_mm",
+      "parameter_type": "double",
+      "default_value": "200.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Geschwindigkeit (m/s)",
+      "description": "Fahrgeschwindigkeit in m/s.",
+      "parameter_name": "drive_speed_m_s",
+      "parameter_type": "double",
+      "default_value": "0.05",
+      "dynamic": true
+    }
+  ]
+}

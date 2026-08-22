@@ -1,5 +1,5 @@
 {
-  "cmake.sourceDirectory": "/home/ros2/ws/src/roboter_tetris",
+  "cmake.sourceDirectory": "/home/tetripick/Desktop/AICA/roboter_tetris/source/roboter_tetris",
   "clang-format.fallbackStyle": "none",
   "clang-format.language.cpp.style": "file:/home/ros2/.clang-format",
   "C_Cpp.intelliSenseEngine": "disabled",
