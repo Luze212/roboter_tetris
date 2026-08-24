@@ -28,7 +28,7 @@ class CalibrationTestDrive(LifecycleComponent):
         self.add_parameter(
             sr.Parameter(
                 "calibration_file_path",
-                "/tmp/calibration.json",
+                "/home/tetripick/Desktop/AICA/roboter_tetris/source/roboter_tetris/roboter_tetris/Calibration/calibration.json",
                 sr.ParameterType.STRING
             ),
             "Pfad zur calibration.json"
@@ -40,6 +40,10 @@ class CalibrationTestDrive(LifecycleComponent):
         self.add_parameter(
             sr.Parameter("drive_speed_m_s", 0.05, sr.ParameterType.DOUBLE),
             "Geschwindigkeit der Testfahrt in m/s"
+        )
+        self.add_parameter(
+            sr.Parameter("center_over_board", True, sr.ParameterType.BOOL),
+            "Positioniert den Greifer vor Start mittig über dem ChArUco-Board"
         )
 
         # Inputs
@@ -97,8 +101,16 @@ class CalibrationTestDrive(LifecycleComponent):
     def _load_conveyor_transform(self) -> Optional[np.ndarray]:
         calib_path = self.get_parameter("calibration_file_path").get_value()
         if not os.path.exists(calib_path):
-            self.get_logger().error(f"Calibration file not found: {calib_path}")
-            return None
+            fallback_path = "/tmp/calibration.json"
+            if os.path.exists(fallback_path):
+                self.get_logger().info(
+                    f"Configured calibration file {calib_path} not found. "
+                    f"Using fallback: {fallback_path}"
+                )
+                calib_path = fallback_path
+            else:
+                self.get_logger().error(f"Calibration file not found at {calib_path} or {fallback_path}")
+                return None
 
         try:
             with open(calib_path, "r", encoding="utf-8") as f:
@@ -146,25 +158,51 @@ class CalibrationTestDrive(LifecycleComponent):
 
         self._T_robot_conveyor = T_robot_conveyor
 
+        # Log Conveyor Frame unit vectors in robot_base (world)
+        X_conv = T_robot_conveyor[:3, 0]
+        Y_conv = T_robot_conveyor[:3, 1]
+        Z_conv = T_robot_conveyor[:3, 2]
+        self.get_logger().info("=== Conveyor Frame Axes in robot_base (world) ===")
+        self.get_logger().info(f"  X_conv (Width) : [{X_conv[0]:.4f}, {X_conv[1]:.4f}, {X_conv[2]:.4f}]")
+        self.get_logger().info(f"  Y_conv (Flow)  : [{Y_conv[0]:.4f}, {Y_conv[1]:.4f}, {Y_conv[2]:.4f}]")
+        self.get_logger().info(f"  Z_conv (Height): [{Z_conv[0]:.4f}, {Z_conv[1]:.4f}, {Z_conv[2]:.4f}]")
+
         pos = self._robot_ee_pose.get_position()
-        self._start_position_robot = np.array(
-            [float(pos[0]), float(pos[1]), float(pos[2])],
-            dtype=np.float64
-        )
+        curr_pos = np.array([float(pos[0]), float(pos[1]), float(pos[2])], dtype=np.float64)
+
+        center_over_board = bool(self.get_parameter("center_over_board").get_value())
+        if center_over_board:
+            # Board center in conveyor frame: [-250 mm, 506 mm] (XY only)
+            # We compute the delta to the board center using only the conveyor X and Y
+            # basis vectors. Z is NEVER modified – this avoids errors from a poorly
+            # calibrated Z component in T_robot_conveyor.
+            T_inv = np.linalg.inv(T_robot_conveyor)
+            curr_conv = T_inv @ np.array([curr_pos[0], curr_pos[1], curr_pos[2], 1.0], dtype=np.float64)
+
+            # Delta in conveyor XY space to reach board center
+            delta_x_conv = -0.250 - curr_conv[0]
+            delta_y_conv = 0.506 - curr_conv[1]
+
+            # Apply delta in world frame using conveyor basis vectors (no Z change)
+            X_conv_unit = T_robot_conveyor[:3, 0]
+            Y_conv_unit = T_robot_conveyor[:3, 1]
+            self._start_position_robot = curr_pos + delta_x_conv * X_conv_unit + delta_y_conv * Y_conv_unit
+            self.get_logger().info(
+                f"Centering EE over board center: delta_X={delta_x_conv*1000:.1f} mm, "
+                f"delta_Y={delta_y_conv*1000:.1f} mm in conveyor_frame (Z unchanged)."
+            )
+        else:
+            self._start_position_robot = curr_pos
 
         self._state = "MOVING_FORWARD"
         self._state_start_time = self.get_clock().now()
         self.set_predicate("is_running", True)
         self.set_predicate("has_failed", False)
 
-        dist_m = (
-            float(self.get_parameter("test_distance_y_mm").get_value())
-            / 1000.0
-        )
-
+        dist_m = float(self.get_parameter("test_distance_y_mm").get_value()) / 1000.0
         self.get_logger().info(
             f"Starting test drive: moving {dist_m*1000:.0f} mm "
-            "forward along Conveyor Y-axis..."
+            "forward along Conveyor Y-axis (Green line)..."
         )
         return True
 
@@ -190,12 +228,7 @@ class CalibrationTestDrive(LifecycleComponent):
             progress = min(dt / duration_s, 1.0)
 
             # +Y im conveyor_frame -> robot_base/world
-            offset_conveyor = np.array([
-                0.0,
-                progress * dist_m,
-                0.0,
-                0.0
-            ])
+            offset_conveyor = np.array([0.0, progress * dist_m, 0.0, 0.0])
 
             current_offset = (
                 self._T_robot_conveyor @ offset_conveyor
@@ -208,12 +241,22 @@ class CalibrationTestDrive(LifecycleComponent):
                 self._robot_ee_pose.get_orientation()
             )
 
+            # Log live position in conveyor_frame coordinates
+            try:
+                T_inv = np.linalg.inv(self._T_robot_conveyor)
+                p_world = np.array([target_pos[0], target_pos[1], target_pos[2], 1.0], dtype=np.float64)
+                p_conv = T_inv @ p_world
+                self.get_logger().info(
+                    f"[Test Drive] EE in Conveyor Frame: X={p_conv[0]*1000.0:.1f} mm, Y={p_conv[1]*1000.0:.1f} mm, Z={p_conv[2]*1000.0:.1f} mm"
+                )
+            except Exception:
+                pass
+
             if progress >= 1.0:
                 self._state = "PAUSING"
                 self._state_start_time = now_time
                 self.get_logger().info(
-                    "Reached end of forward test drive. "
-                    "Pausing 1 second..."
+                    "Reached end of forward test drive. Pausing 1 second..."
                 )
 
         elif self._state == "PAUSING":
@@ -227,13 +270,8 @@ class CalibrationTestDrive(LifecycleComponent):
         elif self._state == "MOVING_BACKWARD":
             progress = min(dt / duration_s, 1.0)
 
-            # +Y im conveyor_frame -> zurück zum Ursprung
-            offset_conveyor = np.array([
-                0.0,
-                (1.0 - progress) * dist_m,
-                0.0,
-                0.0
-            ])
+            # Zurück zum Ausgangspunkt
+            offset_conveyor = np.array([0.0, (1.0 - progress) * dist_m, 0.0, 0.0])
 
             current_offset = (
                 self._T_robot_conveyor @ offset_conveyor

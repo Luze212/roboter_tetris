@@ -34,6 +34,20 @@ def test_rpy_rotation_matrix_roundtrip():
     assert math.degrees(y_calc) == pytest.approx(45.0, abs=1e-3)
 
 
+def test_rotation_matrix_to_quaternion():
+    """Test rotation matrix to quaternion conversion."""
+    from roboter_tetris.Calibration.extrinsic_calibration import rotation_matrix_to_quaternion
+    R_identity = np.eye(3, dtype=np.float64)
+    q_id = rotation_matrix_to_quaternion(R_identity)
+    np.testing.assert_allclose(q_id, [1.0, 0.0, 0.0, 0.0], atol=1e-6)
+
+    # 90 deg rotation around Z
+    R_z90 = rpy_to_rotation_matrix(0, 0, math.pi / 2.0)
+    q_z90 = rotation_matrix_to_quaternion(R_z90)
+    # expected w = cos(45 deg) = sqrt(0.5), z = sin(45 deg) = sqrt(0.5)
+    np.testing.assert_allclose(q_z90, [math.sqrt(0.5), 0.0, 0.0, math.sqrt(0.5)], atol=1e-5)
+
+
 def test_pose_matrix_conversions():
     """Test conversion between (tvec, rvec) and 4x4 homogeneous matrices."""
     tvec = np.array([0.5, -0.2, 0.8], dtype=np.float64)

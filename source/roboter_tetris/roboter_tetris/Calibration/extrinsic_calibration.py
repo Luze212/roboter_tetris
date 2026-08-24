@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 import datetime
 import json
 import math
+import os
 from typing import Dict, List, Optional, Tuple, Union
 
 import cv2
@@ -58,6 +59,39 @@ def rotation_matrix_to_rpy(R: np.ndarray) -> Tuple[float, float, float]:
     return roll, pitch, yaw
 
 
+def rotation_matrix_to_quaternion(R: np.ndarray) -> np.ndarray:
+    """Convert 3x3 rotation matrix to quaternion [w, x, y, z]."""
+    tr = np.trace(R)
+    if tr > 0:
+        S = math.sqrt(tr + 1.0) * 2.0
+        qw = 0.25 * S
+        qx = (R[2, 1] - R[1, 2]) / S
+        qy = (R[0, 2] - R[2, 0]) / S
+        qz = (R[1, 0] - R[0, 1]) / S
+    elif (R[0, 0] > R[1, 1]) and (R[0, 0] > R[2, 2]):
+        S = math.sqrt(1.0 + R[0, 0] - R[1, 1] - R[2, 2]) * 2.0
+        qw = (R[2, 1] - R[1, 2]) / S
+        qx = 0.25 * S
+        qy = (R[0, 1] + R[1, 0]) / S
+        qz = (R[0, 2] + R[2, 0]) / S
+    elif R[1, 1] > R[2, 2]:
+        S = math.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2]) * 2.0
+        qw = (R[0, 2] - R[2, 0]) / S
+        qx = (R[0, 1] + R[1, 0]) / S
+        qy = 0.25 * S
+        qz = (R[1, 2] + R[2, 1]) / S
+    else:
+        S = math.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1]) * 2.0
+        qw = (R[1, 0] - R[0, 1]) / S
+        qx = (R[0, 2] + R[2, 0]) / S
+        qy = (R[1, 2] + R[2, 1]) / S
+        qz = 0.25 * S
+    q = np.array([qw, qx, qy, qz], dtype=np.float64)
+    norm = np.linalg.norm(q)
+    return q / norm if norm > 1e-12 else np.array([1.0, 0.0, 0.0, 0.0])
+
+
+
 def pose_to_matrix(tvec: np.ndarray, rvec: np.ndarray) -> np.ndarray:
     """Convert (tvec [3], rvec [3] Rodrigues) to 4x4 homogeneous matrix."""
     T = np.eye(4, dtype=np.float64)
@@ -104,18 +138,10 @@ class CalibrationResult:
 def solve_eye_in_hand(
     samples: List[CalibrationSample],
     method: int = cv2.CALIB_HAND_EYE_TSAI,
-    conveyor_offset_m: Tuple[float, float, float] = (-0.375, 0.416, 0.0)
+    conveyor_offset_m: Tuple[float, float, float] = (-0.375, 0.416, 0.0),
+    board_rotation_deg: float = 0.0
 ) -> CalibrationResult:
-    """Solve Eye-in-Hand hand-eye calibration from a list of samples.
-    
-    Given:
-      - T_base_ee (robot gripper pose in robot base)
-      - T_cam_target (ChArUco board pose in robot hand camera)
-      
-    Computes:
-      - T_ee_cam (Eye-in-Hand transformation: hand camera relative to gripper)
-      - T_base_cam (Base camera relative to robot base, when combined with static base_cam board pose)
-    """
+    """Solve Eye-in-Hand hand-eye calibration from a list of samples."""
     R_gripper2base = []
     t_gripper2base = []
     R_target2cam = []
@@ -177,11 +203,11 @@ def solve_eye_in_hand(
     T_robot_board[:3, :3] = T_base_target_list[0][:3, :3]
 
     # Compute T_robot_conveyor from T_robot_board and conveyor_offset_m:
-    # board_origin_in_conveyor = [off_x, off_y, off_z]
-    # T_conveyor_board = eye(4) with translation = conveyor_offset_m
+    # T_conveyor_board = Rz(board_rotation_deg) with translation = conveyor_offset_m
     # T_robot_board = T_robot_conveyor @ T_conveyor_board
     # => T_robot_conveyor = T_robot_board @ inv(T_conveyor_board)
     T_conveyor_board = np.eye(4, dtype=np.float64)
+    T_conveyor_board[:3, :3] = rpy_to_rotation_matrix(0.0, 0.0, math.radians(board_rotation_deg))
     T_conveyor_board[0, 3] = conveyor_offset_m[0]
     T_conveyor_board[1, 3] = conveyor_offset_m[1]
     T_conveyor_board[2, 3] = conveyor_offset_m[2]
@@ -274,6 +300,28 @@ def save_calibration_json(
             ],
         }
 
+    if result.T_robot_board is not None:
+        T_brd = result.T_robot_board
+        roll_brd, pitch_brd, yaw_brd = rotation_matrix_to_rpy(T_brd[:3, :3])
+        transformations["T_robot_board"] = {
+            "description": "Transformation von ChArUco-Board-Ursprung zu Roboter-Basis",
+            "source_frame": "board_frame",
+            "target_frame": "robot_base",
+            "translation_m": {
+                "x": round(float(T_brd[0, 3]), 6),
+                "y": round(float(T_brd[1, 3]), 6),
+                "z": round(float(T_brd[2, 3]), 6),
+            },
+            "rotation_rpy_deg": {
+                "roll": round(float(math.degrees(roll_brd)), 4),
+                "pitch": round(float(math.degrees(pitch_brd)), 4),
+                "yaw": round(float(math.degrees(yaw_brd)), 4),
+            },
+            "homogeneous_matrix": [
+                [round(float(val), 8) for val in row] for row in T_brd.tolist()
+            ],
+        }
+
     if result.T_ee_robot_cam is not None:
         T_ee_cam = result.T_ee_robot_cam
         roll_ee, pitch_ee, yaw_ee = rotation_matrix_to_rpy(T_ee_cam[:3, :3])
@@ -327,5 +375,17 @@ def save_calibration_json(
         }
     }
 
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    target_paths = [filepath]
+    if os.path.abspath(filepath) != os.path.abspath("/tmp/calibration.json"):
+        target_paths.append("/tmp/calibration.json")
+
+    for path in target_paths:
+        try:
+            dirname = os.path.dirname(os.path.abspath(path))
+            if dirname:
+                os.makedirs(dirname, exist_ok=True)
+
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass

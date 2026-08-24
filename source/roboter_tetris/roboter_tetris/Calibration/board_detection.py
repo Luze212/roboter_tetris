@@ -78,6 +78,17 @@ class BoardDetection(LifecycleComponent):
         self._board_params_hash = None
         self._board = None
         self._dictionary = None
+        self._last_warn_times: dict = {}
+
+    def _warn_throttle(self, key: str, interval_s: float, msg: str):
+        """Log a warning at most once per interval_s for a given key."""
+        try:
+            now = self.get_clock().now().nanoseconds / 1e9
+        except Exception:
+            now = 0.0
+        if now - self._last_warn_times.get(key, 0.0) >= interval_s:
+            self._last_warn_times[key] = now
+            self.get_logger().warning(msg)
 
     def on_validate_parameter_callback(self, parameter: sr.Parameter) -> bool:
         name = parameter.get_name()
@@ -244,8 +255,10 @@ class BoardDetection(LifecycleComponent):
                 self._board_pose = []
                 self.set_predicate("has_board", False)
                 self.set_predicate("has_pose", False)
+                self._warn_throttle("no_board", 2.0, "Kein ChArUco-Board im Kamerabild erkannt (0 Marker).")
             else:
                 marker_corners, marker_ids, board_corners, board_ids = detection
+                num_markers = len(marker_ids) if marker_ids is not None else 0
                 self._board_corners = []
                 for corner_id, corner in zip(board_ids, board_corners):
                     self._board_corners.extend([
@@ -253,12 +266,21 @@ class BoardDetection(LifecycleComponent):
                         float(corner[0]),
                         float(corner[1]),
                     ])
-                self.set_predicate("has_board", len(marker_ids) >= params.min_detected_markers)
+                has_enough = num_markers >= params.min_detected_markers
+                self.set_predicate("has_board", has_enough)
+
+                if not has_enough:
+                    self._warn_throttle(
+                        "too_few", 2.0,
+                        f"Zu wenige ChArUco-Marker erkannt: {num_markers}/{params.min_detected_markers} Mindest-Marker."
+                    )
 
                 pose = self._estimate_pose(board_corners, board_ids, board)
                 if pose is None:
                     self._board_pose = []
                     self.set_predicate("has_pose", False)
+                    if has_enough:
+                        self._warn_throttle("no_pose", 2.0, "Board-Pose konnte trotz ausreichend Marker nicht berechnet werden.")
                 else:
                     rvec, tvec, _, _ = pose
                     self._board_pose = [*map(float, tvec), *map(float, rvec)]

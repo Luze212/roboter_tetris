@@ -76,7 +76,7 @@
       "description": "Pfad zum Speichern der erzeugten calibration.json.",
       "parameter_name": "calibration_file_path",
       "parameter_type": "string",
-      "default_value": "/home/tetripick/Desktop/AICA/roboter_tetris/source/roboter_tetris/roboter_tetris/Calibration/calibration.json",
+      "default_value": "/tmp/calibration.json",
       "dynamic": true
     },
     {
@@ -93,6 +93,38 @@
       "parameter_name": "samples_per_waypoint",
       "parameter_type": "int",
       "default_value": "5",
+      "dynamic": true
+    },
+    {
+      "display_name": "Anzahl Wegpunkte",
+      "description": "Anzahl der zu generierenden Wegpunkte für die Kalibrierung.",
+      "parameter_name": "num_waypoints",
+      "parameter_type": "int",
+      "default_value": "9",
+      "dynamic": true
+    },
+    {
+      "display_name": "Max. Translation Versatz (m)",
+      "description": "Maximaler kartesischer Versatz in Metern um die Startposition.",
+      "parameter_name": "max_translation_offset_m",
+      "parameter_type": "double",
+      "default_value": "0.05",
+      "dynamic": true
+    },
+    {
+      "display_name": "Max. Kippwinkel (Grad)",
+      "description": "Maximaler Kippwinkel (Roll, Pitch, Yaw) in Grad für höhere Genauigkeit.",
+      "parameter_name": "max_rotation_angle_deg",
+      "parameter_type": "double",
+      "default_value": "8.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Auto-Ausrichtung zum Board",
+      "description": "Automatisch parallel zum ChArUco-Board ausrichten, falls vorab erkannt.",
+      "parameter_name": "align_to_board",
+      "parameter_type": "bool",
+      "default_value": "true",
       "dynamic": true
     },
     {
