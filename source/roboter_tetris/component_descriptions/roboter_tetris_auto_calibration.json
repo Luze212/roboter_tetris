@@ -104,11 +104,11 @@
       "dynamic": true
     },
     {
-      "display_name": "Max. Translation Versatz (m)",
-      "description": "Maximaler kartesischer Versatz in Metern um die Startposition.",
-      "parameter_name": "max_translation_offset_m",
+      "display_name": "Max. Orbit Radius (mm)",
+      "description": "Maximaler kartesischer Orbit-Radius in Millimeter um das Board-Zentrum.",
+      "parameter_name": "max_orbit_radius_mm",
       "parameter_type": "double",
-      "default_value": "0.05",
+      "default_value": "50.0",
       "dynamic": true
     },
     {
@@ -116,15 +116,7 @@
       "description": "Maximaler Kippwinkel (Roll, Pitch, Yaw) in Grad für höhere Genauigkeit.",
       "parameter_name": "max_rotation_angle_deg",
       "parameter_type": "double",
-      "default_value": "8.0",
-      "dynamic": true
-    },
-    {
-      "display_name": "Auto-Ausrichtung zum Board",
-      "description": "Automatisch parallel zum ChArUco-Board ausrichten, falls vorab erkannt.",
-      "parameter_name": "align_to_board",
-      "parameter_type": "bool",
-      "default_value": "true",
+      "default_value": "5.0",
       "dynamic": true
     },
     {

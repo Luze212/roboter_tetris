@@ -296,6 +296,23 @@ class BoardDetection(LifecycleComponent):
 
     def _publish_debug(self, color_img, detection, pose, checker_size_m):
         debug_img = color_img.copy()
+
+        # --- Mittelpunkt-Markierung (Dunkles Gelb) ---
+        height, width = debug_img.shape[:2]
+        center_x, center_y = width // 2, height // 2
+        
+        # BGR-Farbwert für ein dunkles Gelb/Ocker (z.B. B=0, G=180, R=180)
+        dark_yellow = (0, 180, 180)
+        line_thickness = 1
+        crosshair_size = 20  # Länge der Linien-Schenkel in Pixeln (optional für kleines Kreuz)
+
+        # Horizontale Linie (durchgehend oder als Fadenkreuz)
+        # Option A: Vollbild-Linien
+        cv2.line(debug_img, (0, center_y), (width, center_y), dark_yellow, line_thickness)
+        # Vertikale Linie
+        cv2.line(debug_img, (center_x, 0), (center_x, height), dark_yellow, line_thickness)
+        # ----------------------------------------------
+
         if detection is not None:
             marker_corners, marker_ids, board_corners, board_ids = detection
             debug_img = draw_board_debug(
