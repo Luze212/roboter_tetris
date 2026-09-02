@@ -14,6 +14,7 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import cv2
 import numpy as np
+import yaml
 
 
 def rpy_to_rotation_matrix(roll_rad: float, pitch_rad: float, yaw_rad: float) -> np.ndarray:
@@ -249,7 +250,8 @@ def save_calibration_json(
     filepath: str,
     result: CalibrationResult,
     operator: str = "auto_calibration_component",
-    notes: str = "Automatic extrinsic calibration via Eye-in-Hand ChArUco board detection"
+    notes: str = "Automatic extrinsic calibration via Eye-in-Hand ChArUco board detection",
+    board_center_conveyor_mm: Optional[Tuple[float, float, float]] = None
 ) -> None:
     """Save calibration results to json with full explanations of all frame transformations and timestamp."""
     T_cam = result.T_robot_base_cam
@@ -358,6 +360,13 @@ def save_calibration_json(
             "rotation": "R = Rz(yaw) @ Ry(pitch) @ Rx(roll)"
         },
         "transformations": transformations,
+        # Board center in conveyor frame (computed from board origin + dimensions)
+        "board_center_conveyor_mm": {
+            "x": round(float(board_center_conveyor_mm[0]), 2) if board_center_conveyor_mm else None,
+            "y": round(float(board_center_conveyor_mm[1]), 2) if board_center_conveyor_mm else None,
+            "z": round(float(board_center_conveyor_mm[2]), 2) if board_center_conveyor_mm else None,
+            "description": "Zentrum des ChArUco-Boards im conveyor_frame (mm). Wird von TestDrive für Zentrierung genutzt."
+        },
         # Backward compatibility top-level fields:
         "source_frame": "camera_frame",
         "target_frame": "robot_base",
@@ -375,9 +384,11 @@ def save_calibration_json(
         }
     }
 
-    target_paths = [filepath]
-    if os.path.abspath(filepath) != os.path.abspath("/tmp/calibration.json"):
-        target_paths.append("/tmp/calibration.json")
+    base_no_ext, ext = os.path.splitext(filepath)
+    yaml_path = base_no_ext + ".yaml" if ext in (".json", ".yaml", ".yml") else filepath + ".yaml"
+    json_path = base_no_ext + ".json" if ext in (".json", ".yaml", ".yml") else filepath + ".json"
+
+    target_paths = set([filepath, yaml_path, json_path, "/tmp/calibration.yaml", "/tmp/calibration.json"])
 
     for path in target_paths:
         try:
@@ -386,6 +397,21 @@ def save_calibration_json(
                 os.makedirs(dirname, exist_ok=True)
 
             with open(path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+                if path.endswith((".yaml", ".yml")):
+                    yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+                else:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
         except Exception:
             pass
+
+
+def save_calibration_yaml(
+    filepath: str,
+    result: CalibrationResult,
+    operator: str = "auto_calibration_component",
+    notes: str = "Automatic extrinsic calibration via Eye-in-Hand ChArUco board detection",
+    board_center_conveyor_mm: Optional[Tuple[float, float, float]] = None
+) -> None:
+    """Save calibration results to YAML and JSON formats."""
+    save_calibration_json(filepath, result, operator=operator, notes=notes,
+                          board_center_conveyor_mm=board_center_conveyor_mm)

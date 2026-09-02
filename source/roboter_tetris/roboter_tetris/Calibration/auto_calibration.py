@@ -15,7 +15,7 @@ from modulo_interfaces.srv import StringTrigger
 from .extrinsic_calibration import (
     CalibrationResult, CalibrationSample,
     pose_to_matrix, rotation_matrix_to_quaternion,
-    rpy_to_rotation_matrix, save_calibration_json, solve_eye_in_hand,
+    rpy_to_rotation_matrix, save_calibration_json, save_calibration_yaml, solve_eye_in_hand,
 )
 
 STALE_TIMEOUT_S = 1.0
@@ -31,10 +31,10 @@ class AutoCalibration(LifecycleComponent):
         self.add_parameter(
             sr.Parameter(
                 "calibration_file_path",
-                "/tmp/calibration.json",
+                "/tmp/calibration.yaml",
                 sr.ParameterType.STRING
             ),
-            "Zielpfad für die generierte calibration.json (Standard: /tmp/calibration.json)"
+            "Zielpfad für die generierte calibration.yaml (Standard: /tmp/calibration.yaml)"
         )
         self.add_parameter(
             sr.Parameter("settle_time_s", 0.8, sr.ParameterType.DOUBLE),
@@ -53,10 +53,15 @@ class AutoCalibration(LifecycleComponent):
             sr.Parameter("max_orbit_radius_mm", 50.0, sr.ParameterType.DOUBLE),
             "Maximaler kartesischer Orbit-Radius (in mm) um das Board-Zentrum"
         )
-        # PARAMETER: Max. Kippwinkel in Grad zum Board-Zentrum (Standard: 5.0°)
+        # PARAMETER: Max. Kippwinkel in Grad zum Board-Zentrum (Standard: 8.0°)
         self.add_parameter(
-            sr.Parameter("max_rotation_angle_deg", 5.0, sr.ParameterType.DOUBLE),
+            sr.Parameter("max_rotation_angle_deg", 8.0, sr.ParameterType.DOUBLE),
             "Maximaler Neigungswinkel (in Grad) während der Orbit-Schwenks"
+        )
+        # PARAMETER: Abstand von Kamera/EE zum Board-Zentrum in mm (Standard: 350.0 mm)
+        self.add_parameter(
+            sr.Parameter("board_distance_mm", 350.0, sr.ParameterType.DOUBLE),
+            "Geschätzter Abstand vom Greifer/Kamera zum ChArUco-Board in mm"
         )
         self.add_parameter(
             sr.Parameter("conveyor_offset_x_mm", -375.0, sr.ParameterType.DOUBLE),
@@ -70,6 +75,20 @@ class AutoCalibration(LifecycleComponent):
             sr.Parameter("conveyor_offset_z_mm", 0.0, sr.ParameterType.DOUBLE),
             "Z-Offset des ChArUco Board-Ursprungs im conveyor_frame in mm"
         )
+        # ChArUco board dimensions – used to compute the board center in conveyor_frame
+        self.add_parameter(
+            sr.Parameter("board_rows", 5, sr.ParameterType.INT),
+            "Anzahl der Zeilen des ChArUco-Boards (Checker, nicht Marker)"
+        )
+        self.add_parameter(
+            sr.Parameter("board_cols", 7, sr.ParameterType.INT),
+            "Anzahl der Spalten des ChArUco-Boards (Checker, nicht Marker)"
+        )
+        self.add_parameter(
+            sr.Parameter("square_size_mm", 35.0, sr.ParameterType.DOUBLE),
+            "Seitenlänge eines Schachfeldes auf dem ChArUco-Board in mm"
+        )
+
 
         # Inputs
         self._base_cam_board_pose_msg = []
@@ -150,11 +169,6 @@ class AutoCalibration(LifecycleComponent):
         """Generiert eine geometrisch zentrierte Orbit-Trajektorie auf einem Halbkugelsegment."""
         num_wp = max(3, int(self.get_parameter("num_waypoints").get_value()))
         
-        # Radius in mm -> Meter
-        radius_m = float(self.get_parameter("max_orbit_radius_mm").get_value()) / 1000.0
-        tilt_deg = float(self.get_parameter("max_rotation_angle_deg").get_value())
-        tilt_rad = math.radians(tilt_deg)
-
         self._waypoint_labels = []
         self._waypoint_offsets = []
 
@@ -162,40 +176,24 @@ class AutoCalibration(LifecycleComponent):
         self._waypoint_labels.append("center")
         self._waypoint_offsets.append((0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
 
-        # 2. Äußerer Orbit-Ring mit kontinuierlicher Verkippung zur Mitte
+        # 2. Äußerer Orbit-Ring auf der Halbkugeloberfläche
         num_ring_points = min(8, num_wp - 1)
         for i in range(num_ring_points):
             angle = (2.0 * math.pi / num_ring_points) * i
-            
-            dx = radius_m * math.cos(angle)
-            dy = radius_m * math.sin(angle)
-            dz = 0.01 * (1.0 if i % 2 == 0 else -1.0)  # Leichte Entkopplung in Z
-
-            # Entgegengesetzte Verkippung zur Beibehaltung des Bildfokus
-            dr = -tilt_rad * math.sin(angle)  # Roll
-            dp = tilt_rad * math.cos(angle)   # Pitch
-            dyaw = 0.0
-
             label = f"orbit_ring_{i+1}"
             self._waypoint_labels.append(label)
-            self._waypoint_offsets.append((dx, dy, dz, dr, dp, dyaw))
+            # Speichere relativen Winkel
+            self._waypoint_offsets.append((angle, 1.0, 0.0, 0.0, 0.0, 0.0))
 
         # 3. Innerer Kreis (falls mehr als 9 Punkte konfiguriert werden)
         if len(self._waypoint_labels) < num_wp:
             remaining = num_wp - len(self._waypoint_labels)
             for j in range(remaining):
                 angle = (2.0 * math.pi / remaining) * j + (math.pi / 4.0)
-                dx = (radius_m * 0.5) * math.cos(angle)
-                dy = (radius_m * 0.5) * math.sin(angle)
-                dz = 0.015
-                
-                dr = -(tilt_rad * 0.5) * math.sin(angle)
-                dp = (tilt_rad * 0.5) * math.cos(angle)
-                dyaw = 0.0
-
                 label = f"orbit_inner_{j+1}"
                 self._waypoint_labels.append(label)
-                self._waypoint_offsets.append((dx, dy, dz, dr, dp, dyaw))
+                # Speichere relativen Winkel mit halbem Radius (0.5)
+                self._waypoint_offsets.append((angle, 0.5, 0.0, 0.0, 0.0, 0.0))
 
         self._waypoints = self._waypoint_labels
 
@@ -283,35 +281,64 @@ class AutoCalibration(LifecycleComponent):
     def _send_next_waypoint(self):
         idx = self._current_waypoint_idx
         label = self._waypoint_labels[idx]
-        dx, dy, dz, dr, dp, dyaw = self._waypoint_offsets[idx]
-
-        self.get_logger().info(
-            f"Moving to orbit waypoint {idx + 1}/{len(self._waypoint_labels)}: {label} "
-            f"(offset trans=[{dx:.3f}, {dy:.3f}, {dz:.3f}] m, rot_rpy=[{math.degrees(dr):.1f}°, {math.degrees(dp):.1f}°, {math.degrees(dyaw):.1f}°])"
-        )
 
         if self._start_ee_transform is None:
             self.get_logger().warn("No start EE transform available — cannot set target pose.")
             return
 
-        T_target = self._start_ee_transform.copy()
-        T_target[0, 3] += dx
-        T_target[1, 3] += dy
-        T_target[2, 3] += dz
+        T_home = self._start_ee_transform.copy()
+        P_home = T_home[:3, 3]
+        R_home = T_home[:3, :3]
 
-        R_tilt = rpy_to_rotation_matrix(dr, dp, dyaw)
-        R_target = T_target[:3, :3] @ R_tilt
-        T_target[:3, :3] = R_target
+        if label == "center":
+            pos_target = P_home
+            R_target = R_home
+            self.get_logger().info(f"Moving to orbit waypoint {idx + 1}/{len(self._waypoint_labels)}: center (home position)")
+        else:
+            angle, radius_scale, _, _, _, _ = self._waypoint_offsets[idx]
+            max_r = float(self.get_parameter("max_orbit_radius_mm").get_value()) / 1000.0
+            r = max_r * radius_scale
+
+            # Live distance from camera if available, else parameter
+            live_dist_m = None
+            try:
+                cam_data = list(self._robot_cam_board_pose_msg.data) if hasattr(self._robot_cam_board_pose_msg, "data") else list(self._robot_cam_board_pose_msg)
+                if len(cam_data) >= 6 and float(cam_data[2]) > 0.1:
+                    live_dist_m = float(cam_data[2])
+            except Exception:
+                pass
+
+            d = live_dist_m if live_dist_m is not None else float(self.get_parameter("board_distance_mm").get_value()) / 1000.0
+            d = max(d, 0.1)
+
+            # Radial position on sphere dome
+            dx = r * math.cos(angle)
+            dy = r * math.sin(angle)
+            dz = d - math.sqrt(max(d * d - r * r, 0.001))
+
+            # Geometric tilt angle so optical axis aims 100% dead-center at board
+            tilt_rad = math.asin(min(r / d, 0.99))
+            dr = -tilt_rad * math.sin(angle)
+            dp = tilt_rad * math.cos(angle)
+
+            R_tilt = rpy_to_rotation_matrix(dr, dp, 0.0)
+
+            pos_target = P_home + R_home @ np.array([dx, dy, dz], dtype=np.float64)
+            R_target = R_home @ R_tilt
+
+            self.get_logger().info(
+                f"Moving to orbit waypoint {idx + 1}/{len(self._waypoint_labels)}: {label} "
+                f"(radius={r*1000:.1f}mm, tilt={math.degrees(tilt_rad):.1f}° focused on board at {d*1000:.0f}mm)"
+            )
 
         try:
-            pos = T_target[:3, 3].tolist()
-            self._target_pose.set_position(np.array(pos, dtype=np.float64))
+            self._target_pose.set_position(np.array(pos_target, dtype=np.float64))
 
-            quat_target = rotation_matrix_to_quaternion(T_target[:3, :3])
+            quat_target = rotation_matrix_to_quaternion(R_target)
             self._target_pose.set_orientation(np.array(quat_target, dtype=np.float64))
 
             self.get_logger().info(
-                f"Orbit target pose set: pos=({pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f})"
+                f"Orbit target pose set: pos=({pos_target[0]:.3f}, {pos_target[1]:.3f}, {pos_target[2]:.3f})"
             )
         except Exception as e:
             self.get_logger().warn(f"Could not set target EE pose: {e}")
@@ -441,6 +468,22 @@ class AutoCalibration(LifecycleComponent):
                 off_y_m = float(self.get_parameter("conveyor_offset_y_mm").get_value()) / 1000.0
                 off_z_m = float(self.get_parameter("conveyor_offset_z_mm").get_value()) / 1000.0
 
+                board_rows = int(self.get_parameter("board_rows").get_value())
+                board_cols = int(self.get_parameter("board_cols").get_value())
+                square_size_m = float(self.get_parameter("square_size_mm").get_value()) / 1000.0
+
+                # Board origin = corner at (conveyor_offset_x, conveyor_offset_y).
+                # Board +X axis = Conveyor +X axis (columns direction).
+                # Board +Y axis = Conveyor +Y axis (rows direction, conveyor flow direction).
+                # Therefore the board extends in BOTH +X and +Y from its origin corner.
+                board_center_x_m = off_x_m + (board_cols * square_size_m) / 2.0
+                board_center_y_m = off_y_m + (board_rows * square_size_m) / 2.0
+
+                self.get_logger().info(
+                    f"Board center in conveyor_frame: X={board_center_x_m*1000:.1f} mm, "
+                    f"Y={board_center_y_m*1000:.1f} mm"
+                )
+
                 result: CalibrationResult = solve_eye_in_hand(
                     self._collected_samples,
                     conveyor_offset_m=(off_x_m, off_y_m, off_z_m)
@@ -450,7 +493,10 @@ class AutoCalibration(LifecycleComponent):
                 self._calibration_matrix = T.flatten().tolist()
 
                 save_path = self.get_parameter("calibration_file_path").get_value()
-                save_calibration_json(save_path, result)
+                save_calibration_yaml(
+                    save_path, result,
+                    board_center_conveyor_mm=(board_center_x_m * 1000.0, board_center_y_m * 1000.0, off_z_m * 1000.0)
+                )
 
                 self.get_logger().info(
                     f"Calibration successful! RMSE: {result.position_rmse_mm:.2f} mm. Saved to {save_path}"

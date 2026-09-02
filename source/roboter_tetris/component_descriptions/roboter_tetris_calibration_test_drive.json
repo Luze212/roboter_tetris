@@ -52,10 +52,10 @@
   "parameters": [
     {
       "display_name": "Kalibrierdateipfad",
-      "description": "Pfad zur calibration.json Datei.",
+      "description": "Pfad zur calibration.yaml oder calibration.json Datei.",
       "parameter_name": "calibration_file_path",
       "parameter_type": "string",
-      "default_value": "/home/tetripick/Desktop/AICA/roboter_tetris/source/roboter_tetris/roboter_tetris/Calibration/calibration.json",
+      "default_value": "/tmp/calibration.yaml",
       "dynamic": true
     },
     {
@@ -75,8 +75,8 @@
       "dynamic": true
     },
     {
-      "display_name": "Über Board-Mitte zentrieren",
-      "description": "Positioniert den Greifer vor Start mittig über dem ChArUco-Board.",
+      "display_name": "Über Board-Mitte zentrieren (Kalibrierungs-Check)",
+      "description": "Fährt den Greifer rechnerisch auf das Board-Zentrum. Bei korrekter Kalibrierung ist die Bewegung minimal. Große Abweichung = Kalibrierungsfehler.",
       "parameter_name": "center_over_board",
       "parameter_type": "bool",
       "default_value": "true",

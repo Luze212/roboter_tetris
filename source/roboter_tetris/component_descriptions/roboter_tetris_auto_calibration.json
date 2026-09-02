@@ -73,10 +73,10 @@
   "parameters": [
     {
       "display_name": "Kalibrierdateipfad",
-      "description": "Pfad zum Speichern der erzeugten calibration.json.",
+      "description": "Pfad zum Speichern der erzeugten calibration.yaml.",
       "parameter_name": "calibration_file_path",
       "parameter_type": "string",
-      "default_value": "/tmp/calibration.json",
+      "default_value": "/tmp/calibration.yaml",
       "dynamic": true
     },
     {
@@ -116,7 +116,15 @@
       "description": "Maximaler Kippwinkel (Roll, Pitch, Yaw) in Grad für höhere Genauigkeit.",
       "parameter_name": "max_rotation_angle_deg",
       "parameter_type": "double",
-      "default_value": "5.0",
+      "default_value": "8.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Board Abstand (mm)",
+      "description": "Geschätzter Abstand vom Greifer/Kamera zum ChArUco-Board in mm zur Fokalpunkt-Zentrierung.",
+      "parameter_name": "board_distance_mm",
+      "parameter_type": "double",
+      "default_value": "350.0",
       "dynamic": true
     },
     {
@@ -142,6 +150,30 @@
       "parameter_type": "double",
       "default_value": "0.0",
       "dynamic": true
+    },
+    {
+      "display_name": "Board Zeilen (Checker)",
+      "description": "Anzahl der Zeilen des ChArUco-Boards (Checkerfelder, nicht Marker). Wird zusammen mit board_cols und square_size_mm genutzt, um das Board-Zentrum im conveyor_frame zu berechnen und in der calibration.yaml zu speichern.",
+      "parameter_name": "board_rows",
+      "parameter_type": "int",
+      "default_value": "5",
+      "dynamic": false
+    },
+    {
+      "display_name": "Board Spalten (Checker)",
+      "description": "Anzahl der Spalten des ChArUco-Boards (Checkerfelder, nicht Marker).",
+      "parameter_name": "board_cols",
+      "parameter_type": "int",
+      "default_value": "7",
+      "dynamic": false
+    },
+    {
+      "display_name": "Schachfeldgröße (mm)",
+      "description": "Seitenlänge eines Schachfeldes auf dem ChArUco-Board in mm.",
+      "parameter_name": "square_size_mm",
+      "parameter_type": "double",
+      "default_value": "35.0",
+      "dynamic": false
     }
   ]
 }

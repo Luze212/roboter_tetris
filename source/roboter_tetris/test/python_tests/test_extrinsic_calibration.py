@@ -134,3 +134,38 @@ def test_save_calibration_json():
         assert data["validation"]["sample_count"] == 5
         assert data["validation"]["position_rmse_mm"] == 1.23
         assert data["validation"]["operator"] == "pytest_unit_test"
+
+
+def test_save_calibration_yaml():
+    """Test YAML export formatting and parsing."""
+    import yaml
+    from roboter_tetris.Calibration.extrinsic_calibration import save_calibration_yaml
+
+    T_dummy = np.eye(4, dtype=np.float64)
+    T_dummy[0, 3] = 0.5
+    T_dummy[1, 3] = 0.6
+    T_dummy[2, 3] = 0.7
+
+    res = CalibrationResult(
+        T_robot_base_cam=T_dummy,
+        T_robot_conveyor=T_dummy,
+        position_rmse_mm=2.34,
+        rotation_rmse_deg=0.56,
+        sample_count=9
+    )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yaml_path = os.path.join(tmpdir, "calibration_test.yaml")
+        save_calibration_yaml(yaml_path, res, operator="pytest_yaml_test")
+
+        assert os.path.exists(yaml_path)
+        with open(yaml_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+
+        assert data["schema_version"] == 2
+        assert data["status"] == "validated"
+        assert "transformations" in data
+        assert "T_robot_conveyor" in data["transformations"]
+        assert data["transformations"]["T_robot_conveyor"]["translation_m"]["x"] == 0.5
+        assert data["validation"]["sample_count"] == 9
+        assert data["validation"]["operator"] == "pytest_yaml_test"
