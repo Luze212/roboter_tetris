@@ -2,7 +2,7 @@
   "name": "Auto Calibration",
   "description": {
     "brief": "Automatische extrinsische Kalibrierung für Roboter und Kameras.",
-    "details": "Steuert automatisiert Kalibrier-Posen an, erfasst ChArUco-Board-Erkennungen der Eye-in-Hand-Kamera (robot_cam) sowie der Basis-Kamera (base_cam), berechnet die extrinsische Kamera-zu-Roboter Transformation und speichert das Ergebnis in calibration.json."
+    "details": "Steuert automatisiert Kalibrier-Posen an, erfasst ChArUco-Board-Erkennungen der Eye-in-Hand-Kamera (robot_cam) sowie der Basis-Kamera (base_cam), berechnet die extrinsische Kamera-zu-Roboter Transformation sowie den conveyor_frame und speichert das Ergebnis in calibration.yaml / calibration.json."
   },
   "registration": "roboter_tetris::AutoCalibration",
   "inherits": "modulo_components::LifecycleComponent",
@@ -34,6 +34,12 @@
       "signal_type": "cartesian_pose"
     },
     {
+      "display_name": "Conveyor Frame Pose",
+      "description": "Berechnete kartesische Pose des conveyor_frame zur 3D-Visualisierung in AICA Studio via TF.",
+      "signal_name": "conveyor_pose",
+      "signal_type": "cartesian_pose"
+    },
+    {
       "display_name": "Kalibriermatrix",
       "description": "Flaches 4x4 Array der berechneten homogenen Transformationsmatrix (BaseCam -> Robot Base).",
       "signal_name": "calibration_matrix",
@@ -61,7 +67,7 @@
     },
     {
       "display_name": "Kalibriert",
-      "description": "True nach erfolgreicher Berechnung und Abspeicherung der calibration.json.",
+      "description": "True nach erfolgreicher Berechnung und Abspeicherung der calibration.json / calibration.yaml.",
       "predicate_name": "is_calibrated"
     },
     {

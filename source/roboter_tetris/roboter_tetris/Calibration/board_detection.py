@@ -215,20 +215,12 @@ class BoardDetection(LifecycleComponent):
             board, camera_matrix, distortion, None, None)
         if not valid:
             return None
+
         rvec = rvec.reshape(3)
         tvec = tvec.reshape(3)
 
-        # Invert Y and Z axes by rotating 180 degrees around X axis so Z points out of board towards camera
-        R_board, _ = cv2.Rodrigues(rvec)
-        R_flip = np.array([
-            [1.0,  0.0,  0.0],
-            [0.0, -1.0,  0.0],
-            [0.0,  0.0, -1.0]
-        ], dtype=np.float64)
-        R_corrected = R_board @ R_flip
-        rvec_corrected, _ = cv2.Rodrigues(R_corrected)
-
-        return rvec_corrected.reshape(3), tvec, camera_matrix, distortion
+        # Pure Standard OpenCV Charuco Pose estimation - No artificial coordinate flipping
+        return rvec, tvec, camera_matrix, distortion
 
     def on_step_callback(self):
         if self._color_msg.width == 0:
@@ -297,21 +289,15 @@ class BoardDetection(LifecycleComponent):
     def _publish_debug(self, color_img, detection, pose, checker_size_m):
         debug_img = color_img.copy()
 
-        # --- Mittelpunkt-Markierung (Dunkles Gelb) ---
+        # Mittelpunkt-Markierung (Dunkles Gelb)
         height, width = debug_img.shape[:2]
         center_x, center_y = width // 2, height // 2
         
-        # BGR-Farbwert für ein dunkles Gelb/Ocker (z.B. B=0, G=180, R=180)
         dark_yellow = (0, 180, 180)
         line_thickness = 1
-        crosshair_size = 20  # Länge der Linien-Schenkel in Pixeln (optional für kleines Kreuz)
 
-        # Horizontale Linie (durchgehend oder als Fadenkreuz)
-        # Option A: Vollbild-Linien
         cv2.line(debug_img, (0, center_y), (width, center_y), dark_yellow, line_thickness)
-        # Vertikale Linie
         cv2.line(debug_img, (center_x, 0), (center_x, height), dark_yellow, line_thickness)
-        # ----------------------------------------------
 
         if detection is not None:
             marker_corners, marker_ids, board_corners, board_ids = detection

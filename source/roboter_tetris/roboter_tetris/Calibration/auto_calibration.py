@@ -48,17 +48,14 @@ class AutoCalibration(LifecycleComponent):
             sr.Parameter("num_waypoints", 9, sr.ParameterType.INT),
             "Anzahl der Kalibrier-Wegpunkte (Standard: 9)"
         )
-        # PARAMETER: Radius des Orbits um das Board-Zentrum in mm (Standard: 50.0 mm)
         self.add_parameter(
             sr.Parameter("max_orbit_radius_mm", 50.0, sr.ParameterType.DOUBLE),
             "Maximaler kartesischer Orbit-Radius (in mm) um das Board-Zentrum"
         )
-        # PARAMETER: Max. Kippwinkel in Grad zum Board-Zentrum (Standard: 8.0°)
         self.add_parameter(
             sr.Parameter("max_rotation_angle_deg", 8.0, sr.ParameterType.DOUBLE),
             "Maximaler Neigungswinkel (in Grad) während der Orbit-Schwenks"
         )
-        # PARAMETER: Abstand von Kamera/EE zum Board-Zentrum in mm (Standard: 350.0 mm)
         self.add_parameter(
             sr.Parameter("board_distance_mm", 350.0, sr.ParameterType.DOUBLE),
             "Geschätzter Abstand vom Greifer/Kamera zum ChArUco-Board in mm"
@@ -75,7 +72,6 @@ class AutoCalibration(LifecycleComponent):
             sr.Parameter("conveyor_offset_z_mm", 0.0, sr.ParameterType.DOUBLE),
             "Z-Offset des ChArUco Board-Ursprungs im conveyor_frame in mm"
         )
-        # ChArUco board dimensions – used to compute the board center in conveyor_frame
         self.add_parameter(
             sr.Parameter("board_rows", 5, sr.ParameterType.INT),
             "Anzahl der Zeilen des ChArUco-Boards (Checker, nicht Marker)"
@@ -88,7 +84,6 @@ class AutoCalibration(LifecycleComponent):
             sr.Parameter("square_size_mm", 35.0, sr.ParameterType.DOUBLE),
             "Seitenlänge eines Schachfeldes auf dem ChArUco-Board in mm"
         )
-
 
         # Inputs
         self._base_cam_board_pose_msg = []
@@ -119,6 +114,17 @@ class AutoCalibration(LifecycleComponent):
         self.add_output(
             "target_ee_pose",
             "_target_pose",
+            EncodedState,
+            MessageType.CARTESIAN_POSE_MESSAGE
+        )
+
+        # Conveyor Frame Pose (Output für 3D-Visualisierung in AICA Studio via TF)
+        self._conveyor_pose = sr.CartesianPose(
+            "conveyor_frame", "world"
+        )
+        self.add_output(
+            "conveyor_pose",
+            "_conveyor_pose",
             EncodedState,
             MessageType.CARTESIAN_POSE_MESSAGE
         )
@@ -172,27 +178,25 @@ class AutoCalibration(LifecycleComponent):
         self._waypoint_labels = []
         self._waypoint_offsets = []
 
-        # 1. Zentrum (Blick senkrecht von oben auf den eingelernten Startpunkt)
+        # 1. Zentrum
         self._waypoint_labels.append("center")
         self._waypoint_offsets.append((0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
 
-        # 2. Äußerer Orbit-Ring auf der Halbkugeloberfläche
+        # 2. Äußerer Orbit-Ring
         num_ring_points = min(8, num_wp - 1)
         for i in range(num_ring_points):
             angle = (2.0 * math.pi / num_ring_points) * i
             label = f"orbit_ring_{i+1}"
             self._waypoint_labels.append(label)
-            # Speichere relativen Winkel
             self._waypoint_offsets.append((angle, 1.0, 0.0, 0.0, 0.0, 0.0))
 
-        # 3. Innerer Kreis (falls mehr als 9 Punkte konfiguriert werden)
+        # 3. Innerer Kreis
         if len(self._waypoint_labels) < num_wp:
             remaining = num_wp - len(self._waypoint_labels)
             for j in range(remaining):
                 angle = (2.0 * math.pi / remaining) * j + (math.pi / 4.0)
                 label = f"orbit_inner_{j+1}"
                 self._waypoint_labels.append(label)
-                # Speichere relativen Winkel mit halbem Radius (0.5)
                 self._waypoint_offsets.append((angle, 0.5, 0.0, 0.0, 0.0, 0.0))
 
         self._waypoints = self._waypoint_labels
@@ -274,7 +278,6 @@ class AutoCalibration(LifecycleComponent):
             self.set_predicate("is_calibrated", False)
             self.set_predicate("has_failed", False)
 
-            # Fixieren der Teached-In/Startpose als relativen Nullpunkt
             self._start_ee_transform = self._get_current_ee_transform()
             self._send_next_waypoint()
 
@@ -299,7 +302,6 @@ class AutoCalibration(LifecycleComponent):
             max_r = float(self.get_parameter("max_orbit_radius_mm").get_value()) / 1000.0
             r = max_r * radius_scale
 
-            # Live distance from camera if available, else parameter
             live_dist_m = None
             try:
                 cam_data = list(self._robot_cam_board_pose_msg.data) if hasattr(self._robot_cam_board_pose_msg, "data") else list(self._robot_cam_board_pose_msg)
@@ -311,12 +313,10 @@ class AutoCalibration(LifecycleComponent):
             d = live_dist_m if live_dist_m is not None else float(self.get_parameter("board_distance_mm").get_value()) / 1000.0
             d = max(d, 0.1)
 
-            # Radial position on sphere dome
             dx = r * math.cos(angle)
             dy = r * math.sin(angle)
             dz = d - math.sqrt(max(d * d - r * r, 0.001))
 
-            # Geometric tilt angle so optical axis aims 100% dead-center at board
             tilt_rad = math.asin(min(r / d, 0.99))
             dr = -tilt_rad * math.sin(angle)
             dp = tilt_rad * math.cos(angle)
@@ -353,7 +353,6 @@ class AutoCalibration(LifecycleComponent):
             if self._state_start_time is None:
                 self._state_start_time = now_time
 
-            # Ereignisbasierter Stopp-Check (< 2.0 mm Ist-Ziel-Abstand)
             try:
                 current_pos = np.array(self._robot_ee_pose.get_position(), dtype=np.float64)
                 target_pos = np.array(self._target_pose.get_position(), dtype=np.float64)
@@ -472,11 +471,8 @@ class AutoCalibration(LifecycleComponent):
                 board_cols = int(self.get_parameter("board_cols").get_value())
                 square_size_m = float(self.get_parameter("square_size_mm").get_value()) / 1000.0
 
-                # Board origin = corner at (conveyor_offset_x, conveyor_offset_y).
-                # Board +X axis = Conveyor +X axis (columns direction).
-                # Board +Y axis = Conveyor +Y axis (rows direction, conveyor flow direction).
-                # Therefore the board extends in BOTH +X and +Y from its origin corner.
-                board_center_x_m = off_x_m + (board_cols * square_size_m) / 2.0
+                # Board-Zentrum im gedrehten conveyor_frame (-X wegen Ry(180°))
+                board_center_x_m = off_x_m - (board_cols * square_size_m) / 2.0
                 board_center_y_m = off_y_m + (board_rows * square_size_m) / 2.0
 
                 self.get_logger().info(
@@ -491,6 +487,13 @@ class AutoCalibration(LifecycleComponent):
 
                 T = result.T_robot_base_cam
                 self._calibration_matrix = T.flatten().tolist()
+
+                # Sende berechnetes T_robot_conveyor als CartesianPose-Signal für AICA Studio
+                if result.T_robot_conveyor is not None:
+                    T_conv = result.T_robot_conveyor
+                    self._conveyor_pose.set_position(T_conv[:3, 3])
+                    quat_conv = rotation_matrix_to_quaternion(T_conv[:3, :3])
+                    self._conveyor_pose.set_orientation(quat_conv)
 
                 save_path = self.get_parameter("calibration_file_path").get_value()
                 save_calibration_yaml(

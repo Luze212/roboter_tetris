@@ -1,8 +1,7 @@
-"""Extrinsic calibration mathematics and JSON generator for roboter_tetris.
+"""Extrinsic calibration mathematics and JSON/YAML generator for roboter_tetris.
 
 Implements Eye-in-Hand hand-eye calibration, rigid transformation math,
-conveyor frame alignment (using the side edge alignment), and calibration.json
-export according to the project's specification.
+conveyor frame alignment, and calibration export in YAML and JSON formats.
 """
 
 from dataclasses import dataclass, field
@@ -92,7 +91,6 @@ def rotation_matrix_to_quaternion(R: np.ndarray) -> np.ndarray:
     return q / norm if norm > 1e-12 else np.array([1.0, 0.0, 0.0, 0.0])
 
 
-
 def pose_to_matrix(tvec: np.ndarray, rvec: np.ndarray) -> np.ndarray:
     """Convert (tvec [3], rvec [3] Rodrigues) to 4x4 homogeneous matrix."""
     T = np.eye(4, dtype=np.float64)
@@ -112,24 +110,17 @@ def matrix_to_pose(T: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
 @dataclass
 class CalibrationSample:
     """A single sample point containing EE pose and camera board detections."""
-    # EE pose in robot base frame: 4x4 T_robot_ee
     T_robot_ee: np.ndarray
-    # Board pose in eye-in-hand robot_cam frame: [tx, ty, tz, rx, ry, rz]
     robot_cam_board_pose: Optional[List[float]] = None
-    # Board pose in static base_cam frame: [tx, ty, tz, rx, ry, rz]
     base_cam_board_pose: Optional[List[float]] = None
 
 
 @dataclass
 class CalibrationResult:
     """Result of extrinsic calibration."""
-    # Transformation from base_cam to robot_base (p_robot = T_robot_base_cam @ p_cam)
     T_robot_base_cam: np.ndarray
-    # Transformation from robot_cam to end-effector (Eye-in-Hand offset)
     T_ee_robot_cam: Optional[np.ndarray] = None
-    # Transformation from board (aligned with conveyor edge) to robot_base
     T_robot_board: Optional[np.ndarray] = None
-    # Transformation from conveyor_frame to robot_base (origin = conveyor center, Y = flow dir)
     T_robot_conveyor: Optional[np.ndarray] = None
     position_rmse_mm: float = 0.0
     rotation_rmse_deg: float = 0.0
@@ -154,13 +145,11 @@ def solve_eye_in_hand(
             continue
         valid_samples.append(sample)
 
-        # T_base_ee
         R_ee = sample.T_robot_ee[:3, :3]
         t_ee = sample.T_robot_ee[:3, 3]
         R_gripper2base.append(R_ee)
         t_gripper2base.append(t_ee.reshape(3, 1))
 
-        # T_cam_target (from robot_cam board pose)
         tvec = np.array(sample.robot_cam_board_pose[:3], dtype=np.float64)
         rvec = np.array(sample.robot_cam_board_pose[3:6], dtype=np.float64)
         R_cam, _ = cv2.Rodrigues(rvec)
@@ -171,7 +160,6 @@ def solve_eye_in_hand(
     if len(valid_samples) < 3:
         raise ValueError(f"At least 3 valid samples required for hand-eye calibration, got {len(valid_samples)}.")
 
-    # Solve Hand-Eye for Eye-in-Hand: R_cam2gripper, t_cam2gripper (T_ee_cam)
     R_cam2gripper, t_cam2gripper = cv2.calibrateHandEye(
         R_gripper2base, t_gripper2base,
         R_target2cam, t_target2cam,
@@ -182,8 +170,6 @@ def solve_eye_in_hand(
     T_ee_cam[:3, :3] = R_cam2gripper
     T_ee_cam[:3, 3] = t_cam2gripper.flatten()
 
-    # Now compute Board in Robot Base for each sample:
-    # T_base_target = T_base_ee @ T_ee_cam @ T_cam_target
     board_positions = []
     T_base_target_list = []
 
@@ -196,29 +182,29 @@ def solve_eye_in_hand(
         T_base_target_list.append(T_base_target)
         board_positions.append(T_base_target[:3, 3])
 
-    # Average board pose in robot base frame
     mean_board_pos = np.mean(board_positions, axis=0)
     T_robot_board = np.eye(4, dtype=np.float64)
     T_robot_board[:3, 3] = mean_board_pos
-    # Use first valid rotation as baseline
     T_robot_board[:3, :3] = T_base_target_list[0][:3, :3]
 
-    # Compute T_robot_conveyor from T_robot_board and conveyor_offset_m:
-    # T_conveyor_board = Rz(board_rotation_deg) with translation = conveyor_offset_m
-    # T_robot_board = T_robot_conveyor @ T_conveyor_board
-    # => T_robot_conveyor = T_robot_board @ inv(T_conveyor_board)
+    # Compute T_robot_conveyor from T_robot_board and conveyor_offset_m
+    # ANPASSUNG: Drehung um 180° um die Y-Achse (Ry(180°)), damit Z_conveyor
+    # senkrecht nach OBEN aus der Bandoberfläche zeigt und X_conveyor nach RECHTS.
     T_conveyor_board = np.eye(4, dtype=np.float64)
-    T_conveyor_board[:3, :3] = rpy_to_rotation_matrix(0.0, 0.0, math.radians(board_rotation_deg))
+    
+    R_y_180 = rpy_to_rotation_matrix(0.0, math.radians(180.0), 0.0)
+    R_board_additional = rpy_to_rotation_matrix(0.0, 0.0, math.radians(board_rotation_deg))
+    
+    T_conveyor_board[:3, :3] = R_y_180 @ R_board_additional
     T_conveyor_board[0, 3] = conveyor_offset_m[0]
     T_conveyor_board[1, 3] = conveyor_offset_m[1]
     T_conveyor_board[2, 3] = conveyor_offset_m[2]
+
     T_robot_conveyor = T_robot_board @ np.linalg.inv(T_conveyor_board)
 
-    # Calculate position RMSE of board estimation across poses
     errors = [np.linalg.norm(pos - mean_board_pos) for pos in board_positions]
     pos_rmse_mm = float(np.sqrt(np.mean(np.square(errors))) * 1000.0)
 
-    # Compute T_robot_base_cam if base_cam board pose is available in samples
     T_robot_base_cam = None
     for sample in valid_samples:
         if sample.base_cam_board_pose is not None and len(sample.base_cam_board_pose) >= 6:
@@ -226,13 +212,10 @@ def solve_eye_in_hand(
             r_base_cam = np.array(sample.base_cam_board_pose[3:6], dtype=np.float64)
             T_base_cam_board = pose_to_matrix(t_base_cam, r_base_cam)
 
-            # T_robot_base_cam @ T_base_cam_board = T_robot_board
-            # => T_robot_base_cam = T_robot_board @ inv(T_base_cam_board)
             T_robot_base_cam = T_robot_board @ np.linalg.inv(T_base_cam_board)
             break
 
     if T_robot_base_cam is None:
-        # Fallback if no base_cam reading was attached
         T_robot_base_cam = T_robot_conveyor
 
     return CalibrationResult(
@@ -253,7 +236,7 @@ def save_calibration_json(
     notes: str = "Automatic extrinsic calibration via Eye-in-Hand ChArUco board detection",
     board_center_conveyor_mm: Optional[Tuple[float, float, float]] = None
 ) -> None:
-    """Save calibration results to json with full explanations of all frame transformations and timestamp."""
+    """Save calibration results to json/yaml with full explanations of all frame transformations and timestamp."""
     T_cam = result.T_robot_base_cam
     roll_cam, pitch_cam, yaw_cam = rotation_matrix_to_rpy(T_cam[:3, :3])
 
@@ -360,14 +343,12 @@ def save_calibration_json(
             "rotation": "R = Rz(yaw) @ Ry(pitch) @ Rx(roll)"
         },
         "transformations": transformations,
-        # Board center in conveyor frame (computed from board origin + dimensions)
         "board_center_conveyor_mm": {
             "x": round(float(board_center_conveyor_mm[0]), 2) if board_center_conveyor_mm else None,
             "y": round(float(board_center_conveyor_mm[1]), 2) if board_center_conveyor_mm else None,
             "z": round(float(board_center_conveyor_mm[2]), 2) if board_center_conveyor_mm else None,
             "description": "Zentrum des ChArUco-Boards im conveyor_frame (mm). Wird von TestDrive für Zentrierung genutzt."
         },
-        # Backward compatibility top-level fields:
         "source_frame": "camera_frame",
         "target_frame": "robot_base",
         "translation_m": transformations["T_robot_base_cam"]["translation_m"],

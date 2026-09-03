@@ -1,6 +1,6 @@
 """AICA Lifecycle Component: Calibration Test Drive for roboter_tetris.
 
-Validates the extrinsic calibration by reading calibration.json (T_robot_conveyor),
+Validates the extrinsic calibration by reading calibration.yaml/json (T_robot_conveyor),
 and moving the robot end-effector back and forth along the Y-axis of the conveyor frame
 when triggered via a Service / Event button in AICA Studio.
 """
@@ -44,7 +44,7 @@ class CalibrationTestDrive(LifecycleComponent):
         )
         self.add_parameter(
             sr.Parameter("center_over_board", True, sr.ParameterType.BOOL),
-            "Zentriert den Greifer vor Start über dem berechneten ChArUco-Board-Zentrum (Bediener-Kontrolle der Kalibriergenauigkeit)"
+            "Zentriert den Greifer vor Start über dem berechneten ChArUco-Board-Zentrum"
         )
 
         # Inputs
@@ -125,7 +125,6 @@ class CalibrationTestDrive(LifecycleComponent):
                 data = yaml.safe_load(f)
 
             if isinstance(data, dict):
-                # Store full data for board center lookup
                 self._calib_data = data
                 if "transformations" in data and "T_robot_conveyor" in data["transformations"]:
                     mat = data["transformations"]["T_robot_conveyor"]["homogeneous_matrix"]
@@ -180,7 +179,7 @@ class CalibrationTestDrive(LifecycleComponent):
             "Testfahrt gestartet."
             if success
             else "Testfahrt konnte nicht gestartet werden "
-                 "(Fehler in calibration.json)."
+                 "(Fehler in calibration.yaml/json)."
         )
         return response
 
@@ -212,8 +211,7 @@ class CalibrationTestDrive(LifecycleComponent):
             if board_center is None:
                 self.get_logger().warn(
                     "center_over_board=True but no board_center_conveyor_mm in calibration file. "
-                    "Skipping centering; starting from current position. "
-                    "Re-run AutoCalibration to generate board center data."
+                    "Skipping centering; starting from current position."
                 )
                 self._start_position_robot = curr_pos
                 self._state = "MOVING_FORWARD"
@@ -232,11 +230,9 @@ class CalibrationTestDrive(LifecycleComponent):
                     f"Current EE pos (conveyor_frame): X={curr_conv[0]*1000:.1f} mm, Y={curr_conv[1]*1000:.1f} mm"
                 )
                 self.get_logger().info(
-                    f"Phase 0 (Centering): delta_X={delta_x_conv*1000:.1f} mm, delta_Y={delta_y_conv*1000:.1f} mm "
-                    f"(should be ~0 mm if calibration is correct)"
+                    f"Phase 0 (Centering): delta_X={delta_x_conv*1000:.1f} mm, delta_Y={delta_y_conv*1000:.1f} mm"
                 )
 
-                # Only allow centering if delta is reasonable (< 0.5 m)
                 if abs(delta_x_conv) < 0.5 and abs(delta_y_conv) < 0.5:
                     X_conv_unit = T_robot_conveyor[:3, 0]
                     Y_conv_unit = T_robot_conveyor[:3, 1]
@@ -247,8 +243,7 @@ class CalibrationTestDrive(LifecycleComponent):
                 else:
                     self.get_logger().warn(
                         f"Centering delta too large (delta_X={delta_x_conv*1000:.0f} mm, "
-                        f"delta_Y={delta_y_conv*1000:.0f} mm). "
-                        "Skipping centering – calibration error or robot not positioned near board."
+                        f"delta_Y={delta_y_conv*1000:.0f} mm). Skipping centering."
                     )
                     self._start_position_robot = curr_pos
                     self._state = "MOVING_FORWARD"
@@ -295,7 +290,6 @@ class CalibrationTestDrive(LifecycleComponent):
             self._target_pose.set_position(target_pos)
             self._target_pose.set_orientation(self._robot_ee_pose.get_orientation())
 
-            # Log live ACTUAL position in conveyor_frame coordinates
             try:
                 T_inv = np.linalg.inv(self._T_robot_conveyor)
                 p_world = np.array([curr_pos[0], curr_pos[1], curr_pos[2], 1.0], dtype=np.float64)
