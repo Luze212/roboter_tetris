@@ -1,8 +1,8 @@
 {
   "name": "Board Detection",
   "description": {
-    "brief": "Erkennt ein ChArUco-Board in einem Farbbild.",
-    "details": "Detektiert ArUco-Markierungen eines ChArUco-Boards und liefert interpolierte Board-Eckinformationen. Diese Komponente ist auf reine Board-Erkennung ausgelegt, ohne Kamera-zu-Roboter-Transformation."
+    "brief": "Erkennt ein ChArUco-Board und extrahiert Posen sowie Tiefendaten.",
+    "details": "Detektiert ArUco-Markierungen eines ChArUco-Boards und berechnet Eckinformationen, Posen sowie Tiefeninformationen aus dem ausgerichteten Tiefenbild."
   },
   "registration": "roboter_tetris::BoardDetection",
   "inherits": "modulo_components::LifecycleComponent",
@@ -16,28 +16,41 @@
     },
     {
       "display_name": "Color Camera Info",
-      "description": "Kamera-Intrinsics und Verzerrungskoeffizienten. Erforderlich für die Pose-Schätzung des ChArUco-Boards.",
+      "description": "Kamera-Intrinsics für die Pose-Schätzung.",
       "signal_name": "color_camera_info",
       "signal_type": "other",
       "custom_signal_type": "sensor_msgs::msg::CameraInfo"
+    },
+    {
+      "display_name": "Aligned Depth Image",
+      "description": "Ausgerichtetes Tiefenbild zur Live-Tiefenmessung.",
+      "signal_name": "aligned_depth_image",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::Image"
     }
   ],
   "outputs": [
     {
       "display_name": "Board-Ecken",
-      "description": "Flaches Array [id, x, y] pro erkannter ChArUco-Board-Ecke; x/y in Pixeln im Farbbild. Leer, wenn kein Board erkannt wird.",
+      "description": "Flaches Array [id, x, y] pro erkannter ChArUco-Board-Ecke.",
       "signal_name": "board_corners",
       "signal_type": "double_array"
     },
     {
       "display_name": "Board-Pose im Kamera-Frame",
-      "description": "Flaches Array [tx, ty, tz, rx, ry, rz]. Translation in Metern und Rodrigues-Rotationsvektor in Radiant; beschreibt die Transformation vom Board-Koordinatensystem (Ursprung: erste Board-Ecke) in den Kamera-Frame. Leer ohne gültige Pose oder Kamera-Intrinsics.",
+      "description": "Flaches Array [tx, ty, tz, rx, ry, rz].",
       "signal_name": "board_pose",
       "signal_type": "double_array"
     },
     {
+      "display_name": "Board Depth",
+      "description": "Tiefeninformationen des Board-Zentrums [Mittelwert, Median, gültige Pixel].",
+      "signal_name": "board_depth",
+      "signal_type": "double_array"
+    },
+    {
       "display_name": "Debug Image",
-      "description": "Farbbild mit Markern, ChArUco-Ecken und dem Koordinatensystem am Board-Ursprung, nur wenn Debug aktiviert.",
+      "description": "Debug-Bild mit erkannten Markern.",
       "signal_name": "debug_image",
       "signal_type": "other",
       "custom_signal_type": "sensor_msgs::msg::Image"
@@ -46,24 +59,24 @@
   "predicates": [
     {
       "display_name": "Board erkannt",
-      "description": "True, wenn mindestens ein passendes Board im aktuellen Bild erkannt wurde.",
+      "description": "True, wenn mindestens ein passendes Board erkannt wurde.",
       "predicate_name": "has_board"
     },
     {
       "display_name": "Pose geschätzt",
-      "description": "True, wenn aus ChArUco-Ecken und CameraInfo eine gültige Board-Pose geschätzt wurde.",
+      "description": "True, wenn eine gültige Board-Pose geschätzt wurde.",
       "predicate_name": "has_pose"
     },
     {
       "display_name": "Receiving Frames",
-      "description": "True, solange frische Kamera-Frames ankommen (False nach ~1 s ohne neuen Frame).",
+      "description": "True, solange frische Kamera-Frames ankommen.",
       "predicate_name": "is_receiving_frames"
     }
   ],
   "parameters": [
     {
       "display_name": "ArUco Dictionary",
-      "description": "ArUco-Dictionary für das ChArUco-Board, z.B. DICT_6x6_250.",
+      "description": "ArUco-Dictionary für das ChArUco-Board.",
       "parameter_name": "aruco_dictionary",
       "parameter_type": "string",
       "default_value": "DICT_6x6_250",
@@ -71,7 +84,7 @@
     },
     {
       "display_name": "Board Rows",
-      "description": "Anzahl der Marker in Y-Richtung des ChArUco-Boards.",
+      "description": "Anzahl der Marker in Y-Richtung.",
       "parameter_name": "board_rows",
       "parameter_type": "int",
       "default_value": "5",
@@ -79,7 +92,7 @@
     },
     {
       "display_name": "Board Cols",
-      "description": "Anzahl der Marker in X-Richtung des ChArUco-Boards.",
+      "description": "Anzahl der Marker in X-Richtung.",
       "parameter_name": "board_cols",
       "parameter_type": "int",
       "default_value": "7",
@@ -87,7 +100,7 @@
     },
     {
       "display_name": "Checker Size (mm)",
-      "description": "Kantenlänge eines Checker-Felds des ChArUco-Boards in Millimetern.",
+      "description": "Kantenlänge eines Checker-Felds in mm.",
       "parameter_name": "checker_size_mm",
       "parameter_type": "double",
       "default_value": "35.0",
@@ -95,7 +108,7 @@
     },
     {
       "display_name": "Marker Size (mm)",
-      "description": "Kantenlänge eines ArUco-Markers des ChArUco-Boards in Millimetern.",
+      "description": "Kantenlänge eines ArUco-Markers in mm.",
       "parameter_name": "marker_size_mm",
       "parameter_type": "double",
       "default_value": "26.0",
@@ -103,10 +116,18 @@
     },
     {
       "display_name": "Minimale Marker",
-      "description": "Minimale Anzahl erkannter Marker für gültige Detektion.",
+      "description": "Minimale Anzahl erkannter Marker.",
       "parameter_name": "min_detected_markers",
       "parameter_type": "int",
       "default_value": "4",
+      "dynamic": true
+    },
+    {
+      "display_name": "Depth Scale to mm",
+      "description": "Skalierungsfaktor zur Umrechnung des Tiefenbilds in mm.",
+      "parameter_name": "depth_scale_to_mm",
+      "parameter_type": "double",
+      "default_value": "1.0",
       "dynamic": true
     },
     {

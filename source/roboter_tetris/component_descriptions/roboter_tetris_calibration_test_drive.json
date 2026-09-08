@@ -3,7 +3,7 @@
 
   "description": {
     "brief": "Testfahrt zur Validierung der Kalibrierung entlang der Förderband Y-Achse.",
-    "details": "Liest die kalibrierte Transformationsmatrix (T_robot_conveyor) aus calibration.json und steuert den Endeffektor vor und zurück entlang der Y-Achse des Förderbandes. Wird per Service/Trigger-Button in AICA Studio gestartet."
+    "details": "Liest die kalibrierte Transformationsmatrix (T_robot_conveyor) sowie die Eye-in-Hand Transformation (T_ee_robot_cam) aus calibration.yaml/json. Richtet das Fadenkreuz der Kamera über der Board-Mitte aus und steuert den Roboter vor und zurück entlang der Y-Achse des Förderbandes. Wird per Service/Trigger-Button in AICA Studio gestartet."
   },
 
   "registration": "roboter_tetris::CalibrationTestDrive",
@@ -44,7 +44,7 @@
     },
     {
       "display_name": "Fehlgeschlagen",
-      "description": "True, falls calibration.json nicht gelesen werden konnte.",
+      "description": "True, falls calibration.yaml/json nicht gelesen werden konnte.",
       "predicate_name": "has_failed"
     }
   ],
@@ -75,8 +75,8 @@
       "dynamic": true
     },
     {
-      "display_name": "Über Board-Mitte zentrieren (Kalibrierungs-Check)",
-      "description": "Fährt den Greifer rechnerisch auf das Board-Zentrum. Bei korrekter Kalibrierung ist die Bewegung minimal. Große Abweichung = Kalibrierungsfehler.",
+      "display_name": "Kamera über Board-Mitte zentrieren",
+      "description": "Richtet das Fadenkreuz der Kamera (unter Berücksichtigung des Kamera-Flansch-Offsets) auf das Board-Zentrum aus. Bei korrekter Kalibrierung bleibt das Fadenkreuz zentriert.",
       "parameter_name": "center_over_board",
       "parameter_type": "bool",
       "default_value": "true",

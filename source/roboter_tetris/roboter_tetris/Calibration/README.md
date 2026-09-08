@@ -1,50 +1,112 @@
-# Extrinsische Kalibrierung
+# Extrinsische Kalibrierung & Test Drive (`roboter_tetris`)
 
-Dieser Ordner ist bewusst von der Objekterkennung, dem Tracking und der Greifaufgabe getrennt. Er enthält die geometrische Beziehung zwischen der fest montierten Basis-Kamera und dem Roboter. Die Kalibrierung ist eine Voraussetzung für die Aufgabe, aber nicht Teil ihrer Laufzeitlogik.
+Dieser Ordner enthält die Komponenten zur automatisierten extrinsischen **Eye-in-Hand-Kalibrierung** und zur Messung des **Förderband-Koordinatensystems (`conveyor_frame`)** für Roboter und Kameras.
 
-## Quelle der Kalibrierwerte
+Die Kalibrierung ist Voraussetzung für die präzise Objekterkennung und Greifaufgabe, läuft jedoch als eigenständige Modulo/AICA-Lifecycle-Komponente ab.
 
-`calibration.json` ist die versionierbare Ablage für die Kamera-zu-Roboter-Transformation. Sie beschreibt die aktive Konvention eindeutig:
+---
 
-```
-p_robot = T_robot_camera @ p_camera
-```
+## 1. Systemübersicht & Komponenten
 
-`source_frame` ist der Kamera-Frame, `target_frame` der Roboter-Base-Frame. Translationen stehen in Metern. Die Orientierung ist zusätzlich als Roll, Pitch und Yaw in Grad abgelegt und wird mit `Rz(yaw) @ Ry(pitch) @ Rx(roll)` zur Rotationsmatrix aufgebaut. Die Matrix ist zeilenweise gespeichert.
+Das Kalibrier-Subsystem besteht aus vier Hauptkomponenten:
 
-Die Datei enthält derzeit die bisherigen Aufbauwerte und ist ausdrücklich mit `legacy_initial_values` markiert. Sie ist erst nach einer dokumentierten Messung als validierte Kalibrierung zu verwenden.
+* **`board_detection.py` (`BoardDetection`)**: Erkennt ChArUco-Boards im Kamerabild und berechnet die Pose des Board-Ursprungs in der Kamera (`[tx, ty, tz, rx, ry, rz]`). Dient als führende Instanz für die physikalischen Board-Parameter.
+* **`auto_calibration.py` (`AutoCalibration`)**: Steuert eine automatische Orbit-Trajektorie an, erfasst Aufnahmen, führt die Tsai-Hand-Eye-Kalibrierung aus und ermittelt das Förderband-Koordinatensystem (`conveyor_frame`).
+* **`extrinsic_calibration.py`**: Mathematik-Bibliothek für `solve_eye_in_hand`, Quaternionen-Normierung und YAML/JSON-Export.
+* **`test_drive.py` (`CalibrationTestDrive`)**: Validierungskomponente, die das Kamera-Fadenkreuz präzise über dem Board-Zentrum ausrichtet und eine Testfahrt entlang der Förderband-Y-Achse ausführt.
 
-## Vorgehen
+---
 
-1. Roboter und Kamera mechanisch fixieren; den Roboter-Base-Frame als Referenz prüfen.
-2. Mehrere eindeutig messbare Punkte oder ein geeignetes Kalibriertarget im Arbeitsraum erfassen. Die Punkte müssen jeweils im Kamera- und Base-Frame vorliegen.
-3. Die starre Transformation `T_robot_camera` bestimmen und in der JSON-Datei sowohl als Translation/ZYX-Eulerwinkel als auch als 4×4-Matrix eintragen.
-4. Unter `validation` Messdatum, Methode, Anzahl der Punkte und Positions-/Orientierungsfehler dokumentieren. `status` erst nach erfolgreicher Prüfung auf `validated` setzen.
-5. Die sechs Werte in AICA in der Komponente **BaseCam** (`cal_x`, `cal_y`, `cal_z`, `cal_roll`, `cal_pitch`, `cal_yaw`) übernehmen. Diese Laufzeitparameter entsprechen exakt den JSON-Feldern und bleiben für ein kontrolliertes Fein-Tuning verfügbar.
-6. Mit unabhängigen Prüfpunkten validieren. Ein Punkt darf nicht zugleich zur Bestimmung und alleinigen Bewertung der Transformation dienen.
+## 2. Parameter-Konfiguration & Vererbung
 
-## Abgrenzung
+Um Redundanzen zu vermeiden, werden die physikalischen Board-Eigenschaften **nur einmal** in der Komponente `board_detection` (z. B. `board_detection_2`) festgelegt:
 
-Intrinsik, Tiefenskalierung, Förderbandhöhe und affine Korrekturen sind keine Extrinsik und werden hier nicht verwaltet. Die Extrinsik wird neu bestimmt, wenn Kamera, Roboterbase oder deren starre Verbindung bewegt wurde.
+### Board-Detection Parameter (`board_detection.json`)
+| Parameter | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `aruco_dictionary` | string | `"DICT_6x6_250"` | ArUco-Dictionary für das ChArUco-Board |
+| `board_rows` | int | `5` | Anzahl der Zeilen (Checker-Felder in Y-Richtung) |
+| `board_cols` | int | `7` | Anzahl der Spalten (Checker-Felder in X-Richtung) |
+| `checker_size_mm` | double | `35.0` | Kantenlänge eines Schachfeld-Quadrat-Feldes in mm |
+| `marker_size_mm` | double | `26.0` | Kantenlänge eines ArUco-Markers in mm |
+| `min_detected_markers` | int | `4` | Mindestanzahl erkannter Marker für eine gültige Pose |
 
-## Änderungsregel
+### Dynamische Parameterabfrage in AutoCalibration
+`AutoCalibration` fragt beim Ausführen im Zustand `SOLVING` die Parameter `board_rows`, `board_cols` und `checker_size_mm` dynamisch über den ROS 2 Service `/{board_detection_node_name}/get_parameters` ab. Lokale Fallback-Parameter greifen automatisch, falls der Service nicht erreichbar ist.
 
-Keine Werte ohne Messprotokoll überschreiben. Bei jeder Änderung `measured_at`, `operator`, `method`, Fehlerwerte und eine kurze Notiz ergänzen. Dadurch bleibt nachvollziehbar, welcher Aufbau mit welcher AICA-Konfiguration betrieben wurde.
+---
 
+## 3. Geometrische Konventionen & Conveyor Frame
 
-## ChArUco-Board-Erkennung in AICA
+### Board-Ursprung (Marker ID 0)
+Der mathematische Ursprung $(0,0,0)$ des ChArUco-Boards liegt an der **äußersten linken oberen Ecke des ersten Markers (Marker ID 0)**.
 
-`board_detection.py` ist die AICA-Komponente für die reine Erkennung von **ChArUco-Boards**. Sie unterstützt ausschließlich ChArUco-Boards. Für jedes verwendete Board werden die folgenden dynamischen AICA-Parameter gesetzt:
+### Conveyor Frame Transformation
+Das Förderband-Koordinatensystem (`conveyor_frame`) wird wie folgt definiert:
+* **$+Y$ (Flow)**: Entlang der Förderrichtung des Bands.
+* **$+X$ (Width)**: Nach rechts in Förderrichtung gesehen.
+* **$+Z$ (Height)**: Vertikal nach oben aus der Förderbandebene.
 
-| Parameter | Bedeutung |
-| --- | --- |
-| `aruco_dictionary` | ArUco-Dictionary, z. B. `DICT_5X5_250` |
-| `board_rows` / `board_cols` | Anzahl der Marker in Y- bzw. X-Richtung |
-| `checker_size_mm` | Kantenlänge eines Schachbrettfelds in Millimetern (z. B. `35.0`) |
-| `marker_size_mm` | Kantenlänge eines ArUco-Markers in Millimetern (z. B. `26.0`) |
+Da das ChArUco-Board spiegelbildlich im Arbeitsraum liegt, wird das Board-KS mit einer $180^\circ$-Rotation um die Y-Achse ($R_y(180^\circ)$) in das `conveyor_frame` überführt.
 
-`checker_size_mm` muss größer als `marker_size_mm` sein. Der für OpenCV benötigte Abstand wird intern berechnet.
+### Berechnung des Board-Zentrums im Conveyor Frame
+Ausgehend vom gemessenen Ursprung (Ecke Marker ID 0) berechnet `AutoCalibration` das Board-Zentrum wie folgt:
 
-## Pose-Schätzung
+$$\text{board\_width\_m} = \text{board\_cols} \cdot \text{checker\_size\_m}$$
+$$\text{board\_height\_m} = \text{board\_rows} \cdot \text{checker\_size\_m}$$
 
-Wenn `color_camera_info` gültige Kamera-Intrinsics und Verzerrungskoeffizienten liefert, bestimmt die Komponente zusätzlich die Pose mit `cv2.aruco.estimatePoseCharucoBoard`. Die Ausgabe `board_pose` ist `[tx, ty, tz, rx, ry, rz]`: Translation in Metern und Rodrigues-Rotationsvektor in Radiant für die Transformation **Board → Kamera**. Der Ursprung des Board-Koordinatensystems liegt an der ersten Ecke des ChArUco-Boards. `has_pose` ist nur bei gültiger Schätzung gesetzt. Bei aktiviertem Debug wird ein Achsenkreuz mit drei Checker-Feldlängen gezeichnet.
+$$\text{center}_x = \text{conveyor\_offset\_x\_m} - \frac{\text{board\_width\_m}}{2.0}$$
+$$\text{center}_y = \text{conveyor\_offset\_y\_m} + \frac{\text{board\_height\_m}}{2.0}$$
+$$\text{center}_z = \text{conveyor\_offset\_z\_m}$$
+
+Dieses Zentrum wird zusammen mit der Hand-Eye-Matrix in der Kalibrierungsdatei (`/tmp/calibration.yaml`) abgespeichert.
+
+---
+
+## 4. Ablauf der Kalibrierung (`AutoCalibration`)
+
+1. **Vorbereitung:** Kamera mit Fadenkreuz grob über dem Board-Zentrum ausrichten.
+2. **Start:** Auslösen über AICA Studio Button / Service `start_calibration`.
+3. **Orbit-Trajektorie:** Der Roboter fährt automatisch $N$ Wegpunkte auf einem Halbkugelsegment ab, schwenkt die Kamera auf das Board ein und sammelt gemittelte Bildsamples.
+4. **Lösung (`SOLVING`):** 
+   * Berechnung der Eye-in-Hand Transformation $T_{\text{ee\_robot\_cam}}$ via `solve_eye_in_hand`.
+   * Berechnung von $T_{\text{robot\_conveyor}}$ und `board_center_conveyor_mm`.
+   * Speichern der Ergebnisse nach `/tmp/calibration.yaml` und `/tmp/calibration.json`.
+
+---
+
+## 5. Validierung via Test Drive (`CalibrationTestDrive`)
+
+`CalibrationTestDrive` liest sowohl $T_{\text{robot\_conveyor}}$ als auch die Eye-in-Hand Transformation $T_{\text{ee\_robot\_cam}}$ aus der generierten `calibration.yaml` ein:
+
+* **Kamera-Fadenkreuz-Zentrierung (Phase 0 & 1):** 
+  Der Roboter kompensiert den physischen Abstand von $100\text{ mm}$ zwischen Kamera-Optik und Flansch ($T_{\text{ee\_robot\_cam}}$). Dadurch fährt **das Fadenkreuz der Kamera im Debug Image** exakt zentriert über die Mitte des ChArUco-Boards.
+* **Trajektorie (Phase 2 & 3):** 
+  Der Roboter fährt $+200\text{ mm}$ entlang der $Y$-Achse des Förderbands vorwärts und anschließend wieder zurück auf die Startposition.
+* **Erfolgskriterium:** 
+  Das Fadenkreuz bleibt beim Zentrieren auf der Board-Mitte stehen, und der Roboter bewegt sich visuell exakt parallel zur Förderbandkante.
+
+---
+
+## 6. Kalibrierungsdatei Format (`calibration.yaml`)
+
+Auszug der generierten Kalibrierungsstruktur:
+
+```yaml
+transformations:
+  T_ee_robot_cam:
+    source_frame: robot_cam
+    target_frame: end_effector
+    homogeneous_matrix: [...]
+  T_robot_conveyor:
+    source_frame: conveyor_frame
+    target_frame: robot_base
+    homogeneous_matrix: [...]
+
+board_center_conveyor_mm:
+  x: -252.5
+  y: 330.5
+  z: 0.0
+
+validation:
+  position_rmse_mm: 1.25

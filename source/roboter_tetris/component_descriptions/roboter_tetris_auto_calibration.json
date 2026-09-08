@@ -1,133 +1,132 @@
 {
   "name": "Auto Calibration",
   "description": {
-    "brief": "Automatische extrinsische Kalibrierung für Roboter und Kameras.",
-    "details": "Steuert automatisiert Kalibrier-Posen an, erfasst ChArUco-Board-Erkennungen der Eye-in-Hand-Kamera (robot_cam) sowie der Basis-Kamera (base_cam), berechnet die extrinsische Kamera-zu-Roboter Transformation sowie den conveyor_frame und speichert das Ergebnis in calibration.yaml / calibration.json."
+    "brief": "Automatische extrinsische Hand-Eye-Kalibrierung für Roboter-Tetris.",
+    "details": "Führt eine Orbit-Trajektorie aus, sammelt Bild- und Posenproben, berechnet die Eye-in-Hand-Transformation sowie das Förderband-Koordinatensystem und speichert die Ergebnisse in YAML/JSON-Dateien."
   },
   "registration": "roboter_tetris::AutoCalibration",
   "inherits": "modulo_components::LifecycleComponent",
   "inputs": [
     {
       "display_name": "Base Cam Board Pose",
-      "description": "Board-Pose aus der statischen BaseCam [tx, ty, tz, rx, ry, rz].",
+      "description": "Board-Pose von der fest montierten Basis-Kamera [tx, ty, tz, rx, ry, rz].",
       "signal_name": "base_cam_board_pose",
       "signal_type": "double_array"
     },
     {
       "display_name": "Robot Cam Board Pose",
-      "description": "Board-Pose aus der Eye-in-Hand RobotCam [tx, ty, tz, rx, ry, rz].",
+      "description": "Board-Pose von der Hand-Eye-Kamera am Roboterflansch [tx, ty, tz, rx, ry, rz].",
       "signal_name": "robot_cam_board_pose",
       "signal_type": "double_array"
     },
     {
-      "display_name": "Robot EE Pose",
-      "description": "Endeffektor-Pose im Roboter-Base-Frame.",
+      "display_name": "Robot Cam Board Depth",
+      "description": "Tiefeninformationen des Board-Zentrums von der Roboter-Kamera [Mittelwert, Median, gültige Pixel].",
+      "signal_name": "robot_cam_board_depth",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Robot End-Effector Pose",
+      "description": "Aktuelle kartesische Pose des Roboter-Endeffektors im Base-Frame.",
       "signal_name": "robot_ee_pose",
-      "signal_type": "cartesian_pose"
+      "signal_type": "cartesian_state"
     }
   ],
   "outputs": [
     {
       "display_name": "Target EE Pose",
-      "description": "Kartesische Zielpose des Endeffektors (Cartesian Pose) für die Bewegungssteuerung.",
+      "description": "Zielpose für den Roboter-Endeffektor zur Ansteuerung der Kalibrier-Trajektorie.",
       "signal_name": "target_ee_pose",
       "signal_type": "cartesian_pose"
     },
     {
-      "display_name": "Conveyor Frame Pose",
-      "description": "Berechnete kartesische Pose des conveyor_frame zur 3D-Visualisierung in AICA Studio via TF.",
+      "display_name": "Conveyor Pose",
+      "description": "Berechnetes Förderband-Koordinatensystem (conveyor_frame) zur Visualisierung.",
       "signal_name": "conveyor_pose",
       "signal_type": "cartesian_pose"
     },
     {
-      "display_name": "Kalibriermatrix",
-      "description": "Flaches 4x4 Array der berechneten homogenen Transformationsmatrix (BaseCam -> Robot Base).",
+      "display_name": "Calibration Matrix",
+      "description": "Flache 4x4-Transformationsmatrix (T_robot_base_cam).",
       "signal_name": "calibration_matrix",
       "signal_type": "double_array"
     },
     {
-      "display_name": "Kalibrierung RPY",
-      "description": "Roll, Pitch, Yaw Winkel der berechneten Transformation in Grad [roll, pitch, yaw].",
+      "display_name": "Calibration RPY",
+      "description": "Euler-Winkel (Roll, Pitch, Yaw in Grad) der Kalibrierung.",
       "signal_name": "calibration_rpy",
       "signal_type": "double_array"
     }
   ],
-  "services": [
-    {
-      "display_name": "Kalibrierung Starten",
-      "description": "Klicken um die automatische Kalibriersequenz zu starten.",
-      "service_name": "start_calibration"
-    }
-  ],
   "predicates": [
     {
-      "display_name": "Kalibrierung läuft",
-      "description": "True während der Ausführung des automatischen Bewegungs- und Messablaufs.",
+      "display_name": "Is Running",
+      "description": "True, während die Kalibriersequenz aktiv ausgeführt wird.",
       "predicate_name": "is_running"
     },
     {
-      "display_name": "Kalibriert",
-      "description": "True nach erfolgreicher Berechnung und Abspeicherung der calibration.json / calibration.yaml.",
+      "display_name": "Is Calibrated",
+      "description": "True, wenn die Kalibrierung erfolgreich abgeschlossen und gespeichert wurde.",
       "predicate_name": "is_calibrated"
     },
     {
-      "display_name": "Fehlgeschlagen",
-      "description": "True, falls während des Ablaufs oder der Berechnung ein Fehler aufgetreten ist.",
+      "display_name": "Has Failed",
+      "description": "True, wenn bei der Berechnung oder Ausführung ein Fehler aufgetreten ist.",
       "predicate_name": "has_failed"
+    }
+  ],
+  "services": [
+    {
+      "display_name": "Start Calibration",
+      "description": "Service zum Auslösen des automatischen Kalibrierlaufs.",
+      "service_name": "start_calibration",
+      "service_type": "modulo_interfaces::srv::StringTrigger"
     }
   ],
   "parameters": [
     {
-      "display_name": "Kalibrierdateipfad",
-      "description": "Pfad zum Speichern der erzeugten calibration.yaml.",
+      "display_name": "Calibration File Path",
+      "description": "Zielpfad für die generierte YAML-Datei.",
       "parameter_name": "calibration_file_path",
       "parameter_type": "string",
       "default_value": "/tmp/calibration.yaml",
       "dynamic": true
     },
     {
-      "display_name": "Beruhigungszeit (s)",
-      "description": "Wartezeit nach Anfahren einer Pose vor der Bildaufnahme in Sekunden.",
+      "display_name": "Settle Time (s)",
+      "description": "Wartezeit in Sekunden nach Anfahren eines Wegpunkts vor der Datenaufnahme.",
       "parameter_name": "settle_time_s",
       "parameter_type": "double",
       "default_value": "0.8",
       "dynamic": true
     },
     {
-      "display_name": "Samples pro Wegpunkt",
-      "description": "Anzahl zu mittelnder Detektionen pro Wegpunkt.",
+      "display_name": "Samples per Waypoint",
+      "description": "Anzahl zu mittelnder Detektionen pro Orbit-Wegpunkt.",
       "parameter_name": "samples_per_waypoint",
       "parameter_type": "int",
       "default_value": "5",
       "dynamic": true
     },
     {
-      "display_name": "Anzahl Wegpunkte",
-      "description": "Anzahl der zu generierenden Wegpunkte für die Kalibrierung.",
+      "display_name": "Num Waypoints",
+      "description": "Anzahl der abzufahrenden Kalibrier-Wegpunkte.",
       "parameter_name": "num_waypoints",
       "parameter_type": "int",
       "default_value": "9",
       "dynamic": true
     },
     {
-      "display_name": "Max. Orbit Radius (mm)",
-      "description": "Maximaler kartesischer Orbit-Radius in Millimeter um das Board-Zentrum.",
+      "display_name": "Max Orbit Radius (mm)",
+      "description": "Maximaler kartesischer Versatz-Radius um die Startposition in mm.",
       "parameter_name": "max_orbit_radius_mm",
       "parameter_type": "double",
       "default_value": "50.0",
       "dynamic": true
     },
     {
-      "display_name": "Max. Kippwinkel (Grad)",
-      "description": "Maximaler Kippwinkel (Roll, Pitch, Yaw) in Grad für höhere Genauigkeit.",
-      "parameter_name": "max_rotation_angle_deg",
-      "parameter_type": "double",
-      "default_value": "8.0",
-      "dynamic": true
-    },
-    {
-      "display_name": "Board Abstand (mm)",
-      "description": "Geschätzter Abstand vom Greifer/Kamera zum ChArUco-Board in mm zur Fokalpunkt-Zentrierung.",
+      "display_name": "Board Distance (mm)",
+      "description": "Fallback-Abstand zum ChArUco-Board in mm, falls keine Live-Tiefe vorliegt.",
       "parameter_name": "board_distance_mm",
       "parameter_type": "double",
       "default_value": "350.0",
@@ -135,51 +134,59 @@
     },
     {
       "display_name": "Conveyor Offset X (mm)",
-      "description": "X-Offset des ChArUco Board-Ursprungs im conveyor_frame in mm.",
+      "description": "X-Offset des Board-Ursprungs im Förderband-Frame in mm.",
       "parameter_name": "conveyor_offset_x_mm",
       "parameter_type": "double",
-      "default_value": "-375.0",
+      "default_value": "-130.0",
       "dynamic": true
     },
     {
       "display_name": "Conveyor Offset Y (mm)",
-      "description": "Y-Offset des ChArUco Board-Ursprungs im conveyor_frame in mm (Förderband-Laufrichtung).",
+      "description": "Y-Offset des Board-Ursprungs im Förderband-Frame in mm.",
       "parameter_name": "conveyor_offset_y_mm",
       "parameter_type": "double",
-      "default_value": "416.0",
+      "default_value": "243.0",
       "dynamic": true
     },
     {
       "display_name": "Conveyor Offset Z (mm)",
-      "description": "Z-Offset des ChArUco Board-Ursprungs im conveyor_frame in mm (Höhe Förderband).",
+      "description": "Z-Offset des Board-Ursprungs im Förderband-Frame in mm.",
       "parameter_name": "conveyor_offset_z_mm",
       "parameter_type": "double",
       "default_value": "0.0",
       "dynamic": true
     },
     {
-      "display_name": "Board Zeilen (Checker)",
-      "description": "Anzahl der Zeilen des ChArUco-Boards (Checkerfelder, nicht Marker). Wird zusammen mit board_cols und square_size_mm genutzt, um das Board-Zentrum im conveyor_frame zu berechnen und in der calibration.yaml zu speichern.",
+      "display_name": "Board Detection Node Name",
+      "description": "Name der BoardDetection-Komponente zur Parameterabfrage via Service.",
+      "parameter_name": "board_detection_node_name",
+      "parameter_type": "string",
+      "default_value": "board_detection_2",
+      "dynamic": true
+    },
+    {
+      "display_name": "Board Rows (Fallback)",
+      "description": "Fallback: Anzahl der Zeilen des Boards.",
       "parameter_name": "board_rows",
       "parameter_type": "int",
       "default_value": "5",
-      "dynamic": false
+      "dynamic": true
     },
     {
-      "display_name": "Board Spalten (Checker)",
-      "description": "Anzahl der Spalten des ChArUco-Boards (Checkerfelder, nicht Marker).",
+      "display_name": "Board Cols (Fallback)",
+      "description": "Fallback: Anzahl der Spalten des Boards.",
       "parameter_name": "board_cols",
       "parameter_type": "int",
       "default_value": "7",
-      "dynamic": false
+      "dynamic": true
     },
     {
-      "display_name": "Schachfeldgröße (mm)",
-      "description": "Seitenlänge eines Schachfeldes auf dem ChArUco-Board in mm.",
+      "display_name": "Square Size mm (Fallback)",
+      "description": "Fallback: Kantenlänge eines Schachfelds in mm.",
       "parameter_name": "square_size_mm",
       "parameter_type": "double",
       "default_value": "35.0",
-      "dynamic": false
+      "dynamic": true
     }
   ]
 }

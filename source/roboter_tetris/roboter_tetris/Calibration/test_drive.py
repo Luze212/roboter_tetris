@@ -1,13 +1,13 @@
 """AICA Lifecycle Component: Calibration Test Drive for roboter_tetris.
 
-Validates the extrinsic calibration by reading calibration.yaml/json (T_robot_conveyor),
-and moving the robot end-effector back and forth along the Y-axis of the conveyor frame
+Validates the extrinsic calibration by reading calibration.yaml/json (T_robot_conveyor & T_ee_robot_cam),
+and moving the robot camera/end-effector back and forth along the Y-axis of the conveyor frame
 when triggered via a Service / Event button in AICA Studio.
 """
 
 import json
 import os
-from typing import Optional
+from typing import Optional, Tuple
 
 import numpy as np
 import yaml
@@ -44,7 +44,7 @@ class CalibrationTestDrive(LifecycleComponent):
         )
         self.add_parameter(
             sr.Parameter("center_over_board", True, sr.ParameterType.BOOL),
-            "Zentriert den Greifer vor Start über dem berechneten ChArUco-Board-Zentrum"
+            "Zentriert das Fadenkreuz der Kamera vor Start über dem berechneten ChArUco-Board-Zentrum"
         )
 
         # Inputs
@@ -83,6 +83,7 @@ class CalibrationTestDrive(LifecycleComponent):
         self._state_start_time = None
         self._start_position_robot = None
         self._T_robot_conveyor = None
+        self._T_ee_robot_cam = None
 
     def on_configure_callback(self) -> bool:
         return True
@@ -99,8 +100,21 @@ class CalibrationTestDrive(LifecycleComponent):
     def on_deactivate_callback(self) -> bool:
         return True
 
-    def _load_conveyor_transform(self) -> Optional[np.ndarray]:
-        """Load T_robot_conveyor from calibration YAML/JSON. Returns 4x4 matrix or None."""
+    def _get_ee_position_m(self) -> np.ndarray:
+        """Liest die Roboter-EE-Position und garantiert Rückgabe in Metern."""
+        pos = self._robot_ee_pose.get_position()
+        x, y, z = float(pos[0]), float(pos[1]), float(pos[2])
+        if abs(x) > 2.0 or abs(y) > 2.0 or abs(z) > 2.0:
+            x /= 1000.0
+            y /= 1000.0
+            z /= 1000.0
+        return np.array([x, y, z], dtype=np.float64)
+
+    def _load_calibration_data(self) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+        """Load T_robot_conveyor and T_ee_robot_cam from calibration YAML/JSON.
+        
+        Returns (T_robot_conveyor, T_ee_robot_cam).
+        """
         calib_path = self.get_parameter("calibration_file_path").get_value()
         if not os.path.exists(calib_path):
             candidate_fallbacks = ["/tmp/calibration.yaml", "/tmp/calibration.json"]
@@ -118,25 +132,53 @@ class CalibrationTestDrive(LifecycleComponent):
                 calib_path = fallback_found
             else:
                 self.get_logger().error(f"Calibration file not found at {calib_path} or fallbacks {candidate_fallbacks}")
-                return None
+                return None, None
 
         try:
             with open(calib_path, "r", encoding="utf-8") as f:
-                data = yaml.safe_load(f)
+                if calib_path.endswith((".yaml", ".yml")):
+                    data = yaml.safe_load(f)
+                else:
+                    data = json.load(f)
+
+            T_robot_conveyor = None
+            T_ee_robot_cam = None
 
             if isinstance(data, dict):
                 self._calib_data = data
+                
+                # 1. T_robot_conveyor laden
                 if "transformations" in data and "T_robot_conveyor" in data["transformations"]:
                     mat = data["transformations"]["T_robot_conveyor"]["homogeneous_matrix"]
-                    return np.array(mat, dtype=np.float64)
+                    T_robot_conveyor = np.array(mat, dtype=np.float64)
+                elif "conveyor_frame" in data and "matrix_4x4" in data["conveyor_frame"]:
+                    T_robot_conveyor = np.array(data["conveyor_frame"]["matrix_4x4"], dtype=np.float64)
                 elif "homogeneous_matrix" in data:
-                    return np.array(data["homogeneous_matrix"], dtype=np.float64)
+                    T_robot_conveyor = np.array(data["homogeneous_matrix"], dtype=np.float64)
+                elif "T_robot_conveyor" in data:
+                    T_robot_conveyor = np.array(data["T_robot_conveyor"], dtype=np.float64)
 
-            self.get_logger().error(f"No valid transformation matrix found in {calib_path}")
-            return None
+                # 2. T_ee_robot_cam laden (Eye-in-Hand Kamera zu Endeffektor)
+                if "transformations" in data and "T_ee_robot_cam" in data["transformations"]:
+                    mat_cam = data["transformations"]["T_ee_robot_cam"]["homogeneous_matrix"]
+                    T_ee_robot_cam = np.array(mat_cam, dtype=np.float64)
+                elif "T_ee_robot_cam" in data:
+                    T_ee_robot_cam = np.array(data["T_ee_robot_cam"], dtype=np.float64)
+
+            if T_robot_conveyor is None:
+                self.get_logger().error(f"No valid T_robot_conveyor matrix found in {calib_path}")
+
+            if T_ee_robot_cam is None:
+                self.get_logger().warn(
+                    f"T_ee_robot_cam not found in {calib_path}. Assuming camera is at EE origin."
+                )
+                T_ee_robot_cam = np.eye(4, dtype=np.float64)
+
+            return T_robot_conveyor, T_ee_robot_cam
+
         except Exception as e:
             self.get_logger().error(f"Failed to parse calibration file {calib_path}: {e}")
-            return None
+            return None, None
 
     def _load_board_center_conveyor(self) -> Optional[tuple]:
         """Read board_center_conveyor_mm from cached calibration data. Returns (x_m, y_m, z_m) or None."""
@@ -184,13 +226,14 @@ class CalibrationTestDrive(LifecycleComponent):
         return response
 
     def _on_start_test_drive(self) -> bool:
-        T_robot_conveyor = self._load_conveyor_transform()
+        T_robot_conveyor, T_ee_robot_cam = self._load_calibration_data()
 
         if T_robot_conveyor is None:
             self.set_predicate("has_failed", True)
             return False
 
         self._T_robot_conveyor = T_robot_conveyor
+        self._T_ee_robot_cam = T_ee_robot_cam
 
         # Log Conveyor Frame unit vectors in robot_base (world)
         X_conv = T_robot_conveyor[:3, 0]
@@ -201,9 +244,8 @@ class CalibrationTestDrive(LifecycleComponent):
         self.get_logger().info(f"  Y_conv (Flow)  : [{Y_conv[0]:.4f}, {Y_conv[1]:.4f}, {Y_conv[2]:.4f}]")
         self.get_logger().info(f"  Z_conv (Height): [{Z_conv[0]:.4f}, {Z_conv[1]:.4f}, {Z_conv[2]:.4f}]")
 
-        pos = self._robot_ee_pose.get_position()
-        curr_pos = np.array([float(pos[0]), float(pos[1]), float(pos[2])], dtype=np.float64)
-        self._initial_position_robot = curr_pos
+        curr_ee_pos = self._get_ee_position_m()
+        self._initial_position_robot = curr_ee_pos
 
         center_over_board = bool(self.get_parameter("center_over_board").get_value())
         if center_over_board:
@@ -213,30 +255,49 @@ class CalibrationTestDrive(LifecycleComponent):
                     "center_over_board=True but no board_center_conveyor_mm in calibration file. "
                     "Skipping centering; starting from current position."
                 )
-                self._start_position_robot = curr_pos
+                self._start_position_robot = curr_ee_pos
                 self._state = "MOVING_FORWARD"
             else:
                 bc_x_m, bc_y_m, _ = board_center
-                T_inv = np.linalg.inv(T_robot_conveyor)
-                curr_conv = T_inv @ np.array([curr_pos[0], curr_pos[1], curr_pos[2], 1.0], dtype=np.float64)
+                
+                # Berechne die aktuelle Kamera-Position im conveyor_frame
+                R_ee = np.eye(3, dtype=np.float64)
+                ori = self._robot_ee_pose.get_orientation()
+                if hasattr(ori, "to_rotation_matrix"):
+                    R_ee = np.array(ori.to_rotation_matrix(), dtype=np.float64)
+                else:
+                    qx, qy, qz, qw = float(ori.x), float(ori.y), float(ori.z), float(ori.w)
+                    R_ee = np.array([
+                        [1 - 2*(qy**2 + qz**2), 2*(qx*qy - qz*qw), 2*(qx*qz + qy*qw)],
+                        [2*(qx*qy + qz*qw), 1 - 2*(qx**2 + qz**2), 2*(qy*qz - qx*qw)],
+                        [2*(qx*qz - qy*qw), 2*(qy*qz + qx*qw), 1 - 2*(qx**2 - qy**2)],
+                    ], dtype=np.float64)
 
-                delta_x_conv = bc_x_m - curr_conv[0]
-                delta_y_conv = bc_y_m - curr_conv[1]
+                t_ee_cam = T_ee_robot_cam[:3, 3]
+                curr_cam_world = curr_ee_pos + R_ee @ t_ee_cam
+
+                T_inv = np.linalg.inv(T_robot_conveyor)
+                curr_cam_conv = T_inv @ np.array([curr_cam_world[0], curr_cam_world[1], curr_cam_world[2], 1.0], dtype=np.float64)
+
+                delta_x_conv = bc_x_m - curr_cam_conv[0]
+                delta_y_conv = bc_y_m - curr_cam_conv[1]
 
                 self.get_logger().info(
                     f"Board center target (conveyor_frame): X={bc_x_m*1000:.1f} mm, Y={bc_y_m*1000:.1f} mm"
                 )
                 self.get_logger().info(
-                    f"Current EE pos (conveyor_frame): X={curr_conv[0]*1000:.1f} mm, Y={curr_conv[1]*1000:.1f} mm"
+                    f"Current Camera pos (conveyor_frame): X={curr_cam_conv[0]*1000:.1f} mm, Y={curr_cam_conv[1]*1000:.1f} mm"
                 )
                 self.get_logger().info(
-                    f"Phase 0 (Centering): delta_X={delta_x_conv*1000:.1f} mm, delta_Y={delta_y_conv*1000:.1f} mm"
+                    f"Phase 0 (Camera Centering): delta_X={delta_x_conv*1000:.1f} mm, delta_Y={delta_y_conv*1000:.1f} mm"
                 )
 
+                # Toleranz für Bewegung erhöhen (bis zu 0.5m Versatz zentrieren)
                 if abs(delta_x_conv) < 0.5 and abs(delta_y_conv) < 0.5:
                     X_conv_unit = T_robot_conveyor[:3, 0]
                     Y_conv_unit = T_robot_conveyor[:3, 1]
-                    self._start_position_robot = curr_pos + delta_x_conv * X_conv_unit + delta_y_conv * Y_conv_unit
+                    
+                    self._start_position_robot = curr_ee_pos + delta_x_conv * X_conv_unit + delta_y_conv * Y_conv_unit
                     self._state = "CENTERING"
                     self._target_pose.set_position(self._start_position_robot)
                     self._target_pose.set_orientation(self._robot_ee_pose.get_orientation())
@@ -245,10 +306,10 @@ class CalibrationTestDrive(LifecycleComponent):
                         f"Centering delta too large (delta_X={delta_x_conv*1000:.0f} mm, "
                         f"delta_Y={delta_y_conv*1000:.0f} mm). Skipping centering."
                     )
-                    self._start_position_robot = curr_pos
+                    self._start_position_robot = curr_ee_pos
                     self._state = "MOVING_FORWARD"
         else:
-            self._start_position_robot = curr_pos
+            self._start_position_robot = curr_ee_pos
             self._state = "MOVING_FORWARD"
 
         self._state_start_time = self.get_clock().now()
@@ -266,14 +327,14 @@ class CalibrationTestDrive(LifecycleComponent):
         duration_s = dist_m / max(speed_m_s, 0.001)
 
         dt = (now_time - self._state_start_time).nanoseconds / 1e9
-        curr_pos = np.array(self._robot_ee_pose.get_position(), dtype=np.float64)
+        curr_pos = self._get_ee_position_m()
 
         if self._state == "CENTERING":
             dist_to_center = np.linalg.norm(curr_pos - self._start_position_robot)
             if dist_to_center < 0.002 or dt >= 4.0:
                 self._state = "PAUSING_BEFORE_FORWARD"
                 self._state_start_time = now_time
-                self.get_logger().info("Phase 1 Complete: Arrived over board center. Settling 0.8s...")
+                self.get_logger().info("Phase 1 Complete: Camera optical center arrived over board center. Settling 0.8s...")
 
         elif self._state == "PAUSING_BEFORE_FORWARD":
             if dt >= 0.8:

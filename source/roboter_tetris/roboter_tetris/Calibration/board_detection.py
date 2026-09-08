@@ -1,7 +1,7 @@
 """AICA lifecycle component: ChArUco board detection for roboter_tetris.
 
 The component detects a ChArUco board in a color image and returns corner
-positions without any robot-frame transformation.
+positions along with depth information from an aligned depth stream.
 """
 
 import cv2
@@ -51,6 +51,10 @@ class BoardDetection(LifecycleComponent):
             "Minimale Anzahl erkannter Marker, damit eine Detektion als gültig gilt."
         )
         self.add_parameter(
+            sr.Parameter("depth_scale_to_mm", 1.0, sr.ParameterType.DOUBLE),
+            "mm pro Tiefen-Rohwert (16UC1-Bild). 1.0 = bereits mm; für Kameras mit anderer Einheit anpassen."
+        )
+        self.add_parameter(
             sr.Parameter("debug_enable", True, sr.ParameterType.BOOL),
             "Debug-Bild erzeugen und publizieren."
         )
@@ -59,12 +63,19 @@ class BoardDetection(LifecycleComponent):
         self.add_input("color_image", "_color_msg", Image)
         self._info_msg = CameraInfo()
         self.add_input("color_camera_info", "_info_msg", CameraInfo)
+        self._aligned_depth_msg = Image()
+        self.add_input("aligned_depth_image", "_aligned_depth_msg", Image)
 
         self._board_corners = []
         self.add_output("board_corners", "_board_corners", Float64MultiArray)
         # [tx, ty, tz, rx, ry, rz]: board origin in the camera frame.
         self._board_pose = []
         self.add_output("board_pose", "_board_pose", Float64MultiArray)
+        
+        # Output for board center depth information [depth_mean_mm, depth_median_mm, valid_pixels_count]
+        self._board_depth = []
+        self.add_output("board_depth", "_board_depth", Float64MultiArray)
+
         self._debug_msg = Image()
         self.add_output("debug_image", "_debug_msg", Image)
 
@@ -117,6 +128,7 @@ class BoardDetection(LifecycleComponent):
         self._debug_msg = Image()
         self._board_corners = []
         self._board_pose = []
+        self._board_depth = []
         self.set_predicate("has_board", False)
         self.set_predicate("has_pose", False)
         self.set_predicate("is_receiving_frames", False)
@@ -175,6 +187,7 @@ class BoardDetection(LifecycleComponent):
         if age_s > STALE_TIMEOUT_S:
             self._board_corners = []
             self._board_pose = []
+            self._board_depth = []
             self.set_predicate("has_board", False)
             self.set_predicate("has_pose", False)
             self.set_predicate("is_receiving_frames", False)
@@ -219,7 +232,6 @@ class BoardDetection(LifecycleComponent):
         rvec = rvec.reshape(3)
         tvec = tvec.reshape(3)
 
-        # Pure Standard OpenCV Charuco Pose estimation - No artificial coordinate flipping
         return rvec, tvec, camera_matrix, distortion
 
     def on_step_callback(self):
@@ -237,7 +249,22 @@ class BoardDetection(LifecycleComponent):
         self.set_predicate("is_receiving_frames", True)
 
         try:
+            # Exactly like the working legacy version: direct bgr8 loading
             color_img = self._bridge.imgmsg_to_cv2(self._color_msg, "bgr8")
+            ch, cw = color_img.shape[:2]
+
+            # Optional aligned depth extraction
+            depth_mm = None
+            if self._aligned_depth_msg.width > 0:
+                depth_img = self._bridge.imgmsg_to_cv2(self._aligned_depth_msg, desired_encoding="passthrough")
+                if depth_img.dtype == np.float32:
+                    depth_mm = depth_img * 1000.0
+                else:
+                    depth_mm = depth_img.astype(np.float32) * self.get_parameter("depth_scale_to_mm").get_value()
+                dh, dw = depth_mm.shape[:2]
+                if (dw, dh) != (cw, ch):
+                    depth_mm = cv2.resize(depth_mm, (cw, ch), interpolation=cv2.INTER_NEAREST)
+
             params, board, dictionary = self._ensure_board()
             detection = detect_board(color_img, board, dictionary)
             pose = None
@@ -245,6 +272,7 @@ class BoardDetection(LifecycleComponent):
             if detection is None:
                 self._board_corners = []
                 self._board_pose = []
+                self._board_depth = []
                 self.set_predicate("has_board", False)
                 self.set_predicate("has_pose", False)
                 self._warn_throttle("no_board", 2.0, "Kein ChArUco-Board im Kamerabild erkannt (0 Marker).")
@@ -270,6 +298,7 @@ class BoardDetection(LifecycleComponent):
                 pose = self._estimate_pose(board_corners, board_ids, board)
                 if pose is None:
                     self._board_pose = []
+                    self._board_depth = []
                     self.set_predicate("has_pose", False)
                     if has_enough:
                         self._warn_throttle("no_pose", 2.0, "Board-Pose konnte trotz ausreichend Marker nicht berechnet werden.")
@@ -278,11 +307,31 @@ class BoardDetection(LifecycleComponent):
                     self._board_pose = [*map(float, tvec), *map(float, rvec)]
                     self.set_predicate("has_pose", True)
 
+                    # Tiefenwerte aus der Board-Region auslesen
+                    if depth_mm is not None and len(board_corners) > 0:
+                        pts = board_corners.reshape(-1, 2).astype(np.int32)
+                        x_min, y_min = np.clip(pts.min(axis=0), 0, [cw - 1, ch - 1])
+                        x_max, y_max = np.clip(pts.max(axis=0), 0, [cw - 1, ch - 1])
+                        
+                        roi_depth = depth_mm[y_min:y_max+1, x_min:x_max+1]
+                        valid_depths = roi_depth[(roi_depth > 0) & (~np.isnan(roi_depth))]
+                        
+                        if valid_depths.size > 0:
+                            d_mean = float(np.mean(valid_depths))
+                            d_median = float(np.median(valid_depths))
+                            valid_count = float(valid_depths.size)
+                            self._board_depth = [d_mean, d_median, valid_count]
+                        else:
+                            self._board_depth = []
+                    else:
+                        self._board_depth = []
+
             if self.get_parameter("debug_enable").get_value():
                 self._publish_debug(color_img, detection, pose, params.marker_length_m + params.marker_spacing_m)
 
         except Exception as exc:
             self._board_pose = []
+            self._board_depth = []
             self.set_predicate("has_pose", False)
             self._log_error_throttled(f"board_detection pipeline error: {exc}")
 

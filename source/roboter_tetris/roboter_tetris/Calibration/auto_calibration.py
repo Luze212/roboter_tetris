@@ -5,6 +5,8 @@ import math
 from typing import List
 
 import numpy as np
+import rclpy
+from rcl_interfaces.srv import GetParameters
 from modulo_components.lifecycle_component import LifecycleComponent
 from modulo_core.encoded_state import EncodedState
 from clproto import MessageType
@@ -14,11 +16,9 @@ from modulo_interfaces.srv import StringTrigger
 
 from .extrinsic_calibration import (
     CalibrationResult, CalibrationSample,
-    pose_to_matrix, rotation_matrix_to_quaternion,
-    rpy_to_rotation_matrix, save_calibration_json, save_calibration_yaml, solve_eye_in_hand,
+    rotation_matrix_to_quaternion,
+    save_calibration_json, save_calibration_yaml, solve_eye_in_hand,
 )
-
-STALE_TIMEOUT_S = 1.0
 
 
 class AutoCalibration(LifecycleComponent):
@@ -34,11 +34,11 @@ class AutoCalibration(LifecycleComponent):
                 "/tmp/calibration.yaml",
                 sr.ParameterType.STRING
             ),
-            "Zielpfad für die generierte calibration.yaml (Standard: /tmp/calibration.yaml)"
+            "Zielpfad für die generierte calibration.yaml"
         )
         self.add_parameter(
             sr.Parameter("settle_time_s", 0.8, sr.ParameterType.DOUBLE),
-            "Wartezeit (Sekunden) nach Anfahren einer Pose vor der Bildaufnahme"
+            "Wartezeit (s) nach Anfahren einer Pose vor der Bildaufnahme"
         )
         self.add_parameter(
             sr.Parameter("samples_per_waypoint", 5, sr.ParameterType.INT),
@@ -46,120 +46,74 @@ class AutoCalibration(LifecycleComponent):
         )
         self.add_parameter(
             sr.Parameter("num_waypoints", 9, sr.ParameterType.INT),
-            "Anzahl der Kalibrier-Wegpunkte (Standard: 9)"
+            "Anzahl der Kalibrier-Wegpunkte"
         )
         self.add_parameter(
             sr.Parameter("max_orbit_radius_mm", 50.0, sr.ParameterType.DOUBLE),
-            "Maximaler kartesischer Orbit-Radius (in mm) um das Board-Zentrum"
-        )
-        self.add_parameter(
-            sr.Parameter("max_rotation_angle_deg", 8.0, sr.ParameterType.DOUBLE),
-            "Maximaler Neigungswinkel (in Grad) während der Orbit-Schwenks"
+            "Maximaler kartesischer Orbit-Radius (in mm)"
         )
         self.add_parameter(
             sr.Parameter("board_distance_mm", 350.0, sr.ParameterType.DOUBLE),
-            "Geschätzter Abstand vom Greifer/Kamera zum ChArUco-Board in mm"
+            "Geschätzter/Fallback Abstand zum ChArUco-Board in mm"
         )
         self.add_parameter(
-            sr.Parameter("conveyor_offset_x_mm", -375.0, sr.ParameterType.DOUBLE),
-            "X-Offset des ChArUco Board-Ursprungs im conveyor_frame in mm"
+            sr.Parameter("conveyor_offset_x_mm", -130.0, sr.ParameterType.DOUBLE),
+            "X-Offset im conveyor_frame in mm"
         )
         self.add_parameter(
-            sr.Parameter("conveyor_offset_y_mm", 416.0, sr.ParameterType.DOUBLE),
-            "Y-Offset des ChArUco Board-Ursprungs im conveyor_frame in mm"
+            sr.Parameter("conveyor_offset_y_mm", 243.0, sr.ParameterType.DOUBLE),
+            "Y-Offset im conveyor_frame in mm"
         )
         self.add_parameter(
             sr.Parameter("conveyor_offset_z_mm", 0.0, sr.ParameterType.DOUBLE),
-            "Z-Offset des ChArUco Board-Ursprungs im conveyor_frame in mm"
+            "Z-Offset im conveyor_frame in mm"
         )
         self.add_parameter(
-            sr.Parameter("board_rows", 5, sr.ParameterType.INT),
-            "Anzahl der Zeilen des ChArUco-Boards (Checker, nicht Marker)"
+            sr.Parameter("board_detection_node_name", "board_detection_2", sr.ParameterType.STRING),
+            "Name der BoardDetection-Komponente"
         )
-        self.add_parameter(
-            sr.Parameter("board_cols", 7, sr.ParameterType.INT),
-            "Anzahl der Spalten des ChArUco-Boards (Checker, nicht Marker)"
-        )
-        self.add_parameter(
-            sr.Parameter("square_size_mm", 35.0, sr.ParameterType.DOUBLE),
-            "Seitenlänge eines Schachfeldes auf dem ChArUco-Board in mm"
-        )
+        
+        # Fallbacks
+        self.add_parameter(sr.Parameter("board_rows", 5, sr.ParameterType.INT), "Fallback Rows")
+        self.add_parameter(sr.Parameter("board_cols", 7, sr.ParameterType.INT), "Fallback Cols")
+        self.add_parameter(sr.Parameter("square_size_mm", 35.0, sr.ParameterType.DOUBLE), "Fallback Square Size")
 
         # Inputs
         self._base_cam_board_pose_msg = []
-        self.add_input(
-            "base_cam_board_pose",
-            "_base_cam_board_pose_msg",
-            Float64MultiArray
-        )
+        self.add_input("base_cam_board_pose", "_base_cam_board_pose_msg", Float64MultiArray)
 
         self._robot_cam_board_pose_msg = []
-        self.add_input(
-            "robot_cam_board_pose",
-            "_robot_cam_board_pose_msg",
-            Float64MultiArray
-        )
+        self.add_input("robot_cam_board_pose", "_robot_cam_board_pose_msg", Float64MultiArray)
+
+        self._robot_cam_board_depth_msg = []
+        self.add_input("robot_cam_board_depth", "_robot_cam_board_depth_msg", Float64MultiArray)
 
         self._robot_ee_pose = sr.CartesianState("end_effector", "world")
-        self.add_input(
-            "robot_ee_pose",
-            "_robot_ee_pose",
-            EncodedState
-        )
-
-        # Target EE pose
-        self._target_pose = sr.CartesianPose(
-            "calibration_target", "world"
-        )
-        self.add_output(
-            "target_ee_pose",
-            "_target_pose",
-            EncodedState,
-            MessageType.CARTESIAN_POSE_MESSAGE
-        )
-
-        # Conveyor Frame Pose (Output für 3D-Visualisierung in AICA Studio via TF)
-        self._conveyor_pose = sr.CartesianPose(
-            "conveyor_frame", "world"
-        )
-        self.add_output(
-            "conveyor_pose",
-            "_conveyor_pose",
-            EncodedState,
-            MessageType.CARTESIAN_POSE_MESSAGE
-        )
+        self.add_input("robot_ee_pose", "_robot_ee_pose", EncodedState)
 
         # Outputs
+        self._target_pose = sr.CartesianPose("calibration_target", "world")
+        self.add_output("target_ee_pose", "_target_pose", EncodedState, MessageType.CARTESIAN_POSE_MESSAGE)
+
+        self._conveyor_pose = sr.CartesianPose("conveyor_frame", "world")
+        self.add_output("conveyor_pose", "_conveyor_pose", EncodedState, MessageType.CARTESIAN_POSE_MESSAGE)
+
         self._calibration_matrix = []
-        self.add_output(
-            "calibration_matrix",
-            "_calibration_matrix",
-            Float64MultiArray
-        )
+        self.add_output("calibration_matrix", "_calibration_matrix", Float64MultiArray)
 
         self._calibration_rpy = []
-        self.add_output(
-            "calibration_rpy",
-            "_calibration_rpy",
-            Float64MultiArray
-        )
+        self.add_output("calibration_rpy", "_calibration_rpy", Float64MultiArray)
 
         # Predicates
         self.add_predicate("is_running", False)
         self.add_predicate("is_calibrated", False)
         self.add_predicate("has_failed", False)
 
-        # Service
         try:
-            self.add_service(
-                "start_calibration",
-                StringTrigger,
-                self._on_start_calibration_service
-            )
+            self.add_service("start_calibration", StringTrigger, self._on_start_calibration_service)
         except Exception:
             pass
 
-        # State machine
         self._state = "IDLE"
         self._current_waypoint_idx = 0
         self._state_start_time = None
@@ -168,35 +122,22 @@ class AutoCalibration(LifecycleComponent):
         self._sample_buffer_robot_cam: List[List[float]] = []
         self._sample_buffer_base_cam: List[List[float]] = []
 
-        self._waypoint_labels = []
-        self._waypoint_offsets = []
-
     def _generate_waypoints(self):
-        """Generiert eine geometrisch zentrierte Orbit-Trajektorie auf einem Halbkugelsegment."""
         num_wp = max(3, int(self.get_parameter("num_waypoints").get_value()))
-        
-        self._waypoint_labels = []
-        self._waypoint_offsets = []
+        self._waypoint_labels = ["center"]
+        self._waypoint_offsets = [(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)]
 
-        # 1. Zentrum
-        self._waypoint_labels.append("center")
-        self._waypoint_offsets.append((0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
-
-        # 2. Äußerer Orbit-Ring
         num_ring_points = min(8, num_wp - 1)
         for i in range(num_ring_points):
             angle = (2.0 * math.pi / num_ring_points) * i
-            label = f"orbit_ring_{i+1}"
-            self._waypoint_labels.append(label)
+            self._waypoint_labels.append(f"orbit_ring_{i+1}")
             self._waypoint_offsets.append((angle, 1.0, 0.0, 0.0, 0.0, 0.0))
 
-        # 3. Innerer Kreis
         if len(self._waypoint_labels) < num_wp:
             remaining = num_wp - len(self._waypoint_labels)
             for j in range(remaining):
                 angle = (2.0 * math.pi / remaining) * j + (math.pi / 4.0)
-                label = f"orbit_inner_{j+1}"
-                self._waypoint_labels.append(label)
+                self._waypoint_labels.append(f"orbit_inner_{j+1}")
                 self._waypoint_offsets.append((angle, 0.5, 0.0, 0.0, 0.0, 0.0))
 
         self._waypoints = self._waypoint_labels
@@ -224,41 +165,39 @@ class AutoCalibration(LifecycleComponent):
         T = np.eye(4, dtype=np.float64)
         try:
             pos = self._robot_ee_pose.get_position()
-            T[0, 3] = float(pos[0])
-            T[1, 3] = float(pos[1])
-            T[2, 3] = float(pos[2])
+            x, y, z = float(pos[0]), float(pos[1]), float(pos[2])
+            # Falls Werte in mm vorliegen (> 2.0m Distanz), strikt in Meter konvertieren!
+            if abs(x) > 2.0 or abs(y) > 2.0 or abs(z) > 2.0:
+                x /= 1000.0
+                y /= 1000.0
+                z /= 1000.0
+
+            T[0, 3] = x
+            T[1, 3] = y
+            T[2, 3] = z
 
             ori = self._robot_ee_pose.get_orientation()
             if hasattr(ori, "to_rotation_matrix"):
                 T[:3, :3] = np.array(ori.to_rotation_matrix(), dtype=np.float64)
             else:
-                qx = float(ori.x)
-                qy = float(ori.y)
-                qz = float(ori.z)
-                qw = float(ori.w)
+                qx, qy, qz, qw = float(ori.x), float(ori.y), float(ori.z), float(ori.w)
                 T[:3, :3] = np.array([
                     [1 - 2*(qy**2 + qz**2), 2*(qx*qy - qz*qw), 2*(qx*qz + qy*qw)],
                     [2*(qx*qy + qz*qw), 1 - 2*(qx**2 + qz**2), 2*(qy*qz - qx*qw)],
-                    [2*(qx*qz - qy*qw), 2*(qy*qz + qx*qw), 1 - 2*(qx**2 + qy**2)],
+                    [2*(qx*qz - qy*qw), 2*(qy*qz + qx*qw), 1 - 2*(qx**2 - qy**2)],
                 ], dtype=np.float64)
-
         except Exception as e:
             self.get_logger().warn(f"Could not extract current robot_ee_pose: {e}")
         return T
 
-    def _on_start_calibration_service(
-        self,
-        request: StringTrigger.Request
-    ) -> StringTrigger.Response:
+    def _on_start_calibration_service(self, request: StringTrigger.Request) -> StringTrigger.Response:
         response = StringTrigger.Response()
-
         if self._state not in ("IDLE", "FINISHED", "FAILED"):
             response.success = False
             response.message = f"Kalibrierung läuft bereits (Zustand: {self._state})."
             return response
 
         self._on_start_calibration()
-
         response.success = True
         response.message = "Kalibriersequenz gestartet."
         return response
@@ -266,10 +205,7 @@ class AutoCalibration(LifecycleComponent):
     def _on_start_calibration(self):
         if self._state in ("IDLE", "FINISHED", "FAILED"):
             self._generate_waypoints()
-            self.get_logger().info(
-                f"Starting automatic orbit calibration sequence with {len(self._waypoint_labels)} waypoints..."
-            )
-
+            self.get_logger().info(f"Starting calibration sequence with {len(self._waypoint_labels)} waypoints...")
             self._state = "MOVING"
             self._current_waypoint_idx = 0
             self._collected_samples.clear()
@@ -286,7 +222,7 @@ class AutoCalibration(LifecycleComponent):
         label = self._waypoint_labels[idx]
 
         if self._start_ee_transform is None:
-            self.get_logger().warn("No start EE transform available — cannot set target pose.")
+            self.get_logger().warn("No start EE transform available.")
             return
 
         T_home = self._start_ee_transform.copy()
@@ -295,57 +231,29 @@ class AutoCalibration(LifecycleComponent):
 
         if label == "center":
             pos_target = P_home
-            R_target = R_home
-            self.get_logger().info(f"Moving to orbit waypoint {idx + 1}/{len(self._waypoint_labels)}: center (home position)")
         else:
             angle, radius_scale, _, _, _, _ = self._waypoint_offsets[idx]
             max_r = float(self.get_parameter("max_orbit_radius_mm").get_value()) / 1000.0
             r = max_r * radius_scale
 
-            live_dist_m = None
-            try:
-                cam_data = list(self._robot_cam_board_pose_msg.data) if hasattr(self._robot_cam_board_pose_msg, "data") else list(self._robot_cam_board_pose_msg)
-                if len(cam_data) >= 6 and float(cam_data[2]) > 0.1:
-                    live_dist_m = float(cam_data[2])
-            except Exception:
-                pass
-
-            d = live_dist_m if live_dist_m is not None else float(self.get_parameter("board_distance_mm").get_value()) / 1000.0
-            d = max(d, 0.1)
-
             dx = r * math.cos(angle)
             dy = r * math.sin(angle)
-            dz = d - math.sqrt(max(d * d - r * r, 0.001))
-
-            tilt_rad = math.asin(min(r / d, 0.99))
-            dr = -tilt_rad * math.sin(angle)
-            dp = tilt_rad * math.cos(angle)
-
-            R_tilt = rpy_to_rotation_matrix(dr, dp, 0.0)
+            dz = 0.0
 
             pos_target = P_home + R_home @ np.array([dx, dy, dz], dtype=np.float64)
-            R_target = R_home @ R_tilt
 
             self.get_logger().info(
-                f"Moving to orbit waypoint {idx + 1}/{len(self._waypoint_labels)}: {label} "
-                f"(radius={r*1000:.1f}mm, tilt={math.degrees(tilt_rad):.1f}° focused on board at {d*1000:.0f}mm)"
+                f"Moving to orbit waypoint {idx + 1}/{len(self._waypoint_labels)}: {label} (radius={r*1000:.1f}mm)"
             )
 
         try:
             self._target_pose.set_position(np.array(pos_target, dtype=np.float64))
-
-            quat_target = rotation_matrix_to_quaternion(R_target)
-            self._target_pose.set_orientation(np.array(quat_target, dtype=np.float64))
-
-            self.get_logger().info(
-                f"Orbit target pose set: pos=({pos_target[0]:.3f}, {pos_target[1]:.3f}, {pos_target[2]:.3f})"
-            )
+            self._target_pose.set_orientation(self._robot_ee_pose.get_orientation())
         except Exception as e:
             self.get_logger().warn(f"Could not set target EE pose: {e}")
 
     def on_step_callback(self):
         now_time = self.get_clock().now()
-
         if self._state == "IDLE":
             return
 
@@ -355,6 +263,8 @@ class AutoCalibration(LifecycleComponent):
 
             try:
                 current_pos = np.array(self._robot_ee_pose.get_position(), dtype=np.float64)
+                if abs(current_pos[0]) > 2.0:
+                    current_pos /= 1000.0
                 target_pos = np.array(self._target_pose.get_position(), dtype=np.float64)
                 distance_m = np.linalg.norm(current_pos - target_pos)
 
@@ -371,7 +281,6 @@ class AutoCalibration(LifecycleComponent):
         elif self._state == "SETTLING":
             settle_target = float(self.get_parameter("settle_time_s").get_value())
             dt = (now_time - self._state_start_time).nanoseconds / 1e9
-
             if dt >= settle_target:
                 self._state = "SAMPLING"
                 self._sample_buffer_robot_cam.clear()
@@ -380,72 +289,48 @@ class AutoCalibration(LifecycleComponent):
 
         elif self._state == "SAMPLING":
             target_samples = int(self.get_parameter("samples_per_waypoint").get_value())
+            robot_cam_data = list(self._robot_cam_board_pose_msg.data) if hasattr(self._robot_cam_board_pose_msg, "data") else list(self._robot_cam_board_pose_msg)
+            base_cam_data = list(self._base_cam_board_pose_msg.data) if hasattr(self._base_cam_board_pose_msg, "data") else list(self._base_cam_board_pose_msg)
 
-            robot_cam_data = (
-                list(self._robot_cam_board_pose_msg.data)
-                if hasattr(self._robot_cam_board_pose_msg, "data")
-                else list(self._robot_cam_board_pose_msg)
-            )
-
-            base_cam_data = (
-                list(self._base_cam_board_pose_msg.data)
-                if hasattr(self._base_cam_board_pose_msg, "data")
-                else list(self._base_cam_board_pose_msg)
-            )
-
-            if len(robot_cam_data) >= 6:
+            if len(robot_cam_data) >= 6 and np.linalg.norm(robot_cam_data[:3]) > 1e-3:
                 self._sample_buffer_robot_cam.append(robot_cam_data)
-
-            if len(base_cam_data) >= 6:
+            if len(base_cam_data) >= 6 and np.linalg.norm(base_cam_data[:3]) > 1e-3:
                 self._sample_buffer_base_cam.append(base_cam_data)
 
             if len(self._sample_buffer_robot_cam) >= target_samples:
                 avg_robot_cam = np.mean(self._sample_buffer_robot_cam, axis=0).tolist()
-                avg_base_cam = (
-                    np.mean(self._sample_buffer_base_cam, axis=0).tolist()
-                    if self._sample_buffer_base_cam
-                    else None
-                )
+                avg_base_cam = np.mean(self._sample_buffer_base_cam, axis=0).tolist() if self._sample_buffer_base_cam else None
 
                 T_ee = self._get_current_ee_transform()
-
-                sample = CalibrationSample(
-                    T_robot_ee=T_ee,
-                    robot_cam_board_pose=avg_robot_cam,
-                    base_cam_board_pose=avg_base_cam
-                )
-
-                self._collected_samples.append(sample)
-
-                self.get_logger().info(
-                    f"Sampled Orbit Waypoint {self._current_waypoint_idx + 1}/{len(self._waypoints)}"
-                )
+                
+                if np.linalg.norm(avg_robot_cam[:3]) > 1e-3:
+                    sample = CalibrationSample(
+                        T_robot_ee=T_ee,
+                        robot_cam_board_pose=avg_robot_cam,
+                        base_cam_board_pose=avg_base_cam
+                    )
+                    self._collected_samples.append(sample)
+                    self.get_logger().info(f"Sample {len(self._collected_samples)}/9 erfolgreich aufgenommen.")
+                else:
+                    self.get_logger().warn("Wegpunkt-Sample verworfen: Ungültige Kamera-Pose.")
 
                 self._current_waypoint_idx += 1
-
                 if self._current_waypoint_idx < len(self._waypoints):
                     self._state = "MOVING"
                     self._state_start_time = None
                     self._send_next_waypoint()
                 else:
-                    self.get_logger().info("Alle Orbit-Wegpunkte abgetastet. Kehre zurück zur Startposition...")
                     self._state = "RETURNING_HOME"
                     self._state_start_time = None
                     self._send_home_waypoint()
-            else:
-                dt_sample = (now_time - self._state_start_time).nanoseconds / 1e9
-                if dt_sample > 2.0 and int(dt_sample) % 2 == 0:
-                    self.get_logger().warning(
-                        f"Wegpunkt {self._current_waypoint_idx + 1}/{len(self._waypoints)}: "
-                        f"Warte auf ChArUco-Erkennung der RobotCam ({len(self._sample_buffer_robot_cam)}/{target_samples} Samples)..."
-                    )
 
         elif self._state == "RETURNING_HOME":
             if self._state_start_time is None:
                 self._state_start_time = now_time
-
             try:
                 current_pos = np.array(self._robot_ee_pose.get_position(), dtype=np.float64)
+                if abs(current_pos[0]) > 2.0:
+                    current_pos /= 1000.0
                 target_pos = np.array(self._target_pose.get_position(), dtype=np.float64)
                 distance_m = np.linalg.norm(current_pos - target_pos)
 
@@ -453,57 +338,86 @@ class AutoCalibration(LifecycleComponent):
                 if distance_m < 0.002 or dt >= 5.0:
                     self._state = "SOLVING"
             except Exception:
-                dt = (now_time - self._state_start_time).nanoseconds / 1e9
-                if dt >= 3.0:
-                    self._state = "SOLVING"
+                self._state = "SOLVING"
 
         elif self._state == "SOLVING":
-            self.get_logger().info(
-                f"Computing Extrinsic Calibration from {len(self._collected_samples)} samples..."
-            )
-
             try:
                 off_x_m = float(self.get_parameter("conveyor_offset_x_mm").get_value()) / 1000.0
                 off_y_m = float(self.get_parameter("conveyor_offset_y_mm").get_value()) / 1000.0
                 off_z_m = float(self.get_parameter("conveyor_offset_z_mm").get_value()) / 1000.0
 
-                board_rows = int(self.get_parameter("board_rows").get_value())
-                board_cols = int(self.get_parameter("board_cols").get_value())
-                square_size_m = float(self.get_parameter("square_size_mm").get_value()) / 1000.0
+                target_node = self.get_parameter("board_detection_node_name").get_value()
+                board_rows = None
+                board_cols = None
+                square_size_m = None
 
-                # Board-Zentrum im gedrehten conveyor_frame (-X wegen Ry(180°))
-                board_center_x_m = off_x_m - (board_cols * square_size_m) / 2.0
-                board_center_y_m = off_y_m + (board_rows * square_size_m) / 2.0
+                try:
+                    client = self.create_client(GetParameters, f'/{target_node}/get_parameters')
+                    if client.wait_for_service(timeout_sec=0.5):
+                        request = GetParameters.Request()
+                        request.names = ["board_rows", "board_cols", "checker_size_mm"]
+                        future = client.call_async(request)
+                        rclpy.spin_until_future_complete(self, future, timeout_sec=0.5)
+                        if future.result() is not None:
+                            res = future.result().values
+                            if len(res) == 3 and all(v.type != 0 for v in res):
+                                board_rows = int(res[0].integer_value)
+                                board_cols = int(res[1].integer_value)
+                                square_size_m = float(res[2].double_value) / 1000.0
+                except Exception:
+                    pass
 
-                self.get_logger().info(
-                    f"Board center in conveyor_frame: X={board_center_x_m*1000:.1f} mm, "
-                    f"Y={board_center_y_m*1000:.1f} mm"
-                )
+                if board_rows is None or board_cols is None or square_size_m is None:
+                    board_rows = int(self.get_parameter("board_rows").get_value())
+                    board_cols = int(self.get_parameter("board_cols").get_value())
+                    square_size_m = float(self.get_parameter("square_size_mm").get_value()) / 1000.0
+
+                board_width_m = board_cols * square_size_m
+                board_center_x_m = off_x_m - (board_width_m / 2.0)
+                board_height_m = board_rows * square_size_m
+                board_center_y_m = off_y_m + (board_height_m / 2.0)
+                board_center_z_m = off_z_m
 
                 result: CalibrationResult = solve_eye_in_hand(
-                    self._collected_samples,
-                    conveyor_offset_m=(off_x_m, off_y_m, off_z_m)
+                    self._collected_samples, conveyor_offset_m=(off_x_m, off_y_m, off_z_m)
                 )
 
                 T = result.T_robot_base_cam
                 self._calibration_matrix = T.flatten().tolist()
 
-                # Sende berechnetes T_robot_conveyor als CartesianPose-Signal für AICA Studio
                 if result.T_robot_conveyor is not None:
                     T_conv = result.T_robot_conveyor
-                    self._conveyor_pose.set_position(T_conv[:3, 3])
-                    quat_conv = rotation_matrix_to_quaternion(T_conv[:3, :3])
-                    self._conveyor_pose.set_orientation(quat_conv)
+                    self._conveyor_pose.set_position(T_conv[:3, 3].astype(np.float64))
+                    qw, qx, qy, qz = rotation_matrix_to_quaternion(T_conv[:3, :3])
+                    self._conveyor_pose.set_orientation(np.array([qx, qy, qz, qw], dtype=np.float64))
 
                 save_path = self.get_parameter("calibration_file_path").get_value()
+                
+                save_calibration_json(
+                    save_path, result,
+                    board_center_conveyor_mm=(board_center_x_m * 1000.0, board_center_y_m * 1000.0, board_center_z_m * 1000.0)
+                )
                 save_calibration_yaml(
                     save_path, result,
-                    board_center_conveyor_mm=(board_center_x_m * 1000.0, board_center_y_m * 1000.0, off_z_m * 1000.0)
+                    board_center_conveyor_mm=(board_center_x_m * 1000.0, board_center_y_m * 1000.0, board_center_z_m * 1000.0)
                 )
 
-                self.get_logger().info(
-                    f"Calibration successful! RMSE: {result.position_rmse_mm:.2f} mm. Saved to {save_path}"
-                )
+                self.get_logger().info("==================================================")
+                self.get_logger().info("         KALIBRIERUNG ERFOLGREICH BEENDET         ")
+                self.get_logger().info("==================================================")
+                self.get_logger().info(f"Verwendete Samples: {result.sample_count}")
+                self.get_logger().info(f"Position RMSE:    {result.position_rmse_mm:.3f} mm")
+                self.get_logger().info(f"Rotation RMSE:    {result.rotation_rmse_deg:.3f} deg")
+                
+                t_cam = T[:3, 3]
+                self.get_logger().info(f"Camera Pos in Base: X={t_cam[0]*1000:.1f}mm, Y={t_cam[1]*1000:.1f}mm, Z={t_cam[2]*1000:.1f}mm")
+                
+                if result.T_robot_conveyor is not None:
+                    t_c = result.T_robot_conveyor[:3, 3]
+                    self.get_logger().info(f"Conveyor Origin:    X={t_c[0]*1000:.1f}mm, Y={t_c[1]*1000:.1f}mm, Z={t_c[2]*1000:.1f}mm")
+                
+                self.get_logger().info(f"Ergebnisse gespeichert unter: {save_path}")
+                self.get_logger().info("==================================================")
 
                 self.set_predicate("is_calibrated", True)
                 self.set_predicate("is_running", False)
@@ -515,19 +429,11 @@ class AutoCalibration(LifecycleComponent):
                 self.set_predicate("is_running", False)
                 self._state = "FAILED"
 
-        elif self._state in ("FINISHED", "FAILED"):
-            pass
-
     def _send_home_waypoint(self):
-        """Send EE target back to the initial start position."""
         if self._start_ee_transform is not None:
             try:
                 pos = self._start_ee_transform[:3, 3].tolist()
                 self._target_pose.set_position(np.array(pos, dtype=np.float64))
-                quat_target = rotation_matrix_to_quaternion(self._start_ee_transform[:3, :3])
-                self._target_pose.set_orientation(np.array(quat_target, dtype=np.float64))
-                self.get_logger().info(
-                    f"Target pose reset to start position: pos=({pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f})"
-                )
+                self._target_pose.set_orientation(self._robot_ee_pose.get_orientation())
             except Exception as e:
-                self.get_logger().warn(f"Could not reset target EE pose to home: {e}")
+                self.get_logger().warn(f"Could not reset target EE pose: {e}")
