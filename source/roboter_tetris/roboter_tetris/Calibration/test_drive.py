@@ -270,7 +270,7 @@ class CalibrationTestDrive(LifecycleComponent):
                     R_ee = np.array([
                         [1 - 2*(qy**2 + qz**2), 2*(qx*qy - qz*qw), 2*(qx*qz + qy*qw)],
                         [2*(qx*qy + qz*qw), 1 - 2*(qx**2 + qz**2), 2*(qy*qz - qx*qw)],
-                        [2*(qx*qz - qy*qw), 2*(qy*qz + qx*qw), 1 - 2*(qx**2 - qy**2)],
+                        [2*(qx*qz - qy*qw), 2*(qy*qz + qx*qw), 1 - 2*(qx**2 + qy**2)],
                     ], dtype=np.float64)
 
                 t_ee_cam = T_ee_robot_cam[:3, 3]
@@ -361,7 +361,7 @@ class CalibrationTestDrive(LifecycleComponent):
             except Exception:
                 pass
 
-            if progress >= 1.0 and np.linalg.norm(curr_pos - target_pos) < 0.003:
+            if progress >= 1.0 and (np.linalg.norm(curr_pos - target_pos) < 0.010 or dt >= duration_s + 1.0):
                 self._state = "PAUSING"
                 self._state_start_time = now_time
                 self.get_logger().info("Phase 2 Complete: Reached end of forward test drive. Pausing 1.0s...")
@@ -381,7 +381,7 @@ class CalibrationTestDrive(LifecycleComponent):
             self._target_pose.set_position(target_pos)
             self._target_pose.set_orientation(self._robot_ee_pose.get_orientation())
 
-            if progress >= 1.0 and np.linalg.norm(curr_pos - target_pos) < 0.003:
+            if progress >= 1.0 and (np.linalg.norm(curr_pos - target_pos) < 0.010 or dt >= duration_s + 1.0):
                 if bool(self.get_parameter("center_over_board").get_value()):
                     self._state = "RETURNING_INITIAL"
                     self._state_start_time = now_time

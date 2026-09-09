@@ -51,10 +51,6 @@ class BoardDetection(LifecycleComponent):
             "Minimale Anzahl erkannter Marker, damit eine Detektion als gültig gilt."
         )
         self.add_parameter(
-            sr.Parameter("depth_scale_to_mm", 1.0, sr.ParameterType.DOUBLE),
-            "mm pro Tiefen-Rohwert (16UC1-Bild). 1.0 = bereits mm; für Kameras mit anderer Einheit anpassen."
-        )
-        self.add_parameter(
             sr.Parameter("debug_enable", True, sr.ParameterType.BOOL),
             "Debug-Bild erzeugen und publizieren."
         )
@@ -260,7 +256,7 @@ class BoardDetection(LifecycleComponent):
                 if depth_img.dtype == np.float32:
                     depth_mm = depth_img * 1000.0
                 else:
-                    depth_mm = depth_img.astype(np.float32) * self.get_parameter("depth_scale_to_mm").get_value()
+                    depth_mm = depth_img.astype(np.float32)
                 dh, dw = depth_mm.shape[:2]
                 if (dw, dh) != (cw, ch):
                     depth_mm = cv2.resize(depth_mm, (cw, ch), interpolation=cv2.INTER_NEAREST)

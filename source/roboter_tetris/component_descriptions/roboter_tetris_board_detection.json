@@ -123,14 +123,6 @@
       "dynamic": true
     },
     {
-      "display_name": "Depth Scale to mm",
-      "description": "Skalierungsfaktor zur Umrechnung des Tiefenbilds in mm.",
-      "parameter_name": "depth_scale_to_mm",
-      "parameter_type": "double",
-      "default_value": "1.0",
-      "dynamic": true
-    },
-    {
       "display_name": "Debug aktivieren",
       "description": "Debug-Bild erzeugen und publizieren.",
       "parameter_name": "debug_enable",

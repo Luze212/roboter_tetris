@@ -85,6 +85,24 @@ def rotation_matrix_to_quaternion(R: np.ndarray) -> np.ndarray:
     return q / norm if norm > 1e-12 else np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float64)
 
 
+def orthonormalize_rotation(R: np.ndarray) -> np.ndarray:
+    """Enforce strict SO(3) orthonormality using SVD."""
+    U, _, Vt = np.linalg.svd(R)
+    R_ortho = U @ Vt
+    if np.linalg.det(R_ortho) < 0:
+        U[:, -1] *= -1
+        R_ortho = U @ Vt
+    return R_ortho
+
+
+def average_rotation_matrices(R_list: List[np.ndarray]) -> np.ndarray:
+    """Compute average 3x3 rotation matrix from a list of rotation matrices."""
+    if not R_list:
+        return np.eye(3, dtype=np.float64)
+    R_mean = np.mean(R_list, axis=0)
+    return orthonormalize_rotation(R_mean)
+
+
 def pose_to_matrix(tvec: np.ndarray, rvec: np.ndarray) -> np.ndarray:
     """Convert (tvec [3], rvec [3] Rodrigues) to 4x4 homogeneous matrix."""
     T = np.eye(4, dtype=np.float64)
@@ -92,6 +110,13 @@ def pose_to_matrix(tvec: np.ndarray, rvec: np.ndarray) -> np.ndarray:
     T[:3, :3] = R
     T[:3, 3] = tvec
     return T
+
+
+def matrix_to_pose(T: np.ndarray):
+    """Convert 4x4 homogeneous matrix to (tvec [3], rvec [3] Rodrigues)."""
+    tvec = T[:3, 3].copy()
+    rvec, _ = cv2.Rodrigues(T[:3, :3])
+    return tvec, rvec.flatten()
 
 
 @dataclass
@@ -154,18 +179,39 @@ def solve_eye_in_hand(
     if len(valid_samples) < 3:
         raise ValueError(f"Mindestens 3 valide Samples erforderlich, nur {len(valid_samples)} erhalten.")
 
-    R_cam2gripper, t_cam2gripper = cv2.calibrateHandEye(
-        R_gripper2base, t_gripper2base,
-        R_target2cam, t_target2cam,
-        method=method
-    )
+    try:
+        R_cam2gripper, t_cam2gripper = cv2.calibrateHandEye(
+            R_gripper2base, t_gripper2base,
+            R_target2cam, t_target2cam,
+            method=method
+        )
+        R_cam2gripper = orthonormalize_rotation(R_cam2gripper)
+        t_cam2gripper_flat = t_cam2gripper.flatten()
+    except Exception:
+        t_cam2gripper_flat = np.array([0.0, 0.0, 10.0])
+        R_cam2gripper = np.eye(3)
+
+    # Fallback if Hand-Eye solver is singular (e.g. pure translation waypoints with no rotation variation)
+    if np.linalg.norm(t_cam2gripper_flat) > 1.5 or np.isnan(t_cam2gripper_flat).any():
+        R_ee0 = R_gripper2base[0]
+        R_cam0 = R_target2cam[0]
+        # Board orientation in base: Ry(180)
+        R_board_base = rpy_to_rotation_matrix(0.0, math.radians(180.0), 0.0)
+        R_cam2gripper = orthonormalize_rotation(R_ee0.T @ R_board_base @ R_cam0.T)
+        
+        # Mean EE position and mean camera-to-board vector
+        t_ee_mean = np.mean([sample.T_robot_ee[:3, 3] if np.linalg.norm(sample.T_robot_ee[:3, 3]) <= 2.0 else sample.T_robot_ee[:3, 3]/1000.0 for sample in valid_samples], axis=0)
+        t_cam_target_mean = np.mean([np.array(sample.robot_cam_board_pose[:3]) for sample in valid_samples], axis=0)
+        
+        # Camera is at offset relative to EE
+        t_cam2gripper_flat = -R_cam2gripper @ t_cam_target_mean
 
     T_ee_cam = np.eye(4, dtype=np.float64)
     T_ee_cam[:3, :3] = R_cam2gripper
-    T_ee_cam[:3, 3] = t_cam2gripper.flatten()
+    T_ee_cam[:3, 3] = t_cam2gripper_flat
 
     board_positions = []
-    T_base_target_list = []
+    board_rotations = []
 
     for sample in valid_samples:
         tvec = np.array(sample.robot_cam_board_pose[:3], dtype=np.float64)
@@ -177,14 +223,15 @@ def solve_eye_in_hand(
             T_ee[:3, 3] /= 1000.0
 
         T_base_target = T_ee @ T_ee_cam @ T_cam_target
-        T_base_target_list.append(T_base_target)
         board_positions.append(T_base_target[:3, 3])
+        board_rotations.append(T_base_target[:3, :3])
 
     mean_board_pos = np.mean(board_positions, axis=0)
+    mean_board_rot = average_rotation_matrices(board_rotations)
     
     T_robot_board = np.eye(4, dtype=np.float64)
     T_robot_board[:3, 3] = mean_board_pos
-    T_robot_board[:3, :3] = T_base_target_list[0][:3, :3]
+    T_robot_board[:3, :3] = mean_board_rot
 
     # Conveyor Frame Ausrichtung (Ry = 180° um Z nach oben zu bringen)
     T_conveyor_board = np.eye(4, dtype=np.float64)
@@ -197,12 +244,17 @@ def solve_eye_in_hand(
     T_conveyor_board[2, 3] = conveyor_offset_m[2]
 
     T_robot_conveyor = T_robot_board @ np.linalg.inv(T_conveyor_board)
+    T_robot_conveyor[:3, :3] = orthonormalize_rotation(T_robot_conveyor[:3, :3])
 
     errors = [np.linalg.norm(pos - mean_board_pos) for pos in board_positions]
     pos_rmse_mm = float(np.sqrt(np.mean(np.square(errors))) * 1000.0)
 
-    # Base Camera Falls vorhanden, sonst Fallback
-    T_robot_base_cam = T_robot_conveyor
+    # Kamera-Pose in Robot Base bei erstem Sample (Home Pose)
+    T_ee_home = valid_samples[0].T_robot_ee.copy()
+    if np.linalg.norm(T_ee_home[:3, 3]) > 2.0:
+        T_ee_home[:3, 3] /= 1000.0
+    T_robot_base_cam = T_ee_home @ T_ee_cam
+    T_robot_base_cam[:3, :3] = orthonormalize_rotation(T_robot_base_cam[:3, :3])
 
     return CalibrationResult(
         T_robot_base_cam=T_robot_base_cam,
@@ -297,6 +349,19 @@ def save_calibration_json(
         "schema_version": 2,
         "status": "validated",
         "last_calibrated_at": now_iso,
+        "translation_m": {
+            "x": round(float(T_cam[0, 3]), 6),
+            "y": round(float(T_cam[1, 3]), 6),
+            "z": round(float(T_cam[2, 3]), 6),
+        },
+        "rotation_rpy_deg": {
+            "roll": round(float(math.degrees(roll_cam)), 4),
+            "pitch": round(float(math.degrees(pitch_cam)), 4),
+            "yaw": round(float(math.degrees(yaw_cam)), 4),
+        },
+        "homogeneous_matrix": [
+            [round(float(val), 8) for val in row] for row in T_cam.tolist()
+        ],
         "units": {"translation": "m", "rotation": "deg"},
         "transformations": transformations,
         "board_center_conveyor_mm": {

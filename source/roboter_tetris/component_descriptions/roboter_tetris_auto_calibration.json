@@ -125,14 +125,6 @@
       "dynamic": true
     },
     {
-      "display_name": "Board Distance (mm)",
-      "description": "Fallback-Abstand zum ChArUco-Board in mm, falls keine Live-Tiefe vorliegt.",
-      "parameter_name": "board_distance_mm",
-      "parameter_type": "double",
-      "default_value": "350.0",
-      "dynamic": true
-    },
-    {
       "display_name": "Conveyor Offset X (mm)",
       "description": "X-Offset des Board-Ursprungs im Förderband-Frame in mm.",
       "parameter_name": "conveyor_offset_x_mm",
@@ -154,38 +146,6 @@
       "parameter_name": "conveyor_offset_z_mm",
       "parameter_type": "double",
       "default_value": "0.0",
-      "dynamic": true
-    },
-    {
-      "display_name": "Board Detection Node Name",
-      "description": "Name der BoardDetection-Komponente zur Parameterabfrage via Service.",
-      "parameter_name": "board_detection_node_name",
-      "parameter_type": "string",
-      "default_value": "board_detection_2",
-      "dynamic": true
-    },
-    {
-      "display_name": "Board Rows (Fallback)",
-      "description": "Fallback: Anzahl der Zeilen des Boards.",
-      "parameter_name": "board_rows",
-      "parameter_type": "int",
-      "default_value": "5",
-      "dynamic": true
-    },
-    {
-      "display_name": "Board Cols (Fallback)",
-      "description": "Fallback: Anzahl der Spalten des Boards.",
-      "parameter_name": "board_cols",
-      "parameter_type": "int",
-      "default_value": "7",
-      "dynamic": true
-    },
-    {
-      "display_name": "Square Size mm (Fallback)",
-      "description": "Fallback: Kantenlänge eines Schachfelds in mm.",
-      "parameter_name": "square_size_mm",
-      "parameter_type": "double",
-      "default_value": "35.0",
       "dynamic": true
     }
   ]

@@ -16,9 +16,36 @@ from modulo_interfaces.srv import StringTrigger
 
 from .extrinsic_calibration import (
     CalibrationResult, CalibrationSample,
+    orthonormalize_rotation,
     rotation_matrix_to_quaternion,
+    rpy_to_rotation_matrix,
     save_calibration_json, save_calibration_yaml, solve_eye_in_hand,
 )
+
+
+def build_zero_yaw_tilt(r: float, d: float, angle: float) -> np.ndarray:
+    """Compute minimal zero-yaw rotation matrix to tilt optical axis directly toward board center."""
+    v_focus = np.array([-r * math.cos(angle), -r * math.sin(angle), d], dtype=np.float64)
+    z_desired = v_focus / np.linalg.norm(v_focus)
+    z_home = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+
+    axis = np.cross(z_home, z_desired)
+    axis_norm = np.linalg.norm(axis)
+    if axis_norm < 1e-9:
+        return np.eye(3, dtype=np.float64)
+
+    axis = axis / axis_norm
+    cos_phi = np.dot(z_home, z_desired)
+    phi = math.acos(min(max(cos_phi, -1.0), 1.0))
+
+    K = np.array([
+        [0, -axis[2], axis[1]],
+        [axis[2], 0, -axis[0]],
+        [-axis[1], axis[0], 0]
+    ], dtype=np.float64)
+
+    R_tilt = np.eye(3, dtype=np.float64) + math.sin(phi) * K + (1.0 - math.cos(phi)) * (K @ K)
+    return orthonormalize_rotation(R_tilt)
 
 
 class AutoCalibration(LifecycleComponent):
@@ -53,10 +80,6 @@ class AutoCalibration(LifecycleComponent):
             "Maximaler kartesischer Orbit-Radius (in mm)"
         )
         self.add_parameter(
-            sr.Parameter("board_distance_mm", 350.0, sr.ParameterType.DOUBLE),
-            "Geschätzter/Fallback Abstand zum ChArUco-Board in mm"
-        )
-        self.add_parameter(
             sr.Parameter("conveyor_offset_x_mm", -130.0, sr.ParameterType.DOUBLE),
             "X-Offset im conveyor_frame in mm"
         )
@@ -68,15 +91,6 @@ class AutoCalibration(LifecycleComponent):
             sr.Parameter("conveyor_offset_z_mm", 0.0, sr.ParameterType.DOUBLE),
             "Z-Offset im conveyor_frame in mm"
         )
-        self.add_parameter(
-            sr.Parameter("board_detection_node_name", "board_detection_2", sr.ParameterType.STRING),
-            "Name der BoardDetection-Komponente"
-        )
-        
-        # Fallbacks
-        self.add_parameter(sr.Parameter("board_rows", 5, sr.ParameterType.INT), "Fallback Rows")
-        self.add_parameter(sr.Parameter("board_cols", 7, sr.ParameterType.INT), "Fallback Cols")
-        self.add_parameter(sr.Parameter("square_size_mm", 35.0, sr.ParameterType.DOUBLE), "Fallback Square Size")
 
         # Inputs
         self._base_cam_board_pose_msg = []
@@ -184,7 +198,7 @@ class AutoCalibration(LifecycleComponent):
                 T[:3, :3] = np.array([
                     [1 - 2*(qy**2 + qz**2), 2*(qx*qy - qz*qw), 2*(qx*qz + qy*qw)],
                     [2*(qx*qy + qz*qw), 1 - 2*(qx**2 + qz**2), 2*(qy*qz - qx*qw)],
-                    [2*(qx*qz - qy*qw), 2*(qy*qz + qx*qw), 1 - 2*(qx**2 - qy**2)],
+                    [2*(qx*qz - qy*qw), 2*(qy*qz + qx*qw), 1 - 2*(qx**2 + qy**2)],
                 ], dtype=np.float64)
         except Exception as e:
             self.get_logger().warn(f"Could not extract current robot_ee_pose: {e}")
@@ -231,24 +245,50 @@ class AutoCalibration(LifecycleComponent):
 
         if label == "center":
             pos_target = P_home
+            R_target = R_home
+            self.get_logger().info(f"Moving to orbit waypoint {idx + 1}/{len(self._waypoint_labels)}: center (home pose)")
         else:
             angle, radius_scale, _, _, _, _ = self._waypoint_offsets[idx]
             max_r = float(self.get_parameter("max_orbit_radius_mm").get_value()) / 1000.0
             r = max_r * radius_scale
 
-            dx = r * math.cos(angle)
-            dy = r * math.sin(angle)
-            dz = 0.0
+            # Live-Abstandsmessung aus Kamerainputs (fallback 0.35m)
+            d = 0.35
+            try:
+                cam_data = list(self._robot_cam_board_pose_msg.data) if hasattr(self._robot_cam_board_pose_msg, "data") else list(self._robot_cam_board_pose_msg)
+                if len(cam_data) >= 3 and abs(cam_data[2]) > 0.05:
+                    d = float(cam_data[2])
+                elif hasattr(self._robot_cam_board_depth_msg, "data") and len(self._robot_cam_board_depth_msg.data) > 0:
+                    d_depth_mm = float(self._robot_cam_board_depth_msg.data[0])
+                    if d_depth_mm > 50.0:
+                        d = d_depth_mm / 1000.0
+            except Exception:
+                pass
 
-            pos_target = P_home + R_home @ np.array([dx, dy, dz], dtype=np.float64)
+            R_tilt = build_zero_yaw_tilt(r, d, angle)
 
+            # Focus compensation: translate so tilted optical axis hits board center
+            p_focus_local = np.array([0.0, 0.0, d], dtype=np.float64)
+            shift_focus_local = (np.eye(3) - R_tilt) @ p_focus_local
+            offset_pos_local = np.array([r * math.cos(angle), r * math.sin(angle), 0.0], dtype=np.float64)
+
+            pos_target = P_home + R_home @ (offset_pos_local + shift_focus_local)
+            R_target = R_home @ R_tilt
+
+            tilt_deg = math.degrees(math.atan2(r, d))
             self.get_logger().info(
-                f"Moving to orbit waypoint {idx + 1}/{len(self._waypoint_labels)}: {label} (radius={r*1000:.1f}mm)"
+                f"Moving to orbit waypoint {idx + 1}/{len(self._waypoint_labels)}: {label} "
+                f"(r={r*1000:.0f}mm, tilt={tilt_deg:.1f}\u00b0, d={d*1000:.0f}mm)"
             )
 
         try:
             self._target_pose.set_position(np.array(pos_target, dtype=np.float64))
-            self._target_pose.set_orientation(self._robot_ee_pose.get_orientation())
+            q_home = rotation_matrix_to_quaternion(R_home)
+            q_target = rotation_matrix_to_quaternion(R_target)
+            if np.dot(q_target, q_home) < 0:
+                q_target = -q_target
+            qw, qx, qy, qz = q_target
+            self._target_pose.set_orientation(np.array([qx, qy, qz, qw], dtype=np.float64))
         except Exception as e:
             self.get_logger().warn(f"Could not set target EE pose: {e}")
 
@@ -346,38 +386,6 @@ class AutoCalibration(LifecycleComponent):
                 off_y_m = float(self.get_parameter("conveyor_offset_y_mm").get_value()) / 1000.0
                 off_z_m = float(self.get_parameter("conveyor_offset_z_mm").get_value()) / 1000.0
 
-                target_node = self.get_parameter("board_detection_node_name").get_value()
-                board_rows = None
-                board_cols = None
-                square_size_m = None
-
-                try:
-                    client = self.create_client(GetParameters, f'/{target_node}/get_parameters')
-                    if client.wait_for_service(timeout_sec=0.5):
-                        request = GetParameters.Request()
-                        request.names = ["board_rows", "board_cols", "checker_size_mm"]
-                        future = client.call_async(request)
-                        rclpy.spin_until_future_complete(self, future, timeout_sec=0.5)
-                        if future.result() is not None:
-                            res = future.result().values
-                            if len(res) == 3 and all(v.type != 0 for v in res):
-                                board_rows = int(res[0].integer_value)
-                                board_cols = int(res[1].integer_value)
-                                square_size_m = float(res[2].double_value) / 1000.0
-                except Exception:
-                    pass
-
-                if board_rows is None or board_cols is None or square_size_m is None:
-                    board_rows = int(self.get_parameter("board_rows").get_value())
-                    board_cols = int(self.get_parameter("board_cols").get_value())
-                    square_size_m = float(self.get_parameter("square_size_mm").get_value()) / 1000.0
-
-                board_width_m = board_cols * square_size_m
-                board_center_x_m = off_x_m - (board_width_m / 2.0)
-                board_height_m = board_rows * square_size_m
-                board_center_y_m = off_y_m + (board_height_m / 2.0)
-                board_center_z_m = off_z_m
-
                 result: CalibrationResult = solve_eye_in_hand(
                     self._collected_samples, conveyor_offset_m=(off_x_m, off_y_m, off_z_m)
                 )
@@ -395,11 +403,11 @@ class AutoCalibration(LifecycleComponent):
                 
                 save_calibration_json(
                     save_path, result,
-                    board_center_conveyor_mm=(board_center_x_m * 1000.0, board_center_y_m * 1000.0, board_center_z_m * 1000.0)
+                    board_center_conveyor_mm=(off_x_m * 1000.0, off_y_m * 1000.0, off_z_m * 1000.0)
                 )
                 save_calibration_yaml(
                     save_path, result,
-                    board_center_conveyor_mm=(board_center_x_m * 1000.0, board_center_y_m * 1000.0, board_center_z_m * 1000.0)
+                    board_center_conveyor_mm=(off_x_m * 1000.0, off_y_m * 1000.0, off_z_m * 1000.0)
                 )
 
                 self.get_logger().info("==================================================")
