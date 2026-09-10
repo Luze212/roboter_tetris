@@ -203,8 +203,8 @@ def solve_eye_in_hand(
         t_ee_mean = np.mean([sample.T_robot_ee[:3, 3] if np.linalg.norm(sample.T_robot_ee[:3, 3]) <= 2.0 else sample.T_robot_ee[:3, 3]/1000.0 for sample in valid_samples], axis=0)
         t_cam_target_mean = np.mean([np.array(sample.robot_cam_board_pose[:3]) for sample in valid_samples], axis=0)
         
-        # Camera is at offset relative to EE
-        t_cam2gripper_flat = -R_cam2gripper @ t_cam_target_mean
+        # Camera is mounted near EE flange by default in fallback
+        t_cam2gripper_flat = np.array([0.0, 0.0, 0.0], dtype=np.float64)
 
     T_ee_cam = np.eye(4, dtype=np.float64)
     T_ee_cam[:3, :3] = R_cam2gripper

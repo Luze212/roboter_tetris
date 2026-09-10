@@ -6,6 +6,7 @@ when triggered via a Service / Event button in AICA Studio.
 """
 
 import json
+import math
 import os
 from typing import Optional, Tuple
 
@@ -17,6 +18,75 @@ from clproto import MessageType
 import state_representation as sr
 from std_msgs.msg import Float64MultiArray
 from modulo_interfaces.srv import StringTrigger
+
+
+def rpy_to_rotation_matrix(roll_rad: float, pitch_rad: float, yaw_rad: float) -> np.ndarray:
+    rx = np.array([
+        [1, 0, 0],
+        [0, math.cos(roll_rad), -math.sin(roll_rad)],
+        [0, math.sin(roll_rad), math.cos(roll_rad)],
+    ], dtype=np.float64)
+    ry = np.array([
+        [math.cos(pitch_rad), 0, math.sin(pitch_rad)],
+        [0, 1, 0],
+        [-math.sin(pitch_rad), 0, math.cos(pitch_rad)],
+    ], dtype=np.float64)
+    rz = np.array([
+        [math.cos(yaw_rad), -math.sin(yaw_rad), 0],
+        [math.sin(yaw_rad), math.cos(yaw_rad), 0],
+        [0, 0, 1],
+    ], dtype=np.float64)
+    return rz @ ry @ rx
+
+
+def rotation_matrix_to_quaternion(R: np.ndarray) -> np.ndarray:
+    tr = np.trace(R)
+    if tr > 0:
+        S = math.sqrt(tr + 1.0) * 2.0
+        qw = 0.25 * S
+        qx = (R[2, 1] - R[1, 2]) / S
+        qy = (R[0, 2] - R[2, 0]) / S
+        qz = (R[1, 0] - R[0, 1]) / S
+    elif (R[0, 0] > R[1, 1]) and (R[0, 0] > R[2, 2]):
+        S = math.sqrt(1.0 + R[0, 0] - R[1, 1] - R[2, 2]) * 2.0
+        qw = (R[2, 1] - R[1, 2]) / S
+        qx = 0.25 * S
+        qy = (R[0, 1] + R[1, 0]) / S
+        qz = (R[0, 2] + R[2, 0]) / S
+    elif R[1, 1] > R[2, 2]:
+        S = math.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2]) * 2.0
+        qw = (R[0, 2] - R[2, 0]) / S
+        qx = (R[0, 1] + R[1, 0]) / S
+        qy = 0.25 * S
+        qz = (R[1, 2] + R[2, 1]) / S
+    else:
+        S = math.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1]) * 2.0
+        qw = (R[1, 0] - R[0, 1]) / S
+        qx = (R[0, 2] + R[2, 0]) / S
+        qy = (R[1, 2] + R[2, 1]) / S
+        qz = 0.25 * S
+    q = np.array([qw, qx, qy, qz], dtype=np.float64)
+    return q / np.linalg.norm(q)
+
+
+def quaternion_slerp(q1: np.ndarray, q2: np.ndarray, t: float) -> np.ndarray:
+    q1 = q1 / np.linalg.norm(q1)
+    q2 = q2 / np.linalg.norm(q2)
+    dot = np.dot(q1, q2)
+    if dot < 0.0:
+        q2 = -q2
+        dot = -dot
+    if dot > 0.9995:
+        res = q1 + t * (q2 - q1)
+        return res / np.linalg.norm(res)
+    theta_0 = math.acos(min(max(dot, -1.0), 1.0))
+    sin_theta_0 = math.sin(theta_0)
+    theta = theta_0 * t
+    sin_theta = math.sin(theta)
+    s1 = math.cos(theta) - dot * sin_theta / sin_theta_0
+    s2 = sin_theta / sin_theta_0
+    res = s1 * q1 + s2 * q2
+    return res / np.linalg.norm(res)
 
 
 class CalibrationTestDrive(LifecycleComponent):
@@ -82,6 +152,9 @@ class CalibrationTestDrive(LifecycleComponent):
         self._state = "IDLE"
         self._state_start_time = None
         self._start_position_robot = None
+        self._start_orientation_robot = None
+        self._initial_position_robot = None
+        self._initial_orientation_robot = None
         self._T_robot_conveyor = None
         self._T_ee_robot_cam = None
 
@@ -110,11 +183,19 @@ class CalibrationTestDrive(LifecycleComponent):
             z /= 1000.0
         return np.array([x, y, z], dtype=np.float64)
 
+    def _get_ee_rotation_matrix(self) -> np.ndarray:
+        ori = self._robot_ee_pose.get_orientation()
+        if hasattr(ori, "to_rotation_matrix"):
+            return np.array(ori.to_rotation_matrix(), dtype=np.float64)
+        else:
+            qx, qy, qz, qw = float(ori.x), float(ori.y), float(ori.z), float(ori.w)
+            return np.array([
+                [1 - 2*(qy**2 + qz**2), 2*(qx*qy - qz*qw), 2*(qx*qz + qy*qw)],
+                [2*(qx*qy + qz*qw), 1 - 2*(qx**2 + qz**2), 2*(qy*qz - qx*qw)],
+                [2*(qx*qz - qy*qw), 2*(qy*qz + qx*qw), 1 - 2*(qx**2 + qy**2)],
+            ], dtype=np.float64)
+
     def _load_calibration_data(self) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
-        """Load T_robot_conveyor and T_ee_robot_cam from calibration YAML/JSON.
-        
-        Returns (T_robot_conveyor, T_ee_robot_cam).
-        """
         calib_path = self.get_parameter("calibration_file_path").get_value()
         if not os.path.exists(calib_path):
             candidate_fallbacks = ["/tmp/calibration.yaml", "/tmp/calibration.json"]
@@ -158,7 +239,7 @@ class CalibrationTestDrive(LifecycleComponent):
                 elif "T_robot_conveyor" in data:
                     T_robot_conveyor = np.array(data["T_robot_conveyor"], dtype=np.float64)
 
-                # 2. T_ee_robot_cam laden (Eye-in-Hand Kamera zu Endeffektor)
+                # 2. T_ee_robot_cam laden
                 if "transformations" in data and "T_ee_robot_cam" in data["transformations"]:
                     mat_cam = data["transformations"]["T_ee_robot_cam"]["homogeneous_matrix"]
                     T_ee_robot_cam = np.array(mat_cam, dtype=np.float64)
@@ -173,6 +254,12 @@ class CalibrationTestDrive(LifecycleComponent):
                     f"T_ee_robot_cam not found in {calib_path}. Assuming camera is at EE origin."
                 )
                 T_ee_robot_cam = np.eye(4, dtype=np.float64)
+            elif np.linalg.norm(T_ee_robot_cam[:3, 3]) > 0.15:
+                self.get_logger().warn(
+                    f"Unphysical T_ee_robot_cam translation detected ({np.linalg.norm(T_ee_robot_cam[:3, 3])*1000:.1f}mm). "
+                    "Defaulting camera translation to flange origin."
+                )
+                T_ee_robot_cam[:3, 3] = 0.0
 
             return T_robot_conveyor, T_ee_robot_cam
 
@@ -181,7 +268,6 @@ class CalibrationTestDrive(LifecycleComponent):
             return None, None
 
     def _load_board_center_conveyor(self) -> Optional[tuple]:
-        """Read board_center_conveyor_mm from cached calibration data. Returns (x_m, y_m, z_m) or None."""
         data = getattr(self, "_calib_data", None)
         if data is None:
             return None
@@ -198,10 +284,6 @@ class CalibrationTestDrive(LifecycleComponent):
                 return (x_m, y_m, z_m)
         except Exception:
             pass
-        self.get_logger().warn(
-            "board_center_conveyor_mm not found in calibration file. "
-            "Run AutoCalibration first to generate this value."
-        )
         return None
 
     def _on_start_test_drive_service(
@@ -220,8 +302,7 @@ class CalibrationTestDrive(LifecycleComponent):
         response.message = (
             "Testfahrt gestartet."
             if success
-            else "Testfahrt konnte nicht gestartet werden "
-                 "(Fehler in calibration.yaml/json)."
+            else "Testfahrt konnte nicht gestartet werden (Fehler in calibration.yaml/json)."
         )
         return response
 
@@ -235,7 +316,6 @@ class CalibrationTestDrive(LifecycleComponent):
         self._T_robot_conveyor = T_robot_conveyor
         self._T_ee_robot_cam = T_ee_robot_cam
 
-        # Log Conveyor Frame unit vectors in robot_base (world)
         X_conv = T_robot_conveyor[:3, 0]
         Y_conv = T_robot_conveyor[:3, 1]
         Z_conv = T_robot_conveyor[:3, 2]
@@ -245,71 +325,76 @@ class CalibrationTestDrive(LifecycleComponent):
         self.get_logger().info(f"  Z_conv (Height): [{Z_conv[0]:.4f}, {Z_conv[1]:.4f}, {Z_conv[2]:.4f}]")
 
         curr_ee_pos = self._get_ee_position_m()
-        self._initial_position_robot = curr_ee_pos
+        R_ee_curr = self._get_ee_rotation_matrix()
+
+        self._initial_position_robot = curr_ee_pos.copy()
+        self._initial_orientation_robot = rotation_matrix_to_quaternion(R_ee_curr)
+
+        # Target camera orientation parallel to conveyor (looking straight down at conveyor surface)
+        R_conv = T_robot_conveyor[:3, :3]
+        R_y_180 = rpy_to_rotation_matrix(0.0, math.radians(180.0), 0.0)
+        R_cam_target = R_conv @ R_y_180
+
+        # Target EE Flange orientation
+        R_ee_cam = T_ee_robot_cam[:3, :3]
+        R_ee_target = R_cam_target @ R_ee_cam.T
+        quat_ee_target = rotation_matrix_to_quaternion(R_ee_target)
 
         center_over_board = bool(self.get_parameter("center_over_board").get_value())
-        if center_over_board:
-            board_center = self._load_board_center_conveyor()
-            if board_center is None:
+        board_center = self._load_board_center_conveyor()
+
+        if center_over_board and board_center is not None:
+            bc_x_m, bc_y_m, _ = board_center
+
+            # t_ee_cam: Translation of camera optical center relative to EE flange, in meters
+            t_ee_cam = T_ee_robot_cam[:3, 3]
+            # Sanity check: if the norm is unrealistically large (e.g. stored in mm), scale it
+            if np.linalg.norm(t_ee_cam) > 0.5:
                 self.get_logger().warn(
-                    "center_over_board=True but no board_center_conveyor_mm in calibration file. "
-                    "Skipping centering; starting from current position."
+                    f"t_ee_cam norm ({np.linalg.norm(t_ee_cam)*1000:.1f}mm) seems large, scaling from mm to m."
                 )
-                self._start_position_robot = curr_ee_pos
-                self._state = "MOVING_FORWARD"
-            else:
-                bc_x_m, bc_y_m, _ = board_center
-                
-                # Berechne die aktuelle Kamera-Position im conveyor_frame
-                R_ee = np.eye(3, dtype=np.float64)
-                ori = self._robot_ee_pose.get_orientation()
-                if hasattr(ori, "to_rotation_matrix"):
-                    R_ee = np.array(ori.to_rotation_matrix(), dtype=np.float64)
-                else:
-                    qx, qy, qz, qw = float(ori.x), float(ori.y), float(ori.z), float(ori.w)
-                    R_ee = np.array([
-                        [1 - 2*(qy**2 + qz**2), 2*(qx*qy - qz*qw), 2*(qx*qz + qy*qw)],
-                        [2*(qx*qy + qz*qw), 1 - 2*(qx**2 + qz**2), 2*(qy*qz - qx*qw)],
-                        [2*(qx*qz - qy*qw), 2*(qy*qz + qx*qw), 1 - 2*(qx**2 + qy**2)],
-                    ], dtype=np.float64)
+                t_ee_cam = t_ee_cam / 1000.0
 
-                t_ee_cam = T_ee_robot_cam[:3, 3]
-                curr_cam_world = curr_ee_pos + R_ee @ t_ee_cam
+            # Current camera optical center position in world frame
+            curr_cam_world = curr_ee_pos + R_ee_curr @ t_ee_cam
 
-                T_inv = np.linalg.inv(T_robot_conveyor)
-                curr_cam_conv = T_inv @ np.array([curr_cam_world[0], curr_cam_world[1], curr_cam_world[2], 1.0], dtype=np.float64)
+            # Transform current camera pos to conveyor frame to get current Z height above conveyor
+            T_inv = np.linalg.inv(T_robot_conveyor)
+            curr_cam_conv = T_inv @ np.array([curr_cam_world[0], curr_cam_world[1], curr_cam_world[2], 1.0], dtype=np.float64)
 
-                delta_x_conv = bc_x_m - curr_cam_conv[0]
-                delta_y_conv = bc_y_m - curr_cam_conv[1]
+            # Target camera position: board center in XY, same height Z above conveyor
+            p_cam_target_conv = np.array([bc_x_m, bc_y_m, float(curr_cam_conv[2]), 1.0], dtype=np.float64)
+            p_cam_target_world = (T_robot_conveyor @ p_cam_target_conv)[:3]
 
-                self.get_logger().info(
-                    f"Board center target (conveyor_frame): X={bc_x_m*1000:.1f} mm, Y={bc_y_m*1000:.1f} mm"
-                )
-                self.get_logger().info(
-                    f"Current Camera pos (conveyor_frame): X={curr_cam_conv[0]*1000:.1f} mm, Y={curr_cam_conv[1]*1000:.1f} mm"
-                )
-                self.get_logger().info(
-                    f"Phase 0 (Camera Centering): delta_X={delta_x_conv*1000:.1f} mm, delta_Y={delta_y_conv*1000:.1f} mm"
-                )
+            # Required EE flange position so camera optical center is above board center
+            # EE_pos = cam_target_world - R_ee_target * t_ee_cam
+            target_ee_world = p_cam_target_world - R_ee_target @ t_ee_cam
 
-                # Toleranz für Bewegung erhöhen (bis zu 0.5m Versatz zentrieren)
-                if abs(delta_x_conv) < 0.5 and abs(delta_y_conv) < 0.5:
-                    X_conv_unit = T_robot_conveyor[:3, 0]
-                    Y_conv_unit = T_robot_conveyor[:3, 1]
-                    
-                    self._start_position_robot = curr_ee_pos + delta_x_conv * X_conv_unit + delta_y_conv * Y_conv_unit
-                    self._state = "CENTERING"
-                    self._target_pose.set_position(self._start_position_robot)
-                    self._target_pose.set_orientation(self._robot_ee_pose.get_orientation())
-                else:
-                    self.get_logger().warn(
-                        f"Centering delta too large (delta_X={delta_x_conv*1000:.0f} mm, "
-                        f"delta_Y={delta_y_conv*1000:.0f} mm). Skipping centering."
-                    )
-                    self._start_position_robot = curr_ee_pos
-                    self._state = "MOVING_FORWARD"
+            delta_dist = np.linalg.norm(target_ee_world - curr_ee_pos)
+
+            self.get_logger().info(
+                f"=== Phase 0: Camera Centering ===")
+            self.get_logger().info(
+                f"  t_ee_cam offset: [{t_ee_cam[0]*1000:.1f}, {t_ee_cam[1]*1000:.1f}, {t_ee_cam[2]*1000:.1f}] mm")
+            self.get_logger().info(
+                f"  Current EE pos (world): [{curr_ee_pos[0]*1000:.1f}, {curr_ee_pos[1]*1000:.1f}, {curr_ee_pos[2]*1000:.1f}] mm")
+            self.get_logger().info(
+                f"  Current Camera pos (conveyor): X={curr_cam_conv[0]*1000:.1f} mm, Y={curr_cam_conv[1]*1000:.1f} mm, Z={curr_cam_conv[2]*1000:.1f} mm")
+            self.get_logger().info(
+                f"  Board center target (conveyor): X={bc_x_m*1000:.1f} mm, Y={bc_y_m*1000:.1f} mm")
+            self.get_logger().info(
+                f"  Target cam pos (world): [{p_cam_target_world[0]*1000:.1f}, {p_cam_target_world[1]*1000:.1f}, {p_cam_target_world[2]*1000:.1f}] mm")
+            self.get_logger().info(
+                f"  Target EE pos (world): [{target_ee_world[0]*1000:.1f}, {target_ee_world[1]*1000:.1f}, {target_ee_world[2]*1000:.1f}] mm")
+            self.get_logger().info(
+                f"  Travel distance: {delta_dist*1000:.1f} mm")
+
+            self._start_position_robot = target_ee_world.copy()
+            self._start_orientation_robot = quat_ee_target
+            self._state = "CENTERING"
         else:
-            self._start_position_robot = curr_ee_pos
+            self._start_position_robot = curr_ee_pos.copy()
+            self._start_orientation_robot = quat_ee_target
             self._state = "MOVING_FORWARD"
 
         self._state_start_time = self.get_clock().now()
@@ -324,32 +409,49 @@ class CalibrationTestDrive(LifecycleComponent):
         now_time = self.get_clock().now()
         dist_m = float(self.get_parameter("test_distance_y_mm").get_value()) / 1000.0
         speed_m_s = float(self.get_parameter("drive_speed_m_s").get_value())
-        duration_s = dist_m / max(speed_m_s, 0.001)
+        duration_s = max(dist_m / max(speed_m_s, 0.001), 1.0)
 
         dt = (now_time - self._state_start_time).nanoseconds / 1e9
         curr_pos = self._get_ee_position_m()
 
+        def smooth_s_curve(progress: float) -> float:
+            s = min(max(progress, 0.0), 1.0)
+            return 0.5 * (1.0 - math.cos(math.pi * s))
+
         if self._state == "CENTERING":
-            dist_to_center = np.linalg.norm(curr_pos - self._start_position_robot)
-            if dist_to_center < 0.002 or dt >= 4.0:
+            dist_total = np.linalg.norm(self._start_position_robot - self._initial_position_robot)
+            duration_centering = max(1.5, dist_total / max(speed_m_s, 0.01))
+            progress_raw = min(dt / duration_centering, 1.0)
+            p = smooth_s_curve(progress_raw)
+
+            target_pos = self._initial_position_robot + p * (self._start_position_robot - self._initial_position_robot)
+            target_quat = quaternion_slerp(self._initial_orientation_robot, self._start_orientation_robot, p)
+
+            self._target_pose.set_position(target_pos)
+            self._target_pose.set_orientation(target_quat)
+
+            if progress_raw >= 1.0 or dist_total < 0.002:
                 self._state = "PAUSING_BEFORE_FORWARD"
                 self._state_start_time = now_time
                 self.get_logger().info("Phase 1 Complete: Camera optical center arrived over board center. Settling 0.8s...")
 
         elif self._state == "PAUSING_BEFORE_FORWARD":
+            self._target_pose.set_position(self._start_position_robot)
+            self._target_pose.set_orientation(self._start_orientation_robot)
             if dt >= 0.8:
                 self._state = "MOVING_FORWARD"
                 self._state_start_time = now_time
                 self.get_logger().info(f"Phase 2: Moving {dist_m*1000:.0f} mm forward along Conveyor Y-axis...")
 
         elif self._state == "MOVING_FORWARD":
-            progress = min(dt / duration_s, 1.0)
-            offset_conveyor = np.array([0.0, progress * dist_m, 0.0, 0.0])
+            progress_raw = min(dt / duration_s, 1.0)
+            p = smooth_s_curve(progress_raw)
+            offset_conveyor = np.array([0.0, p * dist_m, 0.0, 0.0])
             current_offset = (self._T_robot_conveyor @ offset_conveyor)[:3]
             target_pos = self._start_position_robot + current_offset
 
             self._target_pose.set_position(target_pos)
-            self._target_pose.set_orientation(self._robot_ee_pose.get_orientation())
+            self._target_pose.set_orientation(self._start_orientation_robot)
 
             try:
                 T_inv = np.linalg.inv(self._T_robot_conveyor)
@@ -361,31 +463,35 @@ class CalibrationTestDrive(LifecycleComponent):
             except Exception:
                 pass
 
-            if progress >= 1.0 and (np.linalg.norm(curr_pos - target_pos) < 0.010 or dt >= duration_s + 1.0):
+            if progress_raw >= 1.0:
                 self._state = "PAUSING"
                 self._state_start_time = now_time
                 self.get_logger().info("Phase 2 Complete: Reached end of forward test drive. Pausing 1.0s...")
 
         elif self._state == "PAUSING":
+            offset_conveyor = np.array([0.0, dist_m, 0.0, 0.0])
+            current_offset = (self._T_robot_conveyor @ offset_conveyor)[:3]
+            self._target_pose.set_position(self._start_position_robot + current_offset)
+            self._target_pose.set_orientation(self._start_orientation_robot)
             if dt >= 1.0:
                 self._state = "MOVING_BACKWARD"
                 self._state_start_time = now_time
                 self.get_logger().info("Phase 3: Moving back along Conveyor Y-axis...")
 
         elif self._state == "MOVING_BACKWARD":
-            progress = min(dt / duration_s, 1.0)
-            offset_conveyor = np.array([0.0, (1.0 - progress) * dist_m, 0.0, 0.0])
+            progress_raw = min(dt / duration_s, 1.0)
+            p = smooth_s_curve(progress_raw)
+            offset_conveyor = np.array([0.0, (1.0 - p) * dist_m, 0.0, 0.0])
             current_offset = (self._T_robot_conveyor @ offset_conveyor)[:3]
             target_pos = self._start_position_robot + current_offset
 
             self._target_pose.set_position(target_pos)
-            self._target_pose.set_orientation(self._robot_ee_pose.get_orientation())
+            self._target_pose.set_orientation(self._start_orientation_robot)
 
-            if progress >= 1.0 and (np.linalg.norm(curr_pos - target_pos) < 0.010 or dt >= duration_s + 1.0):
+            if progress_raw >= 1.0:
                 if bool(self.get_parameter("center_over_board").get_value()):
                     self._state = "RETURNING_INITIAL"
                     self._state_start_time = now_time
-                    self._target_pose.set_position(self._initial_position_robot)
                     self.get_logger().info("Phase 4: Returning to original user start position...")
                 else:
                     self._state = "FINISHED"
@@ -393,8 +499,18 @@ class CalibrationTestDrive(LifecycleComponent):
                     self.get_logger().info("Test drive completed successfully!")
 
         elif self._state == "RETURNING_INITIAL":
-            dist_to_init = np.linalg.norm(curr_pos - self._initial_position_robot)
-            if dist_to_init < 0.003 or dt >= 4.0:
+            dist_total = np.linalg.norm(self._initial_position_robot - self._start_position_robot)
+            duration_return = max(1.5, dist_total / max(speed_m_s, 0.01))
+            progress_raw = min(dt / duration_return, 1.0)
+            p = smooth_s_curve(progress_raw)
+
+            target_pos = self._start_position_robot + p * (self._initial_position_robot - self._start_position_robot)
+            target_quat = quaternion_slerp(self._start_orientation_robot, self._initial_orientation_robot, p)
+
+            self._target_pose.set_position(target_pos)
+            self._target_pose.set_orientation(target_quat)
+
+            if progress_raw >= 1.0:
                 self._state = "FINISHED"
                 self.set_predicate("is_running", False)
                 self.get_logger().info("Test drive completed successfully! Robot back at original user start position.")

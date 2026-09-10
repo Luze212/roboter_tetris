@@ -48,6 +48,27 @@ def build_zero_yaw_tilt(r: float, d: float, angle: float) -> np.ndarray:
     return orthonormalize_rotation(R_tilt)
 
 
+def quaternion_slerp(q1: np.ndarray, q2: np.ndarray, t: float) -> np.ndarray:
+    """Spherical linear interpolation between two quaternions [w, x, y, z]."""
+    q1 = q1 / np.linalg.norm(q1)
+    q2 = q2 / np.linalg.norm(q2)
+    dot = np.dot(q1, q2)
+    if dot < 0.0:
+        q2 = -q2
+        dot = -dot
+    if dot > 0.9995:
+        res = q1 + t * (q2 - q1)
+        return res / np.linalg.norm(res)
+    theta_0 = math.acos(min(max(dot, -1.0), 1.0))
+    sin_theta_0 = math.sin(theta_0)
+    theta = theta_0 * t
+    sin_theta = math.sin(theta)
+    s1 = math.cos(theta) - dot * sin_theta / sin_theta_0
+    s2 = sin_theta / sin_theta_0
+    res = s1 * q1 + s2 * q2
+    return res / np.linalg.norm(res)
+
+
 class AutoCalibration(LifecycleComponent):
     """AICA component for automated extrinsic camera-robot orbit calibration."""
 
@@ -102,6 +123,10 @@ class AutoCalibration(LifecycleComponent):
         self._robot_cam_board_depth_msg = []
         self.add_input("robot_cam_board_depth", "_robot_cam_board_depth_msg", Float64MultiArray)
 
+        # Board geometry [rows, cols, checker_size_mm] published by board_detection
+        self._board_geometry_msg = []
+        self.add_input("board_geometry", "_board_geometry_msg", Float64MultiArray)
+
         self._robot_ee_pose = sr.CartesianState("end_effector", "world")
         self.add_input("robot_ee_pose", "_robot_ee_pose", EncodedState)
 
@@ -141,18 +166,11 @@ class AutoCalibration(LifecycleComponent):
         self._waypoint_labels = ["center"]
         self._waypoint_offsets = [(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)]
 
-        num_ring_points = min(8, num_wp - 1)
+        num_ring_points = num_wp - 1
         for i in range(num_ring_points):
             angle = (2.0 * math.pi / num_ring_points) * i
             self._waypoint_labels.append(f"orbit_ring_{i+1}")
             self._waypoint_offsets.append((angle, 1.0, 0.0, 0.0, 0.0, 0.0))
-
-        if len(self._waypoint_labels) < num_wp:
-            remaining = num_wp - len(self._waypoint_labels)
-            for j in range(remaining):
-                angle = (2.0 * math.pi / remaining) * j + (math.pi / 4.0)
-                self._waypoint_labels.append(f"orbit_inner_{j+1}")
-                self._waypoint_offsets.append((angle, 0.5, 0.0, 0.0, 0.0, 0.0))
 
         self._waypoints = self._waypoint_labels
 
@@ -238,6 +256,9 @@ class AutoCalibration(LifecycleComponent):
         if self._start_ee_transform is None:
             self.get_logger().warn("No start EE transform available.")
             return
+        T_curr = self._get_current_ee_transform()
+        self._moving_start_pos = T_curr[:3, 3].copy()
+        self._moving_start_quat = rotation_matrix_to_quaternion(T_curr[:3, :3])
 
         T_home = self._start_ee_transform.copy()
         P_home = T_home[:3, 3]
@@ -246,49 +267,47 @@ class AutoCalibration(LifecycleComponent):
         if label == "center":
             pos_target = P_home
             R_target = R_home
-            self.get_logger().info(f"Moving to orbit waypoint {idx + 1}/{len(self._waypoint_labels)}: center (home pose)")
+            self.get_logger().info(f"Moving to orbit waypoint {idx + 1}/{len(self._waypoint_labels)}: center (home position)")
         else:
             angle, radius_scale, _, _, _, _ = self._waypoint_offsets[idx]
             max_r = float(self.get_parameter("max_orbit_radius_mm").get_value()) / 1000.0
             r = max_r * radius_scale
 
-            # Live-Abstandsmessung aus Kamerainputs (fallback 0.35m)
-            d = 0.35
+            # Live distance from camera if available, else fallback 0.35m
+            live_dist_m = None
             try:
                 cam_data = list(self._robot_cam_board_pose_msg.data) if hasattr(self._robot_cam_board_pose_msg, "data") else list(self._robot_cam_board_pose_msg)
-                if len(cam_data) >= 3 and abs(cam_data[2]) > 0.05:
-                    d = float(cam_data[2])
-                elif hasattr(self._robot_cam_board_depth_msg, "data") and len(self._robot_cam_board_depth_msg.data) > 0:
-                    d_depth_mm = float(self._robot_cam_board_depth_msg.data[0])
-                    if d_depth_mm > 50.0:
-                        d = d_depth_mm / 1000.0
+                if len(cam_data) >= 6 and float(cam_data[2]) > 0.1:
+                    live_dist_m = float(cam_data[2])
             except Exception:
                 pass
 
+            d = live_dist_m if live_dist_m is not None else 0.35
+            d = max(d, 0.1)            # Radial position on sphere dome
+            dx = r * math.cos(angle)
+            dy = r * math.sin(angle)
+            dz = d - math.sqrt(max(d * d - r * r, 0.001))
+
+            # Minimal zero-yaw tilt so camera optical axis (+Z_cam) points dead-center at board
             R_tilt = build_zero_yaw_tilt(r, d, angle)
 
-            # Focus compensation: translate so tilted optical axis hits board center
-            p_focus_local = np.array([0.0, 0.0, d], dtype=np.float64)
-            shift_focus_local = (np.eye(3) - R_tilt) @ p_focus_local
-            offset_pos_local = np.array([r * math.cos(angle), r * math.sin(angle), 0.0], dtype=np.float64)
-
-            pos_target = P_home + R_home @ (offset_pos_local + shift_focus_local)
+            pos_target = P_home + R_home @ np.array([dx, dy, dz], dtype=np.float64)
             R_target = R_home @ R_tilt
 
-            tilt_deg = math.degrees(math.atan2(r, d))
+            tilt_deg = math.degrees(math.acos(min(max(d / math.sqrt(r * r + d * d), -1.0), 1.0)))
             self.get_logger().info(
                 f"Moving to orbit waypoint {idx + 1}/{len(self._waypoint_labels)}: {label} "
-                f"(r={r*1000:.0f}mm, tilt={tilt_deg:.1f}\u00b0, d={d*1000:.0f}mm)"
+                f"(radius={r*1000:.1f}mm, tilt={tilt_deg:.1f}° focused on board at {d*1000:.0f}mm)"
             )
 
+        self._moving_target_pos = np.array(pos_target, dtype=np.float64)
+        self._moving_target_quat = rotation_matrix_to_quaternion(R_target)
+        dist_move = np.linalg.norm(self._moving_target_pos - self._moving_start_pos)
+        self._moving_duration = max(1.5, dist_move / 0.04)
+
         try:
-            self._target_pose.set_position(np.array(pos_target, dtype=np.float64))
-            q_home = rotation_matrix_to_quaternion(R_home)
-            q_target = rotation_matrix_to_quaternion(R_target)
-            if np.dot(q_target, q_home) < 0:
-                q_target = -q_target
-            qw, qx, qy, qz = q_target
-            self._target_pose.set_orientation(np.array([qx, qy, qz, qw], dtype=np.float64))
+            self._target_pose.set_position(self._moving_start_pos)
+            self._target_pose.set_orientation(self._moving_start_quat)
         except Exception as e:
             self.get_logger().warn(f"Could not set target EE pose: {e}")
 
@@ -301,24 +320,30 @@ class AutoCalibration(LifecycleComponent):
             if self._state_start_time is None:
                 self._state_start_time = now_time
 
-            try:
-                current_pos = np.array(self._robot_ee_pose.get_position(), dtype=np.float64)
-                if abs(current_pos[0]) > 2.0:
-                    current_pos /= 1000.0
-                target_pos = np.array(self._target_pose.get_position(), dtype=np.float64)
-                distance_m = np.linalg.norm(current_pos - target_pos)
+            dt = (now_time - self._state_start_time).nanoseconds / 1e9
+            duration = getattr(self, "_moving_duration", 2.0)
+            progress_raw = min(dt / max(duration, 0.1), 1.0)
+            p = 0.5 * (1.0 - math.cos(math.pi * progress_raw))
 
-                dt = (now_time - self._state_start_time).nanoseconds / 1e9
-                if distance_m < 0.002 or dt >= 5.0:
-                    self._state = "SETTLING"
-                    self._state_start_time = now_time
+            pos_curr = self._moving_start_pos + p * (self._moving_target_pos - self._moving_start_pos)
+            quat_curr = quaternion_slerp(self._moving_start_quat, self._moving_target_quat, p)
+
+            try:
+                self._target_pose.set_position(pos_curr)
+                self._target_pose.set_orientation(quat_curr)
             except Exception:
-                dt = (now_time - self._state_start_time).nanoseconds / 1e9
-                if dt >= 3.0:
-                    self._state = "SETTLING"
-                    self._state_start_time = now_time
+                pass
+
+            if progress_raw >= 1.0:
+                self._state = "SETTLING"
+                self._state_start_time = now_time
 
         elif self._state == "SETTLING":
+            try:
+                self._target_pose.set_position(self._moving_target_pos)
+                self._target_pose.set_orientation(self._moving_target_quat)
+            except Exception:
+                pass
             settle_target = float(self.get_parameter("settle_time_s").get_value())
             dt = (now_time - self._state_start_time).nanoseconds / 1e9
             if dt >= settle_target:
@@ -328,6 +353,11 @@ class AutoCalibration(LifecycleComponent):
                 self._state_start_time = now_time
 
         elif self._state == "SAMPLING":
+            try:
+                self._target_pose.set_position(self._moving_target_pos)
+                self._target_pose.set_orientation(self._moving_target_quat)
+            except Exception:
+                pass
             target_samples = int(self.get_parameter("samples_per_waypoint").get_value())
             robot_cam_data = list(self._robot_cam_board_pose_msg.data) if hasattr(self._robot_cam_board_pose_msg, "data") else list(self._robot_cam_board_pose_msg)
             base_cam_data = list(self._base_cam_board_pose_msg.data) if hasattr(self._base_cam_board_pose_msg, "data") else list(self._base_cam_board_pose_msg)
@@ -350,7 +380,7 @@ class AutoCalibration(LifecycleComponent):
                         base_cam_board_pose=avg_base_cam
                     )
                     self._collected_samples.append(sample)
-                    self.get_logger().info(f"Sample {len(self._collected_samples)}/9 erfolgreich aufgenommen.")
+                    self.get_logger().info(f"Sample {len(self._collected_samples)}/{len(self._waypoints)} erfolgreich aufgenommen.")
                 else:
                     self.get_logger().warn("Wegpunkt-Sample verworfen: Ungültige Kamera-Pose.")
 
@@ -367,17 +397,23 @@ class AutoCalibration(LifecycleComponent):
         elif self._state == "RETURNING_HOME":
             if self._state_start_time is None:
                 self._state_start_time = now_time
-            try:
-                current_pos = np.array(self._robot_ee_pose.get_position(), dtype=np.float64)
-                if abs(current_pos[0]) > 2.0:
-                    current_pos /= 1000.0
-                target_pos = np.array(self._target_pose.get_position(), dtype=np.float64)
-                distance_m = np.linalg.norm(current_pos - target_pos)
+                self._send_home_waypoint()
 
-                dt = (now_time - self._state_start_time).nanoseconds / 1e9
-                if distance_m < 0.002 or dt >= 5.0:
-                    self._state = "SOLVING"
+            dt = (now_time - self._state_start_time).nanoseconds / 1e9
+            duration = getattr(self, "_moving_duration", 2.0)
+            progress_raw = min(dt / max(duration, 0.1), 1.0)
+            p = 0.5 * (1.0 - math.cos(math.pi * progress_raw))
+
+            pos_curr = self._moving_start_pos + p * (self._moving_target_pos - self._moving_start_pos)
+            quat_curr = quaternion_slerp(self._moving_start_quat, self._moving_target_quat, p)
+
+            try:
+                self._target_pose.set_position(pos_curr)
+                self._target_pose.set_orientation(quat_curr)
             except Exception:
+                pass
+
+            if progress_raw >= 1.0:
                 self._state = "SOLVING"
 
         elif self._state == "SOLVING":
@@ -385,6 +421,30 @@ class AutoCalibration(LifecycleComponent):
                 off_x_m = float(self.get_parameter("conveyor_offset_x_mm").get_value()) / 1000.0
                 off_y_m = float(self.get_parameter("conveyor_offset_y_mm").get_value()) / 1000.0
                 off_z_m = float(self.get_parameter("conveyor_offset_z_mm").get_value()) / 1000.0
+
+                # Read board geometry from board_detection's board_geometry output.
+                # Format: [rows, cols, checker_size_mm]  (no parameter duplication needed)
+                geom = list(self._board_geometry_msg) if self._board_geometry_msg else []
+                if len(geom) >= 3 and geom[1] > 0 and geom[2] > 0:
+                    board_rows = int(round(geom[0]))
+                    board_cols = int(round(geom[1]))
+                    checker_size_m = float(geom[2]) / 1000.0
+                    board_w_m = board_cols * checker_size_m
+                    board_h_m = board_rows * checker_size_m
+                    self.get_logger().info(
+                        f"Board geometry from board_detection: "
+                        f"{board_rows}x{board_cols} @ {geom[2]:.1f}mm "
+                        f"-> {board_w_m*1000:.1f}x{board_h_m*1000:.1f}mm"
+                    )
+                else:
+                    # Fallback: conveyor_offset is the board origin; no center correction possible
+                    board_w_m = 0.0
+                    board_h_m = 0.0
+                    self.get_logger().warn(
+                        "board_geometry not received from board_detection. "
+                        "Board center will equal board origin (conveyor_offset). "
+                        "Connect board_detection.board_geometry -> auto_calibration.board_geometry."
+                    )
 
                 result: CalibrationResult = solve_eye_in_hand(
                     self._collected_samples, conveyor_offset_m=(off_x_m, off_y_m, off_z_m)
@@ -396,18 +456,55 @@ class AutoCalibration(LifecycleComponent):
                 if result.T_robot_conveyor is not None:
                     T_conv = result.T_robot_conveyor
                     self._conveyor_pose.set_position(T_conv[:3, 3].astype(np.float64))
-                    qw, qx, qy, qz = rotation_matrix_to_quaternion(T_conv[:3, :3])
-                    self._conveyor_pose.set_orientation(np.array([qx, qy, qz, qw], dtype=np.float64))
+                    quat_conv = rotation_matrix_to_quaternion(T_conv[:3, :3])
+                    self._conveyor_pose.set_orientation(np.array(quat_conv, dtype=np.float64))
+
+                    # Compute geometric board center:
+                    # The conveyor_offset defines the Board KS origin (corner).
+                    # The board center is at origin + half board dimensions along
+                    # the board X and Y axes (which align with conveyor X and Y).
+                    # In conveyor frame: center = origin + (board_w/2, board_h/2, 0)
+                    center_conv = np.array([
+                        off_x_m + board_w_m / 2.0,
+                        off_y_m + board_h_m / 2.0,
+                        off_z_m,
+                        1.0
+                    ], dtype=np.float64)
+                    center_world = (T_conv @ center_conv)[:3]
+                    T_inv = np.linalg.inv(T_conv)
+                    # Verify round-trip (should equal center_conv[:3])
+                    center_back = (T_inv @ np.append(center_world, 1.0))[:3]
+                    board_center_mm = (
+                        round(center_back[0] * 1000.0, 2),
+                        round(center_back[1] * 1000.0, 2),
+                        round(center_back[2] * 1000.0, 2)
+                    )
+                    self.get_logger().info(
+                        f"Board KS-Ursprung (conveyor): X={off_x_m*1000:.1f} mm, Y={off_y_m*1000:.1f} mm"
+                    )
+                    self.get_logger().info(
+                        f"Board-Abmessungen: {board_w_m*1000:.1f} x {board_h_m*1000:.1f} mm"
+                    )
+                    self.get_logger().info(
+                        f"Berechnetes Board-Zentrum (conveyor): "
+                        f"X={board_center_mm[0]:.1f} mm, Y={board_center_mm[1]:.1f} mm"
+                    )
+                else:
+                    # Fallback: no conveyor transform available, use origin as center
+                    board_center_mm = (off_x_m * 1000.0, off_y_m * 1000.0, off_z_m * 1000.0)
+                    self.get_logger().warn(
+                        "No T_robot_conveyor in result – saving board origin as center (fallback)."
+                    )
 
                 save_path = self.get_parameter("calibration_file_path").get_value()
-                
+
                 save_calibration_json(
                     save_path, result,
-                    board_center_conveyor_mm=(off_x_m * 1000.0, off_y_m * 1000.0, off_z_m * 1000.0)
+                    board_center_conveyor_mm=board_center_mm
                 )
                 save_calibration_yaml(
                     save_path, result,
-                    board_center_conveyor_mm=(off_x_m * 1000.0, off_y_m * 1000.0, off_z_m * 1000.0)
+                    board_center_conveyor_mm=board_center_mm
                 )
 
                 self.get_logger().info("==================================================")
@@ -440,8 +537,17 @@ class AutoCalibration(LifecycleComponent):
     def _send_home_waypoint(self):
         if self._start_ee_transform is not None:
             try:
-                pos = self._start_ee_transform[:3, 3].tolist()
-                self._target_pose.set_position(np.array(pos, dtype=np.float64))
-                self._target_pose.set_orientation(self._robot_ee_pose.get_orientation())
+                T_curr = self._get_current_ee_transform()
+                self._moving_start_pos = T_curr[:3, 3].copy()
+                self._moving_start_quat = rotation_matrix_to_quaternion(T_curr[:3, :3])
+
+                self._moving_target_pos = self._start_ee_transform[:3, 3].copy()
+                self._moving_target_quat = rotation_matrix_to_quaternion(self._start_ee_transform[:3, :3])
+                dist_move = np.linalg.norm(self._moving_target_pos - self._moving_start_pos)
+                self._moving_duration = max(1.5, dist_move / 0.04)
+
+                self._target_pose.set_position(self._moving_start_pos)
+                self._target_pose.set_orientation(self._moving_start_quat)
+                self.get_logger().info("Returning robot to home position (user start pose)...")
             except Exception as e:
                 self.get_logger().warn(f"Could not reset target EE pose: {e}")

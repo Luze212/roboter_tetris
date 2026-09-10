@@ -72,6 +72,11 @@ class BoardDetection(LifecycleComponent):
         self._board_depth = []
         self.add_output("board_depth", "_board_depth", Float64MultiArray)
 
+        # Output for board geometry [board_rows, board_cols, checker_size_mm]
+        # Allows other components (e.g. auto_calibration) to read board dimensions without duplicating parameters.
+        self._board_geometry = []
+        self.add_output("board_geometry", "_board_geometry", Float64MultiArray)
+
         self._debug_msg = Image()
         self.add_output("debug_image", "_debug_msg", Image)
 
@@ -302,6 +307,14 @@ class BoardDetection(LifecycleComponent):
                     rvec, tvec, _, _ = pose
                     self._board_pose = [*map(float, tvec), *map(float, rvec)]
                     self.set_predicate("has_pose", True)
+
+                    # Publish board geometry so other components can compute board center
+                    # without needing to duplicate board_rows / board_cols / checker_size_mm.
+                    self._board_geometry = [
+                        float(params.board_rows),
+                        float(params.board_cols),
+                        float((params.marker_length_m + params.marker_spacing_m) * 1000.0),  # checker_size_mm
+                    ]
 
                     # Tiefenwerte aus der Board-Region auslesen
                     if depth_mm is not None and len(board_corners) > 0:
