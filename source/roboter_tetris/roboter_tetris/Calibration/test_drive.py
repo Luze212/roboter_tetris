@@ -116,6 +116,10 @@ class CalibrationTestDrive(LifecycleComponent):
             sr.Parameter("center_over_board", True, sr.ParameterType.BOOL),
             "Zentriert das Fadenkreuz der Kamera vor Start über dem berechneten ChArUco-Board-Zentrum"
         )
+        self.add_parameter(
+            sr.Parameter("phase_pause_s", 2.0, sr.ParameterType.DOUBLE),
+            "Pausenzeit (s) zwischen den einzelnen Phasen der Testfahrt"
+        )
 
         # Inputs
         self._robot_ee_pose = sr.CartesianState("end_effector", "world")
@@ -124,6 +128,9 @@ class CalibrationTestDrive(LifecycleComponent):
             "_robot_ee_pose",
             EncodedState
         )
+        # Board geometry [board_rows, board_cols, checker_size_mm] published by board_detection
+        self._board_geometry_msg = []
+        self.add_input("board_geometry", "_board_geometry_msg", Float64MultiArray)
 
         # Outputs
         self._target_pose = sr.CartesianPose("calibration_test_target", "world")
@@ -277,12 +284,45 @@ class CalibrationTestDrive(LifecycleComponent):
                 x_m = float(bc["x"]) / 1000.0
                 y_m = float(bc["y"]) / 1000.0
                 z_m = float(bc.get("z", 0.0)) / 1000.0
-                self.get_logger().info(
-                    f"Board center from calibration: X={x_m*1000:.1f} mm, Y={y_m*1000:.1f} mm "
-                    f"(in conveyor_frame)"
-                )
+
+                # Determine board dimensions
+                geom = []
+                if hasattr(self._board_geometry_msg, "data") and len(self._board_geometry_msg.data) >= 3:
+                    geom = list(self._board_geometry_msg.data)
+                elif isinstance(self._board_geometry_msg, (list, tuple, np.ndarray)) and len(self._board_geometry_msg) >= 3:
+                    geom = list(self._board_geometry_msg)
+
+                if len(geom) >= 3 and geom[1] > 0 and geom[2] > 0:
+                    board_rows = int(round(geom[0]))
+                    board_cols = int(round(geom[1]))
+                    checker_size_m = float(geom[2]) / 1000.0
+                    board_w_m = board_cols * checker_size_m
+                    board_h_m = board_rows * checker_size_m
+                else:
+                    # Default 5x7 @ 35mm board: 245mm x 175mm
+                    board_w_m = 0.245
+                    board_h_m = 0.175
+
+                # Check if loaded x_m is the board corner origin (e.g. x_m >= -0.18 m, such as -0.13m / -0.128m)
+                # If so, convert corner origin to geometric board center in conveyor frame:
+                # X_center = X_origin - board_w / 2.0
+                # Y_center = Y_origin + board_h / 2.0
+                if x_m > -0.18:
+                    x_orig_m, y_orig_m = x_m, y_m
+                    x_m = x_orig_m - board_w_m / 2.0
+                    y_m = y_orig_m + board_h_m / 2.0
+                    self.get_logger().info(
+                        f"Detected board corner origin in calibration file (X={x_orig_m*1000:.1f} mm, Y={y_orig_m*1000:.1f} mm). "
+                        f"Automatically converted to geometric board center: X={x_m*1000:.1f} mm, Y={y_m*1000:.1f} mm"
+                    )
+                else:
+                    self.get_logger().info(
+                        f"Board center from calibration: X={x_m*1000:.1f} mm, Y={y_m*1000:.1f} mm "
+                        f"(in conveyor_frame)"
+                    )
                 return (x_m, y_m, z_m)
-        except Exception:
+        except Exception as e:
+            self.get_logger().warn(f"Error loading board center: {e}")
             pass
         return None
 
@@ -430,20 +470,24 @@ class CalibrationTestDrive(LifecycleComponent):
             self._target_pose.set_position(target_pos)
             self._target_pose.set_orientation(target_quat)
 
+            pause_s = float(self.get_parameter("phase_pause_s").get_value())
+
             if progress_raw >= 1.0 or dist_total < 0.002:
                 self._state = "PAUSING_BEFORE_FORWARD"
                 self._state_start_time = now_time
-                self.get_logger().info("Phase 1 Complete: Camera optical center arrived over board center. Settling 0.8s...")
+                self.get_logger().info(f"Phase 1 Complete: Camera optical center arrived over board center. Settling {pause_s:.1f}s...")
 
         elif self._state == "PAUSING_BEFORE_FORWARD":
+            pause_s = float(self.get_parameter("phase_pause_s").get_value())
             self._target_pose.set_position(self._start_position_robot)
             self._target_pose.set_orientation(self._start_orientation_robot)
-            if dt >= 0.8:
+            if dt >= pause_s:
                 self._state = "MOVING_FORWARD"
                 self._state_start_time = now_time
                 self.get_logger().info(f"Phase 2: Moving {dist_m*1000:.0f} mm forward along Conveyor Y-axis...")
 
         elif self._state == "MOVING_FORWARD":
+            pause_s = float(self.get_parameter("phase_pause_s").get_value())
             progress_raw = min(dt / duration_s, 1.0)
             p = smooth_s_curve(progress_raw)
             offset_conveyor = np.array([0.0, p * dist_m, 0.0, 0.0])
@@ -464,21 +508,23 @@ class CalibrationTestDrive(LifecycleComponent):
                 pass
 
             if progress_raw >= 1.0:
-                self._state = "PAUSING"
+                self._state = "PAUSING_AFTER_FORWARD"
                 self._state_start_time = now_time
-                self.get_logger().info("Phase 2 Complete: Reached end of forward test drive. Pausing 1.0s...")
+                self.get_logger().info(f"Phase 2 Complete: Reached end of forward test drive. Pausing {pause_s:.1f}s...")
 
-        elif self._state == "PAUSING":
+        elif self._state == "PAUSING_AFTER_FORWARD":
+            pause_s = float(self.get_parameter("phase_pause_s").get_value())
             offset_conveyor = np.array([0.0, dist_m, 0.0, 0.0])
             current_offset = (self._T_robot_conveyor @ offset_conveyor)[:3]
             self._target_pose.set_position(self._start_position_robot + current_offset)
             self._target_pose.set_orientation(self._start_orientation_robot)
-            if dt >= 1.0:
+            if dt >= pause_s:
                 self._state = "MOVING_BACKWARD"
                 self._state_start_time = now_time
                 self.get_logger().info("Phase 3: Moving back along Conveyor Y-axis...")
 
         elif self._state == "MOVING_BACKWARD":
+            pause_s = float(self.get_parameter("phase_pause_s").get_value())
             progress_raw = min(dt / duration_s, 1.0)
             p = smooth_s_curve(progress_raw)
             offset_conveyor = np.array([0.0, (1.0 - p) * dist_m, 0.0, 0.0])
@@ -490,13 +536,22 @@ class CalibrationTestDrive(LifecycleComponent):
 
             if progress_raw >= 1.0:
                 if bool(self.get_parameter("center_over_board").get_value()):
-                    self._state = "RETURNING_INITIAL"
+                    self._state = "PAUSING_AFTER_BACKWARD"
                     self._state_start_time = now_time
-                    self.get_logger().info("Phase 4: Returning to original user start position...")
+                    self.get_logger().info(f"Phase 3 Complete: Returned to board center position. Pausing {pause_s:.1f}s...")
                 else:
                     self._state = "FINISHED"
                     self.set_predicate("is_running", False)
                     self.get_logger().info("Test drive completed successfully!")
+
+        elif self._state == "PAUSING_AFTER_BACKWARD":
+            pause_s = float(self.get_parameter("phase_pause_s").get_value())
+            self._target_pose.set_position(self._start_position_robot)
+            self._target_pose.set_orientation(self._start_orientation_robot)
+            if dt >= pause_s:
+                self._state = "RETURNING_INITIAL"
+                self._state_start_time = now_time
+                self.get_logger().info("Phase 4: Returning to original user start position...")
 
         elif self._state == "RETURNING_INITIAL":
             dist_total = np.linalg.norm(self._initial_position_robot - self._start_position_robot)

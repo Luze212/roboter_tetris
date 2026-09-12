@@ -424,7 +424,12 @@ class AutoCalibration(LifecycleComponent):
 
                 # Read board geometry from board_detection's board_geometry output.
                 # Format: [rows, cols, checker_size_mm]  (no parameter duplication needed)
-                geom = list(self._board_geometry_msg) if self._board_geometry_msg else []
+                geom = []
+                if hasattr(self._board_geometry_msg, "data") and len(self._board_geometry_msg.data) >= 3:
+                    geom = list(self._board_geometry_msg.data)
+                elif isinstance(self._board_geometry_msg, (list, tuple, np.ndarray)) and len(self._board_geometry_msg) >= 3:
+                    geom = list(self._board_geometry_msg)
+
                 if len(geom) >= 3 and geom[1] > 0 and geom[2] > 0:
                     board_rows = int(round(geom[0]))
                     board_cols = int(round(geom[1]))
@@ -437,13 +442,15 @@ class AutoCalibration(LifecycleComponent):
                         f"-> {board_w_m*1000:.1f}x{board_h_m*1000:.1f}mm"
                     )
                 else:
-                    # Fallback: conveyor_offset is the board origin; no center correction possible
-                    board_w_m = 0.0
-                    board_h_m = 0.0
+                    # Fallback: default 5x7 board @ 35mm (245mm x 175mm)
+                    board_rows = 5
+                    board_cols = 7
+                    checker_size_m = 0.035
+                    board_w_m = board_cols * checker_size_m
+                    board_h_m = board_rows * checker_size_m
                     self.get_logger().warn(
                         "board_geometry not received from board_detection. "
-                        "Board center will equal board origin (conveyor_offset). "
-                        "Connect board_detection.board_geometry -> auto_calibration.board_geometry."
+                        "Using default 5x7 @ 35mm board dimensions for center calculation."
                     )
 
                 result: CalibrationResult = solve_eye_in_hand(
@@ -461,11 +468,11 @@ class AutoCalibration(LifecycleComponent):
 
                     # Compute geometric board center:
                     # The conveyor_offset defines the Board KS origin (corner).
-                    # The board center is at origin + half board dimensions along
-                    # the board X and Y axes (which align with conveyor X and Y).
-                    # In conveyor frame: center = origin + (board_w/2, board_h/2, 0)
+                    # Board X-axis points along -X_conveyor (R_y_180[0,0] = -1.0)
+                    # Board Y-axis points along +Y_conveyor (R_y_180[1,1] = +1.0)
+                    # In conveyor frame: center = (off_x - board_w/2, off_y + board_h/2, off_z)
                     center_conv = np.array([
-                        off_x_m + board_w_m / 2.0,
+                        off_x_m - board_w_m / 2.0,
                         off_y_m + board_h_m / 2.0,
                         off_z_m,
                         1.0

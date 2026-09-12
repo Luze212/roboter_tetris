@@ -49,6 +49,12 @@
       "signal_type": "double_array"
     },
     {
+      "display_name": "Board Geometry",
+      "description": "Board-Geometrie [Zeilen, Spalten, Feldgröße in mm] zur Nutzung in Kalibrierung und Testfahrt.",
+      "signal_name": "board_geometry",
+      "signal_type": "double_array"
+    },
+    {
       "display_name": "Debug Image",
       "description": "Debug-Bild mit erkannten Markern.",
       "signal_name": "debug_image",

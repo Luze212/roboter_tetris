@@ -16,6 +16,12 @@
       "description": "Endeffektor-Pose im Roboter-Base-Frame.",
       "signal_name": "robot_ee_pose",
       "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Board Geometry",
+      "description": "Board-Geometrie [Zeilen, Spalten, Feldgröße in mm] von Board Detection.",
+      "signal_name": "board_geometry",
+      "signal_type": "double_array"
     }
   ],
 
@@ -80,6 +86,14 @@
       "parameter_name": "center_over_board",
       "parameter_type": "bool",
       "default_value": "true",
+      "dynamic": true
+    },
+    {
+      "display_name": "Pausenzeit Phasen (s)",
+      "description": "Pausenzeit in Sekunden zwischen den einzelnen Phasen der Testfahrt.",
+      "parameter_name": "phase_pause_s",
+      "parameter_type": "double",
+      "default_value": "2.0",
       "dynamic": true
     }
   ]
