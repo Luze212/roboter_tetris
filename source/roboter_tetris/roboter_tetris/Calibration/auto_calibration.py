@@ -79,7 +79,7 @@ class AutoCalibration(LifecycleComponent):
         self.add_parameter(
             sr.Parameter(
                 "calibration_file_path",
-                "/tmp/calibration.yaml",
+                "/home/tetripick/Desktop/AICA/roboter_tetris/calibration.yaml",
                 sr.ParameterType.STRING
             ),
             "Zielpfad für die generierte calibration.yaml"
@@ -136,6 +136,15 @@ class AutoCalibration(LifecycleComponent):
 
         self._conveyor_pose = sr.CartesianPose("conveyor_frame", "world")
         self.add_output("conveyor_pose", "_conveyor_pose", EncodedState, MessageType.CARTESIAN_POSE_MESSAGE)
+
+        self._board_pose_out = sr.CartesianPose("board_frame", "world")
+        self.add_output("board_pose_out", "_board_pose_out", EncodedState, MessageType.CARTESIAN_POSE_MESSAGE)
+
+        self._robot_cam_pose_out = sr.CartesianPose("robot_cam_frame", "world")
+        self.add_output("robot_cam_pose_out", "_robot_cam_pose_out", EncodedState, MessageType.CARTESIAN_POSE_MESSAGE)
+
+        self._base_cam_pose_out = sr.CartesianPose("base_cam_frame", "world")
+        self.add_output("base_cam_pose_out", "_base_cam_pose_out", EncodedState, MessageType.CARTESIAN_POSE_MESSAGE)
 
         self._calibration_matrix = []
         self.add_output("calibration_matrix", "_calibration_matrix", Float64MultiArray)
@@ -466,6 +475,24 @@ class AutoCalibration(LifecycleComponent):
                     quat_conv = rotation_matrix_to_quaternion(T_conv[:3, :3])
                     self._conveyor_pose.set_orientation(np.array(quat_conv, dtype=np.float64))
 
+                if result.T_robot_board is not None:
+                    T_b = result.T_robot_board
+                    self._board_pose_out.set_position(T_b[:3, 3].astype(np.float64))
+                    quat_b = rotation_matrix_to_quaternion(T_b[:3, :3])
+                    self._board_pose_out.set_orientation(np.array(quat_b, dtype=np.float64))
+
+                if result.T_robot_base_cam is not None:
+                    T_rc = result.T_robot_base_cam
+                    self._robot_cam_pose_out.set_position(T_rc[:3, 3].astype(np.float64))
+                    quat_rc = rotation_matrix_to_quaternion(T_rc[:3, :3])
+                    self._robot_cam_pose_out.set_orientation(np.array(quat_rc, dtype=np.float64))
+
+                if result.T_robot_base_static_cam is not None:
+                    T_bc = result.T_robot_base_static_cam
+                    self._base_cam_pose_out.set_position(T_bc[:3, 3].astype(np.float64))
+                    quat_bc = rotation_matrix_to_quaternion(T_bc[:3, :3])
+                    self._base_cam_pose_out.set_orientation(np.array(quat_bc, dtype=np.float64))
+
                     # Compute geometric board center:
                     # The conveyor_offset defines the Board KS origin (corner).
                     # Board X-axis points along -X_conveyor (R_y_180[0,0] = -1.0)
@@ -522,8 +549,14 @@ class AutoCalibration(LifecycleComponent):
                 self.get_logger().info(f"Rotation RMSE:    {result.rotation_rmse_deg:.3f} deg")
                 
                 t_cam = T[:3, 3]
-                self.get_logger().info(f"Camera Pos in Base: X={t_cam[0]*1000:.1f}mm, Y={t_cam[1]*1000:.1f}mm, Z={t_cam[2]*1000:.1f}mm")
+                self.get_logger().info(f"Robot Cam Pos in Base: X={t_cam[0]*1000:.1f}mm, Y={t_cam[1]*1000:.1f}mm, Z={t_cam[2]*1000:.1f}mm")
                 
+                if result.T_robot_base_static_cam is not None:
+                    t_bcam = result.T_robot_base_static_cam[:3, 3]
+                    self.get_logger().info(f"Base Cam Pos in Base:  X={t_bcam[0]*1000:.1f}mm, Y={t_bcam[1]*1000:.1f}mm, Z={t_bcam[2]*1000:.1f}mm")
+                else:
+                    self.get_logger().info("Base Cam Pos in Base:  N/A (base_cam_board_pose nicht empfangen)")
+
                 if result.T_robot_conveyor is not None:
                     t_c = result.T_robot_conveyor[:3, 3]
                     self.get_logger().info(f"Conveyor Origin:    X={t_c[0]*1000:.1f}mm, Y={t_c[1]*1000:.1f}mm, Z={t_c[2]*1000:.1f}mm")

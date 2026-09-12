@@ -61,7 +61,7 @@
       "description": "Pfad zur calibration.yaml oder calibration.json Datei.",
       "parameter_name": "calibration_file_path",
       "parameter_type": "string",
-      "default_value": "/tmp/calibration.yaml",
+      "default_value": "/home/tetripick/Desktop/AICA/roboter_tetris/calibration.yaml",
       "dynamic": true
     },
     {

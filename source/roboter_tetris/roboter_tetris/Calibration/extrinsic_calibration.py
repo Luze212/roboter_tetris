@@ -134,6 +134,7 @@ class CalibrationResult:
     T_ee_robot_cam: Optional[np.ndarray] = None
     T_robot_board: Optional[np.ndarray] = None
     T_robot_conveyor: Optional[np.ndarray] = None
+    T_robot_base_static_cam: Optional[np.ndarray] = None
     position_rmse_mm: float = 0.0
     rotation_rmse_deg: float = 0.0
     sample_count: int = 0
@@ -249,6 +250,25 @@ def solve_eye_in_hand(
     errors = [np.linalg.norm(pos - mean_board_pos) for pos in board_positions]
     pos_rmse_mm = float(np.sqrt(np.mean(np.square(errors))) * 1000.0)
 
+    # Static Base Camera Pose in Robot Base (from base_cam_board_pose detections)
+    base_cam_transforms = []
+    for sample in valid_samples:
+        if sample.base_cam_board_pose is not None and len(sample.base_cam_board_pose) >= 6:
+            if np.linalg.norm(sample.base_cam_board_pose[:3]) > 1e-3:
+                tvec_b = np.array(sample.base_cam_board_pose[:3], dtype=np.float64)
+                rvec_b = np.array(sample.base_cam_board_pose[3:6], dtype=np.float64)
+                T_base_cam_target = pose_to_matrix(tvec_b, rvec_b)
+                T_robot_base_cam_static = T_robot_board @ np.linalg.inv(T_base_cam_target)
+                base_cam_transforms.append(T_robot_base_cam_static)
+
+    T_robot_base_static_cam = None
+    if base_cam_transforms:
+        pos_mean = np.mean([T[:3, 3] for T in base_cam_transforms], axis=0)
+        rot_mean = average_rotation_matrices([T[:3, :3] for T in base_cam_transforms])
+        T_robot_base_static_cam = np.eye(4, dtype=np.float64)
+        T_robot_base_static_cam[:3, :3] = rot_mean
+        T_robot_base_static_cam[:3, 3] = pos_mean
+
     # Kamera-Pose in Robot Base bei erstem Sample (Home Pose)
     T_ee_home = valid_samples[0].T_robot_ee.copy()
     if np.linalg.norm(T_ee_home[:3, 3]) > 2.0:
@@ -261,6 +281,7 @@ def solve_eye_in_hand(
         T_ee_robot_cam=T_ee_cam,
         T_robot_board=T_robot_board,
         T_robot_conveyor=T_robot_conveyor,
+        T_robot_base_static_cam=T_robot_base_static_cam,
         position_rmse_mm=pos_rmse_mm,
         rotation_rmse_deg=0.0,
         sample_count=len(valid_samples)
@@ -345,6 +366,28 @@ def save_calibration_json(
             ],
         }
 
+    if result.T_robot_base_static_cam is not None:
+        T_stat = result.T_robot_base_static_cam
+        roll_stat, pitch_stat, yaw_stat = rotation_matrix_to_rpy(T_stat[:3, :3])
+        transformations["T_robot_base_static_cam"] = {
+            "description": "Transformation von statischer Base-Kamera zu Roboter-Basis (berechnet aus base_cam_board_pose)",
+            "source_frame": "base_camera_frame",
+            "target_frame": "robot_base",
+            "translation_m": {
+                "x": round(float(T_stat[0, 3]), 6),
+                "y": round(float(T_stat[1, 3]), 6),
+                "z": round(float(T_stat[2, 3]), 6),
+            },
+            "rotation_rpy_deg": {
+                "roll": round(float(math.degrees(roll_stat)), 4),
+                "pitch": round(float(math.degrees(pitch_stat)), 4),
+                "yaw": round(float(math.degrees(yaw_stat)), 4),
+            },
+            "homogeneous_matrix": [
+                [round(float(val), 8) for val in row] for row in T_stat.tolist()
+            ],
+        }
+
     data = {
         "schema_version": 2,
         "status": "validated",
@@ -382,7 +425,14 @@ def save_calibration_json(
     yaml_path = base_no_ext + ".yaml" if ext in (".json", ".yaml", ".yml") else filepath + ".yaml"
     json_path = base_no_ext + ".json" if ext in (".json", ".yaml", ".yml") else filepath + ".json"
 
-    target_paths = set([filepath, yaml_path, json_path, "/tmp/calibration.yaml", "/tmp/calibration.json"])
+    persistent_dir = "/home/tetripick/Desktop/AICA/roboter_tetris"
+    target_paths = set([
+        filepath, yaml_path, json_path,
+        os.path.join(persistent_dir, "calibration.yaml"),
+        os.path.join(persistent_dir, "calibration.json"),
+        "/tmp/calibration.yaml",
+        "/tmp/calibration.json"
+    ])
 
     for path in target_paths:
         try:

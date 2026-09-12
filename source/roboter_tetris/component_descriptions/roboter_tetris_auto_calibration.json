@@ -52,6 +52,24 @@
       "signal_type": "cartesian_pose"
     },
     {
+      "display_name": "Board Pose Output",
+      "description": "Berechnetes Board-Koordinatensystem (board_frame) zur Visualisierung.",
+      "signal_name": "board_pose_out",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Robot Cam Pose Output",
+      "description": "Berechnete Pose der Roboter-Kamera am Flansch zur Visualisierung.",
+      "signal_name": "robot_cam_pose_out",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Base Cam Pose Output",
+      "description": "Berechnete Pose der statischen Base-Kamera zur Visualisierung.",
+      "signal_name": "base_cam_pose_out",
+      "signal_type": "cartesian_pose"
+    },
+    {
       "display_name": "Calibration Matrix",
       "description": "Flache 4x4-Transformationsmatrix (T_robot_base_cam).",
       "signal_name": "calibration_matrix",
@@ -95,7 +113,7 @@
       "description": "Zielpfad für die generierte YAML-Datei.",
       "parameter_name": "calibration_file_path",
       "parameter_type": "string",
-      "default_value": "/tmp/calibration.yaml",
+      "default_value": "/home/tetripick/Desktop/AICA/roboter_tetris/calibration.yaml",
       "dynamic": true
     },
     {

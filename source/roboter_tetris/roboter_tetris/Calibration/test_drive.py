@@ -99,7 +99,7 @@ class CalibrationTestDrive(LifecycleComponent):
         self.add_parameter(
             sr.Parameter(
                 "calibration_file_path",
-                "/tmp/calibration.yaml",
+                "/home/tetripick/Desktop/AICA/roboter_tetris/calibration.yaml",
                 sr.ParameterType.STRING
             ),
             "Pfad zur calibration.yaml oder calibration.json"
@@ -205,7 +205,12 @@ class CalibrationTestDrive(LifecycleComponent):
     def _load_calibration_data(self) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         calib_path = self.get_parameter("calibration_file_path").get_value()
         if not os.path.exists(calib_path):
-            candidate_fallbacks = ["/tmp/calibration.yaml", "/tmp/calibration.json"]
+            candidate_fallbacks = [
+                "/home/tetripick/Desktop/AICA/roboter_tetris/calibration.yaml",
+                "/home/tetripick/Desktop/AICA/roboter_tetris/calibration.json",
+                "/tmp/calibration.yaml",
+                "/tmp/calibration.json"
+            ]
             fallback_found = None
             for fb in candidate_fallbacks:
                 if os.path.exists(fb):
@@ -498,12 +503,16 @@ class CalibrationTestDrive(LifecycleComponent):
             self._target_pose.set_orientation(self._start_orientation_robot)
 
             try:
-                T_inv = np.linalg.inv(self._T_robot_conveyor)
-                p_world = np.array([curr_pos[0], curr_pos[1], curr_pos[2], 1.0], dtype=np.float64)
-                p_conv = T_inv @ p_world
-                self.get_logger().info(
-                    f"[Test Drive] Actual EE in Conveyor Frame: X={p_conv[0]*1000.0:.1f} mm, Y={p_conv[1]*1000.0:.1f} mm, Z={p_conv[2]*1000.0:.1f} mm"
-                )
+                now_s = dt
+                last_log = getattr(self, "_last_drive_log_time", 0.0)
+                if now_s - last_log >= 0.2:
+                    self._last_drive_log_time = now_s
+                    T_inv = np.linalg.inv(self._T_robot_conveyor)
+                    p_world = np.array([curr_pos[0], curr_pos[1], curr_pos[2], 1.0], dtype=np.float64)
+                    p_conv = T_inv @ p_world
+                    self.get_logger().info(
+                        f"[Test Drive] Actual EE in Conveyor Frame: X={p_conv[0]*1000.0:.1f} mm, Y={p_conv[1]*1000.0:.1f} mm, Z={p_conv[2]*1000.0:.1f} mm"
+                    )
             except Exception:
                 pass
 
