@@ -1,0 +1,210 @@
+# Projektkontext Robotetris
+
+**Stand 13.09.2026.** Rahmenbedingungen, Abgrenzungen und Arbeitsweise.
+Gedacht als Einstieg für jede Sitzung, die ohne Vorkontext startet — vor den
+technischen Dokumenten zu lesen.
+
+> Dies ist **nicht** die `CLAUDE.md`. Die existiert separat und ist in
+> `.gitignore` eingetragen.
+
+---
+
+## 1. Was das Projekt leisten soll
+
+Ein **UR10e** greift farbige Klötze von einem laufenden Förderband — **im Lauf,
+ohne dass das Band angehalten wird**. Die Klötze werden vorn von Hand aufgelegt
+und durchlaufen den Arbeitsbereich.
+
+Die Aufgabenstellung umfasst vier Punkte:
+
+| Nr. | Aufgabe | Stand |
+|---|---|---|
+| 1 | AICA implementieren, Hardware zum Laufen bringen | **erledigt** |
+| 2 | Automatische Kamerakalibrierung einrichten | läuft — **anderer Kommilitone, getrenntes Projekt** |
+| 3 | **Pickvorgang on-the-fly umsetzen** | Gegenstand dieser Arbeit |
+| 4 | Prozess nachvollziehbar darstellen | `interface_streamer`, zuletzt |
+
+Punkt 3 ist der eigentliche Kern. **Genau daran ist das Vorgängerprojekt
+gescheitert.**
+
+## 2. Was das Vorgängerprojekt erreicht hat
+
+Die Vorgängergruppe arbeitete am **selben Aufbau, mit demselben Greifer und
+demselben Band**. Sie hat:
+
+- die Klötze erkannt und verfolgt (die C++-Erkennung ist die Grundlage der
+  heutigen `base_cam`, nach Python übertragen)
+- **nicht** im Lauf gegriffen: Der Roboter wartete an einer **festen Pickposition
+  am Bandende** und griff zu, sobald der Klotz im Bild der Roboterkamera auftauchte
+- den RGB-Raum für die Roboterkamera nicht zuverlässig nutzen können. Stattdessen
+  ein Behelf: Die Kamera wurde so positioniert, dass die Tiefenkamera das Band
+  gerade noch erfassen konnte, alles etwa einen Zentimeter darüber aber aus dem
+  Messbereich fiel (Tiefenwert 0). Die Konturen wurden dann über diesen
+  Null-Bereich bestimmt.
+
+**Dieser Behelf funktioniert bei uns nur bedingt** — deshalb die beiden
+Erkennungsvarianten `robot_cam` (farbbasiert) und `robot_cam_2` (kantenbasiert),
+die aktuell gegeneinander getestet werden.
+
+Für uns relevant: Die Vorgängergruppe hat Werte, die wir brauchen — die
+Hand-Auge-Kalibrierung der Roboterkamera und den Werkzeugversatz zum Greifpunkt
+(siehe `offene-punkte.md`, C1 und C8). Und sie beantwortet indirekt, **welches
+Frame die Robotersteuerung führt** (C9).
+
+## 3. Was heute funktioniert
+
+| Komponente | Stand |
+|---|---|
+| `robotiq_gripper` | **funktionsfähig** am Aufbau |
+| `base_cam` | **funktionsfähig**, erkennt Klötze zuverlässig |
+| `robot_cam` / `robot_cam_2` | Testblöcke vorhanden, **im Test** — Probleme bei Kantendetektion und zuverlässiger Erkennung im Bildbereich |
+| `move_to_pose_test`, `true_signal`, `toggle_signal` | Testhilfen |
+| AICA-Kette Attractor → IK-Velocity-Controller | **getestet**, Roboter folgt einem per Maus verschobenen Frame |
+
+## 4. Abgrenzungen — was nicht angefasst wird
+
+Dies sind harte Vorgaben, keine Empfehlungen.
+
+### `roboter_tetris/Calibration/*` — fremdes Projekt
+
+Der Ordner gehört dem Kommilitonen, der die Kamerakalibrierung automatisiert.
+Das läuft als **getrenntes Projekt**. Die dortigen Komponenten
+(`board_detection`, `auto_calibration`) und Dateien **dürfen unter keinen
+Umständen verändert werden**.
+
+Wir sind lediglich **Abnehmer** der Ergebnisse: Intrinsik beider Kameras,
+Extrinsik der Basiskamera zur Roboterbasis. Die Werte werden als AICA-Parameter
+gespiegelt, wie in `Calibration/README.md` beschrieben.
+
+### `roboter_tetris/vision/*` — Bildverarbeitung
+
+Die Algorithmik steht und wird **gesondert behandelt**. Sie ist ausdrücklich
+nicht Teil dieser Überarbeitung. Geändert wird ausschließlich, **wie ihre
+Ergebnisse ausgegeben werden** — also das Packen der Ausgabearrays in
+`base_cam.py`, `robot_cam.py` und `robot_cam_2.py`.
+
+**Grund für die Zurückhaltung:** Das System ist bei der Bildverarbeitung an der
+Leistungsgrenze. Die Kamerakomponenten sind bewusst so gehalten, dass neben der
+Bildverarbeitung möglichst wenig gerechnet wird, damit sie ohne spürbare
+Verzögerung in Echtzeit laufen. Zusatzrechnungen gehören in andere Komponenten —
+deshalb liegt etwa die Umrechnung der Roboterkamera-Messung in Weltkoordinaten
+im `object_follower` und nicht in `robot_cam`.
+
+### `.init_wizard/` — Vorlagengenerator
+
+Nach der Wizard-Ausführung nicht mehr ändern (`ARCHITECTURE.md`).
+
+### GitHub
+
+**Es wird nichts committet und nichts gepusht.** Der Nutzer bedient git
+ausschließlich manuell. Dateien werden lokal angelegt und bleiben untracked, bis
+er sie selbst übernimmt.
+
+## 5. Der Aufbau
+
+| | |
+|---|---|
+| Roboter | UR10e, steht **direkt neben dem Band**, etwa auf einem Drittel vom Bandende aus gerechnet |
+| Greifer | Robotiq 2-Finger (2F-140), über USB/Modbus direkt angesteuert — **nicht** als ros2_control-Hardware-Interface |
+| Basiskamera | RealSense, fest **am Bandanfang** montiert |
+| Roboterkamera | RealSense, am Arm montiert |
+| Band | konstante Geschwindigkeit, **nicht einstellbar**, Wert noch unbekannt |
+| Klötze | rechtwinklig, **unterschiedlich groß**, von Hand aufgelegt, realistisch 2–3 gleichzeitig |
+| Ablage | seitlich neben dem Band auf der Roboterseite; Pose in der Luft über einer Auffangkiste, der Klotz fällt hinein |
+| Freiraum | senkrecht über dem Arbeitsbereich frei; nur die Basiskamera steht am Bandanfang, den der Roboter kaum erreicht |
+
+Herunterfallende Klötze sind **kein Problem** — sie müssen nur erkannt werden,
+damit der Roboter ihnen nicht hinterherfährt. Das leistet die
+Plausibilitätsprüfung in `vectoring`.
+
+Die Ablage ist **kein Aufgabenpunkt**. Sie muss nur funktionieren, ohne dass sich
+abgelegte Klötze gegenseitig behindern. Der Pickvorgang ist der Fokus.
+
+## 6. Arbeitsweise
+
+### Zwei Systeme
+
+| System | Rolle |
+|---|---|
+| Heimrechner | Konzeptarbeit, Architektur, Dokumentation (diese Sitzung) |
+| Laptop | Umsetzung der Komponenten, Zeit am realen Aufbau begrenzt |
+
+Daraus folgt: **Alles, was am Schreibtisch entschieden werden kann, wird vorab
+entschieden.** Die Umsetzungssitzung soll nicht neu herleiten müssen — deshalb
+die ausführlichen Specs.
+
+### Ein zweiter Projekt-Chat
+
+Auf dem Laptop existiert eine weitere Sitzung, in der die `robot_cam`-Varianten
+entstanden sind. Sie kennt unter anderem den Ablageort der
+Attractor-Parameter (`offene-punkte.md`, C7).
+
+### AICA-Aufbau
+
+Die Kette stammt aus einem AICA-Beispielaufbau mit Frame-Verfolgung:
+
+```
+frame_to_signal → signal_point_attractor → ik_velocity_controller
+                            ▲
+              robot_state_broadcaster (cartesian_state)
+```
+
+Hardware-Rate 100 Hz. Der `object_follower` ersetzt `frame_to_signal` im Betrieb.
+
+Die Kenntnisse über verfügbare AICA-Controller sind im Team begrenzt — der
+Aufbau entstand aus dem, was verstanden wurde. Auf AICA-Seite bestehen keine
+Einschränkungen, Ergänzungen sind möglich.
+
+### Vorerfahrung
+
+Das Team hat **noch nicht mit Echtzeitanwendungen gearbeitet**. Entscheidungen
+werden deshalb schrittweise erarbeitet und begründet, nicht nur festgelegt —
+siehe `review/entscheidungen.md`, wo zu jeder Festlegung das *Warum* steht.
+
+## 7. Dokumentenlandkarte
+
+| Dokument | Inhalt |
+|---|---|
+| `ARCHITECTURE.md` | **verbindliche** AICA-Regeln — Pflichtlektüre |
+| `docs/projektkontext.md` | dieses Dokument |
+| `docs/Komponentenplan Robotetris - Stand 2026-09-13.docx` | Systembeschreibung für Menschen, mit Farbcode |
+| `docs/Komponentenplan Robotetris.docx` | **Original**, unverändert, historischer Stand |
+| `docs/review/entscheidungen.md` | alle Architekturentscheidungen mit Begründung (Themen 1–7) |
+| `docs/review/datenvertraege.md` | verbindliche Signalspezifikation |
+| `docs/review/offene-punkte.md` | Arbeitsliste nach Ort und Quelle |
+| `docs/review/systemgraph.md` | Graph und Signalliste |
+| `docs/review/2026-09-05-konzeptreview-komponentenplan.md` | die ursprüngliche Analyse (61 Befunde) |
+| `docs/superpowers/specs/2026-09-13-umsetzungsplan-on-the-fly-pick.md` | Reihenfolge, Phasen, Abnahmekriterien |
+| in `docs/superpowers/specs/`:<br>`2026-09-13-data-tracker-component-design.md`<br>`2026-09-13-interface-streamer-component-design.md`<br>`2026-09-13-object-follower-component-design.md`<br>`2026-09-13-priority-handler-component-design.md`<br>`2026-09-13-vectoring-component-design.md`<br>`2026-09-13-bestandskomponenten-anpassungen.md`<br>`2026-06-01-robotiq-gripper-component-design.md` | Umsetzungsvorlagen je Komponente |
+
+## 8. Farbcode der Dokumentation
+
+Im Word-Dokument und im Systemgraph durchgängig verwendet:
+
+| Farbe | Hex | Bedeutung |
+|---|---|---|
+| Hellblau | `00B0F0` | Komponentennamen |
+| Rot | `EE0000` | Datensignale (Zahlenfelder) |
+| Grau | `808080` | Schaltsignale (Bool) |
+| Orange | `FFC000` | Bildsignale |
+| Gelb | `FFFF00` | Zielkoordinaten an die Robotersteuerung |
+| Grün | `92D050` | Roboterzustand (Koordinaten TCP) |
+
+> Anmerkung: `FFFF00` ist auf weißem Grund schwer lesbar. Ein dunkleres Gold
+> (etwa `BF8F00`) bliebe vom Orange unterscheidbar. Noch nicht entschieden.
+
+## 9. Beobachtungen am Bestand
+
+Ohne Handlungsbedarf, aber gut zu wissen:
+
+- `component_descriptions/roboter_tetris_auto_calibration.json` existiert, die
+  Klasse `AutoCalibration` ist aber **nicht in `setup.cfg` registriert**. Gehört
+  zum Kalibrierprojekt — nicht anfassen.
+- `Safety/workspace_bounds.json` steht auf `placeholder_not_yet_defined` mit
+  lauter `null`. Laut eigenem README darf daraus nichts als Sicherheitsgrenze
+  übernommen werden, solange das so ist.
+- `Calibration/calibration.json` enthält Legacy-Werte, markiert als
+  `legacy_initial_values` — noch nicht validiert.
+- Die bestehenden Tests prüfen ausschließlich die Module unter `vision/`, nicht
+  das Packen der Komponentenausgaben. Eine Änderung des Ausgabeformats bricht
+  daher keine Tests.
