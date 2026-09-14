@@ -19,6 +19,7 @@ Voraussetzungen, betroffene Dateien und ein prüfbares Abnahmekriterium.
 | `docs/review/entscheidungen.md` | Alle Architekturentscheidungen mit Begründung (Themen 1–7) |
 | `docs/review/datenvertraege.md` | Verbindliche Signalspezifikation |
 | `docs/review/offene-punkte.md` | Was noch zu klären/messen ist |
+| `docs/review/robot-cam-befunde.md` | Szene, Materialphysik und verworfene Wege der Roboterkamera. **Vor Schritt 2.2 und vor jeder Arbeit an der Beobachtungshöhe (B8) lesen.** |
 | `docs/superpowers/specs/2026-06-01-robotiq-gripper-component-design.md` | Format- und Qualitätsvorlage für Komponenten-Specs |
 
 ## Verbindliche Rahmenregeln
@@ -111,7 +112,8 @@ Kleine, risikoarme Änderungen an laufendem Code. Jede einzeln testbar.
 | **Ziel** | Ausgabe auf `[t, valid, x, y, z_band, orientation]` umstellen, SI-Einheiten |
 | **Änderung** | `valid`-Flag ergänzen; Distanz-Gate über neue Parameter `min_belt_distance_m` / `max_belt_distance_m` auf `z_band`; mm → m; Rate 100 Hz |
 | **Wichtig** | Bei `valid = 0` läuft `t` **weiter**. Nur so unterscheidet der Empfänger "Kamera arbeitet, sieht nichts" von "Kamera liefert nicht mehr". |
-| **Nicht ändern** | Erkennungsalgorithmik in `vision/robot_detection*.py` |
+| **Nicht ändern** | Erkennungsalgorithmik in `vision/robot_detection*.py` — **inkl. des gemeinsamen Kerns `localize_largest_blob`**, den sich beide Varianten teilen. Nur so bleibt der A/B-Test aussagekräftig. |
+| **Vorher lesen** | `docs/review/robot-cam-befunde.md` — begründet die Defaults und nennt die Fallstricke (Seitenflächen-Physik, Nah-Gate, RealSense-Konfiguration) |
 | **Dateien** | `roboter_tetris/robot_cam.py`, `robot_cam_2.py` + beide JSONs |
 | **Abnahme** | Beide Varianten liefern denselben Vertrag und sind gegeneinander austauschbar. |
 
@@ -205,7 +207,7 @@ Die größte Komponente. **Nicht am Stück bauen.**
 | | |
 |---|---|
 | **Ziel** | Zustandsautomat, Zielposen-Ausgang, Sicherheitsgate, TCP-Ringpuffer. Aktiv nur `WARTEN`, `ABLEGEN`, `ABBRUCH`. |
-| **Voraussetzung** | 0.1, 0.2, 0.4 |
+| **Voraussetzung** | 0.1, 0.2, 0.4; **B8** (Beobachtungshöhe) — 4a fährt sie bereits an, und sie ist an B6 Stufe 3 gekoppelt |
 | **Prüft** | Verbindung zum Attractor, Werkzeugversatz, Sicherheitsgate, Startverhalten |
 | **Wichtig** | Start im Zustand `ABBRUCH` — senkrecht hoch, dann Beobachtungspose. Damit ist der Start definiert, egal wo der Arm steht. Bei stehenden Zielen `lead_offset_m = 0`, sonst parkt der Roboter dauerhaft daneben. |
 | **Abnahme** | Roboter fährt aus beliebiger Ausgangslage sicher zur Beobachtungspose und zur Ablagepose. Zielposen außerhalb des Arbeitsraums werden gedeckelt und gemeldet. |
@@ -225,7 +227,7 @@ Die größte Komponente. **Nicht am Stück bauen.**
 | | |
 |---|---|
 | **Ziel** | `w`-Mischung mit Rampe, Rückfall, Identitätsprüfung |
-| **Voraussetzung** | 4b, 2.2, 0.3 |
+| **Voraussetzung** | 4b, 2.2, 0.3; **B6 abgeschlossen** — 2.2 ist nur der Vertragsumbau, den eine `robot_cam` auch besteht, die dauerhaft `valid = 0` liefert. Ohne belegte Erkennung am Aufbau ist 4c nicht beurteilbar. |
 | **Kern** | `korrektur = roboterkamera_welt − basiskamera_prädiktion`; `ziel = prädiktion + w · korrektur_gefiltert`. Die Korrektur ist nahezu konstant und damit stark glättbar — die absolute Position wäre es nicht. |
 | **Schutz** | `max_korrektur_m`: zu große Korrektur → Messung verwerfen, `w = 0` (fängt einen falschen Block im Bild ab, R4). Rampe ~0,2 s beim Wechsel. |
 | **Abnahme** | `w_wirksam` in `follower_status` zeigt den Quellenwechsel. Bei abgedeckter Roboterkamera läuft die Verfolgung mit `w = 0` weiter. |

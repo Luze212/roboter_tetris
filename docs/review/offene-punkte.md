@@ -34,9 +34,9 @@ Wächst mit jedem bearbeiteten Thema. Rein lokal.
 | B3 | **Option C verifizieren** (5-Minuten-Test) | Roboter still, Attractor auf eine feste Pose, `base_frame` mit einem Signal versorgen, das eine Position **und eine lineare Geschwindigkeit** trägt. Bewegt sich der Roboter → Option C bestätigt, `lead_offset_m` kann auf 0. Bewegt er sich nicht → bei Option A bleiben. | 🟡 | offen |
 | B4 | **Vorhalt kalibrieren** (nur bei Option A) | Block mitfahren lassen, Restabstand TCP↔Block im Debug-Bild ablesen, `lead_offset_m` anpassen bis der Abstand null ist. Ersetzt die Kenntnis des exakten Gains. | 🟡 | offen |
 | B5 | **Kameralatenz** bestimmen | Verfahren siehe Thema 2. Ergebnis ist ein konstanter Offset in Sekunden. | 🟡 | offen |
-| B6 | `robot_cam` / `robot_cam_2` am realen Aufbau durchtesten | Läuft bereits, separates Thema (Kantendetektion / zuverlässige Objekterkennung im Bildbereich). | 🟡 | in Arbeit |
+| B6 | `robot_cam` / `robot_cam_2` am realen Aufbau durchtesten | Beide sind implementiert und unit-getestet, aber **noch nie gegen echte Klötze gelaufen**. A/B-Test: Farbe (`robot_cam`) gegen Kante (`robot_cam_2`), identische I/O. **Vorgehen in sechs Stufen: `robot-cam-befunde.md` §7** (Signalweg → Farbmaske → Nah-Gate → **Höhe** → Geometrie → A/B). Stufe 3 (Höhe) ist der Kernpunkt und liefert zugleich B8 und D18. Hintergrund: ebd. §2. | 🟡 | in Arbeit |
 | B7 | **Greifhöhe und Eintauchtiefe** ermitteln | Bei welcher z-Höhe fasst der Greifer den Block sicher, ohne aufs Band zu drücken? Pro Blocktyp einmal. | 🟡 | offen |
-| B8 | **Beobachtungshöhe festlegen** | Orientierung ist entschieden: **senkrecht** (Thema 6). Offen bleibt nur die Höhe. Sie ist **nicht frei wählbar** — sie muss dort liegen, wo `robot_cam` zuverlässig misst (Kopplung an B6 und die Min-/Max-Distanz-Parameter). Gilt für Warten und Suchen gleichermaßen (ein Parameter, nicht zwei). | 🟡 | offen |
+| B8 | **Beobachtungshöhe festlegen** | Orientierung ist entschieden: **senkrecht** (Thema 6). Offen bleibt nur die Höhe. Sie ist **nicht frei wählbar** — sie muss dort liegen, wo `robot_cam` zuverlässig misst (Kopplung an B6 und die Min-/Max-Distanz-Parameter). Gilt für Warten und Suchen gleichermaßen (ein Parameter, nicht zwei). **Grund für die Untergrenze:** zu tief ⇒ die Tiefenkamera sieht die spiegelnden Seitenflächen, die Geometrie verzieht sich horizontal (`robot-cam-befunde.md` §2). Obergrenze: zu wenig Auflösung auf dem Klotz. Anhaltspunkt Vorgängergruppe: TCP-Z = 0,1 m, aber geneigt — **nicht übertragbar**, muss eingemessen werden. | 🟡 | offen |
 | B15 | **Backenhöhe und `min_greifhoehe`** bestimmen | Halbe Backenhöhe plus Luft. Legt fest, ab welcher Blockhöhe sicher gegriffen werden kann. | 🟡 | offen |
 | B16 | **Greiferöffnung und Marge** bestimmen | Für die Greifbarkeitsprüfung im `priority_handler` (zu breite Blöcke gar nicht erst anfahren). | 🟡 | offen |
 | B17 | **Bandoberflächenhöhe** in world bestimmen | Bezug für die Greifhöhe. Fester Wert, einmal vermessen. | 🟡 | offen |
@@ -55,15 +55,15 @@ Wächst mit jedem bearbeiteten Thema. Rein lokal.
 
 | ID | Punkt | Quelle | Dringl. | Status |
 |---|---|---|---|---|
-| C1 | **Hand-Auge-Kalibrierung Roboterkamera → TCP/Flansch** | Vorgängergruppe (existiert laut Aussage). Zu klären: Konvention (Kamera→Flansch oder Kamera→TCP), Einheit, Dateiformat. | 🔴 | offen |
+| C1 | **Hand-Auge-Kalibrierung Roboterkamera → TCP/Flansch** | **Werte gefunden:** `camera_mount_to_camera` x=0,1087 y=−0,03436 z=−0,05987 m + ~90°-Drehung, in `FuE_Greifen-main/Robot/Calibration_results_final.yaml` (auf dem Projektrechner). Einheit m, Format YAML — damit geklärt. **Rest offen:** ob „mount" der Flansch oder der Greifpunkt ist (hängt an C8). Siehe `robot-cam-befunde.md` §6. | 🔴 | teilweise |
 | C2 | **Intrinsik beider Kameras** | Kommilitone (laufendes Kalibrierprojekt) bzw. Vorgängergruppe | 🔴 | offen |
 | C3 | **Extrinsik Basiskamera → Roboterbasis** | Kommilitone. Ist-Stand: Legacy-Werte in `Calibration/calibration.json`, markiert als `legacy_initial_values` — noch nicht validiert. | 🔴 | offen |
-| C4 | **Extrinsik Roboterkamera — Bezug klären** | Zur Basis oder zum TCP? Beim Vorgängerprojekt lag eine Kamera→TCP-Kalibrierung vor. | 🔴 | offen |
+| C4 | **Extrinsik Roboterkamera — Bezug klären** | Zur Basis oder zum TCP? Beim Vorgängerprojekt lag eine Kamera→TCP-Kalibrierung vor. **Bestätigt:** Das Feld heißt `camera_mount_to_camera`, ist also **mitbewegt** (kamerafest zur Montagestelle am Arm), nicht basisfest. Werte siehe C1 / `robot-cam-befunde.md` §6. | 🔴 | teilweise |
 | C5 | **Bandgeschwindigkeit aus dem Vorgängerprojekt** | Gleiches Band — evtl. bereits dokumentiert. Ersetzt B1 nicht, aber gibt einen Erwartungswert zur Gegenprobe. | 🟢 | offen |
 | C6 | **Übergabeform der Kalibrierwerte** | Kommilitone. JSON zum manuellen Übertragen in AICA-Parameter (wie bisher) oder als TF? | 🟡 | offen |
 | C7 | Attractor-Parameterwerte | 2. Projekt-Chat auf dem mobilen System kennt den Ablageort | 🔴 | offen |
 | C8 | **Werkzeugversatz Flansch → Greifpunkt** aus dem Vorgängerprojekt auslesen | Gleicher Greifer, gleicher Aufbau. Die Gruppe hatte laut Aussage eine Kalibrierung für den Greifpunkt. Liefert denselben Wert, den wir als `tool_offset_z_m` brauchen. Beim Bau der Komponenten auf dem mobilen System zu klären. | 🔴 | offen |
-| C9 | **Wie hat die Vorgängergruppe gegriffen?** (welches Frame sie kommandiert haben) | Beantwortet A7/A8 indirekt und zuverlässig, da gleicher Aufbau. Beim Bau der Komponenten auf dem mobilen System zu klären. | 🔴 | offen |
+| C9 | **Wie hat die Vorgängergruppe gegriffen?** (welches Frame sie kommandiert haben) | Beantwortet A7/A8 indirekt und zuverlässig, da gleicher Aufbau. **Indiz gefunden:** In `FuE_Greifen-main/Robot/move_handler_strat2.py` werden **TCP-Posen** kommandiert (`target_tcp`). ⚠️ Das ist aus dem Code **erschlossen, nicht bestätigt** — A7 (Greifer im URDF?) bleibt eigenständig zu prüfen. Siehe `robot-cam-befunde.md` §6/§8. | 🔴 | teilweise |
 
 ---
 
@@ -84,7 +84,7 @@ Wächst mit jedem bearbeiteten Thema. Rein lokal.
 | D15 | `max_ziel_sprung_m` (Sprungerkennung im Sicherheitsgate) | Thema 7 | offen |
 | D16 | `max_korrektur_m` (Identitätsprüfung der Roboterkamera, R4) | Thema 7 — Größenordnung: wenige cm | offen |
 | D17 | Sicherheitsfaktor im Erreichbarkeitskriterium (P1) | Nachtrag Thema 7 | offen |
-| D18 | `min_belt_distance_m` / `max_belt_distance_m` für `robot_cam` (R3) | hängt an B6 und B8 | offen |
+| D18 | `min_belt_distance_m` / `max_belt_distance_m` für `robot_cam` (R3) | hängt an B6 und B8. Untergrenze = wo der Seitenflächen-Verzug einsetzt, Obergrenze = wo die Auflösung nicht mehr reicht (`robot-cam-befunde.md` §2) | offen |
 | D19 | `tol_yaw_rad` — Winkeltoleranz der Greif-Freigabe (Nachtrag 2 / F1) | B18 | offen |
 | D6 | Maximale Messungsalter-Grenze der `robot_cam`-Messung vor Rückfall auf `w=0` | Thema 2 | offen |
 | D7 | `latency_compensation_s` | B4 / B13 | offen |
