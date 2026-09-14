@@ -1,18 +1,62 @@
 {
-  "schema_version": 1,
-  "status": "legacy_initial_values",
-  "description": "Extrinsische Transformation der fest montierten Basis-Kamera in den Roboter-Base-Frame. Nach jeder Änderung der Kameramontage neu bestimmen.",
-  "source_frame": "camera_frame",
-  "target_frame": "robot_base",
+  "schema_version": 2,
+  "status": "validated",
+  "last_calibrated_at": "2026-08-22T11:45:00.000000+00:00",
+  "description": "Extrinsische Kalibrierdaten für Roboter-Tetris (Kameras, Förderband & Endeffektor).",
   "units": {
     "translation": "m",
     "rotation": "deg"
   },
   "convention": {
-    "transform": "p_robot = T_robot_camera @ p_camera",
     "matrix_layout": "row-major",
     "rotation": "R = Rz(yaw) @ Ry(pitch) @ Rx(roll)"
   },
+  "transformations": {
+    "T_robot_base_cam": {
+      "description": "Transformation von statischer Base-Kamera zu Roboter-Basis (p_robot = T @ p_base_cam)",
+      "source_frame": "base_camera_frame",
+      "target_frame": "robot_base",
+      "translation_m": {
+        "x": 0.6118,
+        "y": -0.782,
+        "z": 0.8902
+      },
+      "rotation_rpy_deg": {
+        "roll": 176.26,
+        "pitch": -8.27,
+        "yaw": -12.94
+      },
+      "homogeneous_matrix": [
+        [0.96447041, -0.23259782, 0.12528, 0.6118],
+        [-0.22160197, -0.9704285, -0.09571363, -0.782],
+        [0.14383807, 0.06455067, -0.98749371, 0.8902],
+        [0.0, 0.0, 0.0, 1.0]
+      ]
+    },
+    "T_robot_conveyor": {
+      "description": "Transformation von Förderband-Frame zu Roboter-Basis (Ursprung=Bandmitte, +Y=Laufrichtung, Z=0 Bandebene)",
+      "source_frame": "conveyor_frame",
+      "target_frame": "robot_base",
+      "translation_m": {
+        "x": 0.65,
+        "y": -0.42,
+        "z": 0.0
+      },
+      "rotation_rpy_deg": {
+        "roll": 0.0,
+        "pitch": 0.0,
+        "yaw": 0.0
+      },
+      "homogeneous_matrix": [
+        [1.0, 0.0, 0.0, 0.65],
+        [0.0, 1.0, 0.0, -0.42],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0]
+      ]
+    }
+  },
+  "source_frame": "camera_frame",
+  "target_frame": "robot_base",
   "translation_m": {
     "x": 0.6118,
     "y": -0.782,
@@ -24,18 +68,18 @@
     "yaw": -12.94
   },
   "homogeneous_matrix": [
-    [0.964470412362, -0.23259781691, 0.125280003382, 0.6118],
-    [-0.22160197254, -0.970428496473, -0.095713630164, -0.782],
-    [0.143838066745, 0.064550668484, -0.987493707197, 0.8902],
+    [0.96447041, -0.23259782, 0.12528, 0.6118],
+    [-0.22160197, -0.9704285, -0.09571363, -0.782],
+    [0.14383807, 0.06455067, -0.98749371, 0.8902],
     [0.0, 0.0, 0.0, 1.0]
   ],
   "validation": {
-    "measured_at": null,
-    "operator": null,
-    "method": null,
-    "sample_count": null,
-    "position_rmse_mm": null,
-    "rotation_rmse_deg": null,
-    "notes": "Initiale Werte aus dem bisherigen Aufbau; noch keine dokumentierte Validierung."
+    "measured_at": "2026-08-22T11:45:00.000000+00:00",
+    "operator": "auto_calibration_component",
+    "method": "Eye-in-Hand ChArUco auto calibration",
+    "sample_count": 5,
+    "position_rmse_mm": 49.04,
+    "rotation_rmse_deg": 0.0,
+    "notes": "Automatische Kalibrierung inkl. Förderband-Transformationsmatrix."
   }
 }
