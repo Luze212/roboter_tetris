@@ -4,7 +4,7 @@ Laufendes Protokoll der Architekturentscheidungen. Entsteht Thema für Thema und
 ist die Grundlage für die Aktualisierung des Word-Dokuments und den
 Umsetzungsplan. Rein lokal, nichts committet.
 
-Bezug: `docs/review/2026-09-05-konzeptreview-komponentenplan.md` (Befundnummern
+Bezug: `docs/archiv/2026-09-05-konzeptreview-komponentenplan.md` (Befundnummern
 in eckigen Klammern verweisen dorthin).
 
 ---
@@ -534,7 +534,7 @@ ab. Eine Entscheidung, ein Eigentümer.
 **Status:** entschieden, Details in `datenvertraege.md`
 **Löst Befunde:** S2, B1, V7, D2, G1, G2, teilweise S7
 
-Vollständige Spezifikation: **`docs/review/datenvertraege.md`**
+Vollständige Spezifikation: **`docs/architektur/datenvertraege.md`**
 
 ### Fünf Grundregeln
 
@@ -732,6 +732,16 @@ Messungen einig, nahe 0 = Winkel flattert. Unterschreitet sie eine Schwelle,
 gilt die Orientierung als unbrauchbar → Verhalten wie Modus 1 (fester Winkel),
 Meldung über den Status. Bei einem quadratischen Block ist das korrekt, dort ist
 die Orientierung ohnehin beliebig.
+
+> **Nachtrag 14.09.2026 — die Begründung stimmt, das Beispiel nicht.** Der
+> beschriebene Sprung erreicht `vectoring` nicht: `vision/detection.py` markiert
+> fast quadratische Objekte und `vision/tracker.py` friert deren Orientierung auf
+> den zuerst gemessenen Wert ein. Für sie meldet das Gütemaß deshalb dauerhaft
+> „einig". Mittelung und Gütemaß bleiben richtig und nötig — das Gütemaß wirkt nur
+> gegen andere Ursachen (Rauschen, Teilverdeckung, Objekt am ROI-Rand), nicht gegen
+> Quadrate. Geprüft und verworfen wurde, das Merkmal `square` in S1 aufzunehmen;
+> Begründung in `datenvertraege.md` unter S1, Hintergrund in
+> `vorgaengerprojekt-abgleich.md` §7.
 
 **Winkelwahl:** Orientierung liegt in [0, π), der Greifer ist 180°-symmetrisch —
 es gibt immer zwei gleichwertige Handgelenkstellungen. Regel: **die nähere zur
@@ -1131,3 +1141,356 @@ Kalibrierfehler, der über das Sichtfeld wandert) mittelt man über eine Drift
 statt über Rauschen. Vorher nicht entscheidbar. Falls die Quergenauigkeit im
 Betrieb enttäuscht: exponentielle Gewichtung als erster Versuch, bevor anderes
 angefasst wird.
+
+---
+
+## Nachtrag 3 — Kritische Durchsicht gegen den Code (14.09.2026)
+
+Prüfung des Gesamtplans gegen den tatsächlichen Stand von `roboter_tetris/vision/`,
+mit den Erkenntnissen aus `vorgaengerprojekt-abgleich.md` und
+`robot-cam-befunde.md`. Ergebnis: zwei Messfehler erster Ordnung, zwei
+Planwidersprüche, eine Lastfalle. Alle fünf sind entschieden.
+
+### N1 — `robot_cam` misst seitlich höhenabhängig falsch
+
+`vision/robot_detection.py` projiziert den Blobmittelpunkt mit der **Banddistanz**
+zurück:
+
+```python
+x_mm = (ref_px[0] - cx) * depth_m / fx * 1000.0     # depth_m = Abstand zum Band
+```
+
+Der Mittelpunkt liegt aber auf der **Oberseite** des Klotzes, also um dessen Höhe
+`h` näher an der Kamera. Jeder Seitenversatz ist damit um `z_band/(z_band − h)` zu
+groß; der absolute Fehler beträgt
+
+```
+Δ = (seitlicher Abstand vom Bildzentrum) · h / (z_band − h)
+```
+
+**Der Fehler konvergiert nicht weg.** Im Bildzentrum wäre er null — dort steht der
+Klotz aber gerade nicht. Die Hand-Auge-Kalibrierung weist rund **114 mm seitlichen
+Versatz** zwischen Flanschachse und Kamera aus (x = 0,1087, y = −0,0344 m). Liegt
+der Klotz korrekt unter dem Greifer, steht er im Bild also weit außen — dort ist
+der Fehler maximal.
+
+| Klotzhöhe | z_band = 0,30 m | z_band = 0,50 m |
+|---|---|---|
+| 25 mm | 10 mm | 6 mm |
+| 76 mm | **39 mm** | 20 mm |
+
+Systematisch, richtungsfest und **je Klotz verschieden** — dieselbe Fehlerklasse,
+die „Beobachtungspose senkrecht" (Thema 6) eigentlich ausschließen sollte. Er
+liegt zudem unter `max_correction_m` (0,05 m) und wird von der Identitätsprüfung
+nicht abgefangen.
+
+> Passt zum Fehlerbild der Vorgängergruppe: fester `MANUELLER_X_OFFSET = -0.03`
+> plus zwei nie eingestellte Faktoren für eine positionsabhängige „Rand-Korrektur"
+> (`vorgaengerprojekt-abgleich.md` §5). Kein Beweis — deren Kette war eine andere.
+
+**Entscheidung: Korrektur im `object_follower`**, unmittelbar bei der Umrechnung
+der Messung in Weltkoordinaten:
+
+```
+x_korr = x_gemessen · (z_band − blockhoehe) / z_band        (y analog)
+```
+
+Die Rechnung ist exakt, keine Näherung — sie kürzt sich algebraisch auf die
+richtige Rückprojektion. `z_band` steht in S2 Feld 4, `blockhoehe` in S4 Feld 10;
+beides liegt bereits an, es ändert sich kein Datenvertrag und nichts unter
+`vision/`. Das entspricht der Regel aus Thema 3, dass Transformationen in den
+Follower gehören und die Kamerakomponenten rechenarm bleiben, und hält den
+A/B-Test `robot_cam` ↔ `robot_cam_2` unberührt (gemeinsamer Kern unangetastet).
+
+**Reihenfolge beachten:** Die Skalierung wirkt **vor** dem Korrekturfilter und
+damit vor dem Einfrieren beim Übergang `FOLGEN → ABSENKEN` (F2). Sonst friert der
+unkorrigierte Wert ein.
+
+Verworfen: Korrektur in `robot_cam` (bräuchte die Klotzhöhe als neuen Eingang in
+beide Varianten und einen Eingriff in den gemeinsamen Detektionskern) und
+Absorption in der Hand-Auge-Kalibrierung (rechnerisch unmöglich — die
+Kalibrierung ist starr, der Fehler höhenabhängig; die Spanne beträgt bei euren
+Klötzen rund 30 mm).
+
+### N2 — Der Tracker koppelt die Längsposition außerhalb seiner Messregion
+
+`vision/tracker.py`, zwei Stellen:
+
+```python
+if not det_in_region and det.vy != 0.0:
+    track.object.y = prev_y + det.vy * dt          # y wird INTEGRIERT
+...
+if velocity_region_y_min <= y <= velocity_region_y_max:
+    keep = track.missed <= max_missed_in_region     # streng: 3 verpasste Frames
+else:
+    keep = min_tracked_y_mm <= y <= max_tracked_y_mm # nur Positionsgrenzen
+```
+
+Außerhalb von `track_velocity_region_y_min…max` gilt beides: Die Längsposition
+wird aus der global gefilterten Bandgeschwindigkeit fortgeschrieben **statt
+gemessen** — auch bei vorliegender frischer Detektion — und ein Track wird für
+fehlende Detektionen **nicht gelöscht**, sondern erst, wenn seine gerechnete
+Position das Band verlässt.
+
+Drei Folgen:
+
+| Betroffen | Folge |
+|---|---|
+| Plausibilität in `vectoring` | Status 1 („steht/verklemmt") vergleicht die Längsgeschwindigkeit gegen `belt_speed_mps`. Außerhalb der Region *ist* die Längsbewegung per Konstruktion die Bandgeschwindigkeit — die Prüfung ist tautologisch und kann dort nie auslösen. |
+| Abbruchregel des Follower | Thema 2 legt fest: „Objekt verloren" erkennt man am Verschwinden der ID. Außerhalb der Region verschwindet sie nicht mehr. Ein heruntergefallener oder weggenommener Klotz gleitet als **Phantom** mit Bandgeschwindigkeit weiter, mit Status 0, und wird vom `priority_handler` gewählt. |
+| Längsgenauigkeit | Ein Fehler in `v_band` wächst außerhalb der Region linear mit der zurückgelegten Strecke. Mitteln hilft nicht — das ist keine zufällige Streuung. |
+
+**Entscheidung: Die Messregion wird an die Greifzone gekoppelt.**
+`track_velocity_region_y_min` / `_max` werden bei **B19 gemeinsam mit der
+Greifzone** festgelegt: Region = Greifzone plus Rand. Damit ist `y` dort gemessen,
+wo gegriffen wird, und ein Phantom stirbt beim Eintritt in die Zone nach drei
+verpassten Frames. Stromaufwärts bleibt die weiche Regel — dort dient die Position
+nur der Auswahl und der Erreichbarkeitsschätzung, wo Koppelung über kurze Strecken
+unkritisch ist.
+
+Das ist **reine Konfiguration**: beides sind vorhandene AICA-Parameter von
+`base_cam`, nichts unter `vision/` wird angefasst. **B19 bekommt damit ein viertes
+Kriterium.**
+
+> Der ursprüngliche Zweck der Messregion ist für uns ohnehin entfallen: Sie sollte
+> einen verlässlichen Ausschnitt für die *Geschwindigkeitsschätzung* liefern. Seit
+> Thema 3 ist `belt_speed_mps` eine kalibrierte Konstante; `v_band_gemessen` ist
+> nur noch Kalibrierquelle (B1) und Laufkontrolle.
+
+Verworfen: Ausweitung auf das ganze Band (am Rand des Sichtfelds reißen Tracks
+dann nach drei Frames ab → neue IDs, `vectoring` beginnt mit Status 3, der
+Ziel-Lock geht verloren) und Beibehaltung der geerbten −1000…−500 mm (diese
+500 mm stammen aus dem Aufbau der Vorgängergruppe und würden die Greifzone
+willkürlich einengen, womöglich im Konflikt mit Reichweite und Singularitäten).
+
+### N3 — Die Greifzonen-Begrenzung im Follower ist **eine** Zahl
+
+Thema 6 verlangt für `ANFAHREN` „Ziel auf Greifzone begrenzt", Thema 4 hat die
+Zonenparameter aber ausdrücklich aus dem Follower entfernt. Der Widerspruch löst
+sich bei genauem Lesen fast von selbst — es wirken gar nicht vier Grenzen:
+
+- **quer:** Thema 6 selbst schließt es aus — der Roboter wartet am Zonenrand „auf
+  der Querposition des Blocks (die wird nicht begrenzt)".
+- **stromabwärts:** P4 verbietet es — der Roboter darf dem Block über die
+  Zonengrenze hinaus folgen, sonst bricht ein fast gelungener Griff ab.
+- **Höhe:** deckt der Arbeitsraum-Clamp des Sicherheitsgates ab.
+
+Übrig bleibt die **stromaufwärtige Längsgrenze**.
+
+**Entscheidung: als 13. Feld im `target`-Satz (S4), feste Länge 12 → 13.** Der
+`priority_handler` bleibt alleiniger Eigentümer der Greifzone (Thema 4 unberührt),
+der Follower wendet nur an, was er bekommt. S4 ist ein Satz fester Länge ohne
+Stride-Arithmetik und hat **genau einen Verbraucher** — der Eingriff berührt
+`datenvertraege.md`, `contracts.py`, `priority_handler` und `object_follower`,
+sonst nichts.
+
+Verworfen: eigener Parameter im Follower (die Doppelpflege, die Befund P3
+aufgelöst hat — stimmen die Werte nicht überein, wartet der Roboter woanders, als
+der `priority_handler` für seine Erreichbarkeitsrechnung annimmt) und
+Vorberechnung der Warteposition im `priority_handler` (der müsste dann
+`lead_offset_m` und `latency_compensation_s` ebenfalls kennen — drei doppelt
+gepflegte Parameter statt einem, und die Vorhaltrechnung an zwei Orten).
+
+### N4 — Die Erreichbarkeitsprüfung braucht den Roboterzustand
+
+`t_benötigt = abstand / attractor_v_max_mps + 3/K + t_descend_s + t_grasp_s`
+braucht einen Anfahrweg. Der `priority_handler` hatte dafür keine Quelle — seine
+Eingänge sind `tracks` und `picked_id`, seine Parameter kennen weder
+Roboterzustand noch Beobachtungspose. Der Term ist nicht entbehrlich: Über
+Bandbreite und Zonenlänge schwankt der Weg realistisch zwischen 0,3 und 0,8 m,
+also rund eine Sekunde bei einem Budget von wenigen Sekunden.
+
+**Entscheidung: `cartesian_state` wird Eingang des `priority_handler`.**
+
+Das erzeugt **keinen Zyklus** — das Signal kommt vom `robot_state_broadcaster`,
+also aus der Hardware, und der `object_follower` hört es ohnehin ab. Es ist eine
+zusätzliche Abzweigung eines vorhandenen Signals. Die Entkopplung, die Thema 4
+schützt, betrifft die Rückmeldung des **Follower-Zustands**, und die bleibt
+unberührt.
+
+Nebeneffekt in die richtige Richtung: Steht der Roboter gerade weit weg — etwa
+mitten im Abbruchpfad — gilt korrekt nichts als erreichbar, bis er zurück ist.
+
+Verworfen: Beobachtungspose als eigener Parameter (P3-Doppelpflege, und die
+Annahme stimmt nur, solange der Roboter wirklich in `WARTEN` steht) und eine
+pauschale Anfahrzeit (man müsste auf den ungünstigsten Fall auslegen und
+verschenkt systematisch nahe liegende Klötze).
+
+### N5 — Debug-Bilder werden mit der Komponentenrate publiziert
+
+AICA verschickt Ausgangsvariablen in **jedem** Takt. `debug_image` ist ein
+normaler Output; die Anhebung von `base_cam` und `robot_cam` auf 100 Hz
+verdreifacht damit den Bildverkehr gegenüber der Kamerarate.
+
+Im Produktivbetrieb folgenlos — bei ausgeschaltetem Debug bleibt die Variable ein
+leeres `Image()`. Die Last entsteht genau dann, wenn `debug_enable` an ist: **bei
+der Inbetriebnahme**, deren sechs Stufen (B6) vollständig auf dem Debug-Bild
+aufbauen. Ausbleibende Frames würde man dort der Erkennung anlasten statt dem
+Publizieren.
+
+**Entscheidung: `add_output(..., publish_on_step=False)`** für `debug_image` in
+`base_cam`, `robot_cam` und `robot_cam_2`, und `publish_output("debug_image")`
+nur dann, wenn tatsächlich ein neues Debug-Bild gerendert wurde. Der Mechanismus
+ist in `ARCHITECTURE.md` vorgesehen.
+
+**Korrektur einer Begründung nebenbei:** Die 100 Hz waren mit halbiertem
+*Zeitstempel*-Jitter begründet. Das galt für die Notlösung, bei der `base_cam`
+selbst stempelt. Seit Thema 2 den Header-Stempel nutzt, trägt der Zeitstempel
+diesen Jitter nicht. Der Gewinn ist ein anderer und kleinerer: Die Wartezeit
+zwischen Bildeingang und Verarbeitung sinkt von 0–20 ms auf 0–10 ms, und dieser
+Anteil steckt im Regelkreis. **100 Hz bleibt richtig, die Begründung war es
+nicht.**
+
+---
+
+## Nachtrag 4 — Messungen am Aufbau (14.09.2026)
+
+Erste Messsitzung am laufenden System (Teststand-Anwendung, virtueller Roboter
+statt UR10e). Klärt A6, B12, B13, B14 und findet einen akuten Fehler.
+
+> Technische Notiz für Wiederholungen: Messungen im AICA-Container **als Benutzer
+> `ros2`** ausführen (`docker exec -u ros2 …`). FastDDS tauscht die Daten über
+> Shared-Memory-Segmente, die `ros2` gehören; als `root` sieht man über UDP zwar
+> alle Topics, bekommt aber **keine Daten** — ein Fehlerbild, das viel Zeit kostet.
+
+### M1 — A6: Bildraten und Auflösungen
+
+| Signal | Auflösung | Encoding | Rate |
+|---|---|---|---|
+| Basiskamera (L515) Farbe | 1280×720 | rgb8 | 29,7 Hz |
+| Basiskamera aligned depth | 1280×720 (nativ 640×480) | 16UC1 | 29,8 Hz |
+| Roboterkamera (D435i) Farbe | 848×480 | rgb8 | 29,7 Hz |
+| Roboterkamera aligned depth | 848×480 | 16UC1 | 28,5 Hz |
+
+Die in Thema 2 angenommenen ~30 Bilder/s stimmen. **A6 erledigt.** Die Tiefe der
+Basiskamera ist nativ nur halb so fein wie ihr Farbbild und wird fürs Alignment
+hochskaliert.
+
+Nebenbefund: Die Komponenten liefen mit **10 Hz**, nicht mit den 50 Hz, die der
+Ist-Stand annahm — `base_cam` verarbeitete also nur jedes dritte Kamerabild.
+
+### M2 — B13/B14: Die Basiskamera stempelte in einer fremden, driftenden Uhr
+
+**Gemessen:** `ros_zeit − header_stempel`
+
+| | Basiskamera | Roboterkamera |
+|---|---|---|
+| Epoche des Stempels | 1155960174 (**Jahr 2006**) | ROS-Zeit ✓ |
+| Drift | **+4,05 ms/s**, linear über 270 s | keine |
+| danach | Stempel **bleibt ganz stehen** (151 Bilder, 1 Zeitstempel) | 181 Bilder, 181 Zeitstempel |
+
+**Folge, und zwar sofort:** `base_cam` gated auf den Zeitstempel. Steht er, wird
+jedes Bild nach dem ersten verworfen, `_handle_stale()` räumt nach einer Sekunde
+die Ausgabe leer — `objects` war über Minuten leer, während das Debug-Bild
+eingefroren den letzten verarbeiteten Frame zeigte (byteweise identisch über acht
+Minuten). Thema 2 hatte genau diesen Fall beschrieben und aus der
+Funktionsfähigkeit von `base_cam` geschlossen, dass er nicht eintritt. Der
+Schluss war richtig — nur galt er zum Zeitpunkt der Beobachtung.
+
+**Ursache und Behebung:** `rgb_camera.global_time_enabled` und
+`depth_module.global_time_enabled` standen bei der L515 auf `false`, bei der
+D435i auf `true`. Das ist ein Treiber-Default je Gerätefamilie, keine
+Fehlkonfiguration. Nach dem Setzen auf `true`:
+
+```
+t=340 s   1,7849 s     ← Drift läuft
+t=350 s   0,0730 s     ← Parameter gesetzt
+```
+
+Bestätigungsmessung über die folgenden 220 s: **Drift +0,022 ms/s** statt
++4,05 ms/s, Versatz stabil bei 0,046…0,093 s — auf dem Niveau der Roboterkamera.
+**B13 und B14 erledigt**, die Notlösung aus Thema 2 wird nicht gebraucht.
+
+### M3 — Entscheidung: `base_cam` erzwingt die Zeitdomäne selbst
+
+**Der AICA-RealSense-Block exponiert `global_time_enabled` nicht** — er bietet 25
+Parameter, dieser ist nicht dabei. Der Wert lässt sich also nur zur Laufzeit über
+den ROS-Parameterdienst setzen und ist nach jedem Start der Anwendung wieder weg.
+
+**Entscheidung:** `base_cam` bekommt den Parameter **`camera_node`** (Default
+leer = aus). Ist er gesetzt, legt die Komponente in `on_configure_callback` einen
+Service-Client auf `<camera_node>/set_parameters` an und setzt beide Parameter aus
+`on_step_callback` heraus — nicht blockierend über `service_is_ready()` und
+`call_async` mit Done-Callback, mit Wiederholung, weil die Kamera-Node später
+hochkommen kann als die Komponente (`ARCHITECTURE.md` §3).
+
+Begründung gegen die Alternativen: Ein Setzen von Hand nach jedem Start wird genau
+einmal vergessen, und der Fehler ist **still** — die Erkennung sieht minutenlang
+normal aus, bevor sie einfriert. Ein Exponieren durch AICA wäre der saubere Weg,
+ist aber nichts, worauf man wartet.
+
+### M4 — Was die Erkennung dabei gezeigt hat
+
+Mit laufenden Zeitstempeln arbeitet die Kette einwandfrei:
+
+- `n=1`, der Klotz sauber erkannt, `median=862 mm` gegen `conveyor_z_dist=865` —
+  die Banddistanz stimmt auf 3 mm
+- **ChArUco-Bögen und Zettel auf dem Band werden korrekt nicht erkannt** — die
+  Höhenfilterung über das Tiefenfenster arbeitet wie vorgesehen
+- `objects` mit Stride 10 in mm, wie dokumentiert; Position im Roboter-Frame
+  **x = 814, y = −874 mm** — innerhalb der Tracker-Grenzen und innerhalb der
+  Messregion
+
+**Zwei offene Zahlenfragen** aus derselben Messung:
+
+`z` ist **nicht die Oberkante**. Gemeldet wurde 103,1 mm, die Rückrechnung über
+die Boxecken ergibt 53,1 mm — also exakt `Eckenmittel + Höhe/2`. `datenvertraege.md`
+beschreibt das Feld unter S1 als „Oberkante des Blocks". Regelungsrelevant ist es
+nicht (die Greifhöhe kommt aus `belt_surface_z_m`), die Beschreibung ist aber falsch.
+
+Die **Höhe stimmt exakt** — und `HEIGHT_BIAS_MM` ist damit belegt, nicht willkürlich.
+Der vermessene Klotz ist **50 × 50 × 100 mm, hochkant stehend** (nachgereicht):
+
+```
+gemeldet                            100,0 mm
+rückgerechnete Deckflächen-Tiefe    865 + 20 − 100 = 785 mm
+geometrisch erwartet                865 − 100      = 765 mm
+→ die Tiefenmessung liest die Deckfläche 20 mm zu weit,
+  HEIGHT_BIAS_MM = 20 kompensiert genau das
+```
+
+Die Gegenprobe aus `robot-cam-befunde.md` §1 reproduziert sich damit. **Der Bias
+ist eine gemessene Korrektur der Tiefenkamera, kein Fudge-Faktor** — und er hängt
+genau deshalb an `conveyor_z_dist`, wie bei B7/B17 vermerkt.
+
+> Eine frühere Fassung dieses Abschnitts behauptete, die Höhe sei rund 23 mm zu
+> groß. Das war falsch: Als Bandreferenz war der `median` aus der Debug-Kopfzeile
+> genommen worden — der ist aber der Median über **das ganze Bild** (Band, Tisch,
+> Kalibrierbögen), nicht die Banddistanz unter dem Klotz. Richtig ist
+> `conveyor_z_dist`.
+
+### M5 — Die Grundfläche wird dagegen zu groß gemessen
+
+Dieselbe Messung, anderes Ergebnis:
+
+| | gemeldet | echt | Abweichung |
+|---|---|---|---|
+| längere Seite | 58,8 mm | 50,0 mm | **+8,8 mm (+17,6 %)** |
+| kürzere Seite | 52,3 mm | 50,0 mm | +2,3 mm (+4,6 %) |
+
+Die Überschätzung ist **richtungsabhängig**, und das passt zur Geometrie: Der Klotz
+lag bei x = 814, y = −874 mm deutlich seitlich der Basiskamera, die also eine
+Seitenfläche mitsieht. Die Tiefenkontur wächst dadurch in genau diese Richtung —
+dieselbe Physik wie beim Verdeckungsschatten der Roboterkamera
+(`robot-cam-befunde.md` §2), nur schwächer, weil die Basiskamera weiter weg steht.
+Die Erosion (`erosion_px = 5`) dämpft es bereits; ohne sie wäre es größer.
+
+**Zwei Konsequenzen:**
+
+**Für B16.** Die Greifbarkeitsprüfung rechnet mit zu breiten Klötzen und liegt damit
+zur sicheren Seite — sie verwirft eher, als dass sie einen zu breiten Klotz
+durchlässt. Die Marge `gripper_margin_m` sollte diesen systematischen Anteil nicht
+noch einmal aufschlagen.
+
+**Für die Quadrat-Erkennung.** Das gemessene Seitenverhältnis beträgt
+52,3 / 58,8 = **0,889** — bei einem *exakt quadratischen* Klotz. Die Schwelle
+`NEAR_SQUARE_ASPECT = 0,92` wird damit **unterschritten**: Der Klotz gilt nicht als
+quadratisch, obwohl er es ist.
+
+Das betrifft **beide** Wege gleichermaßen — sowohl das interne `square`-Flag als
+auch die aus `length`/`width` abgeleitete Prüfung, denn beide stammen aus derselben
+verzogenen Tiefenkontur. Die Entscheidung, `square` nicht in S1 aufzunehmen,
+bleibt damit richtig und wird sogar besser begründet: Das Flag hätte denselben
+Fehler. **Anzupassen ist die Schwelle**, nicht der Übertragungsweg. Startwert für
+die abgeleitete Prüfung: **0,85** statt 0,92. Ein einzelner Messpunkt — an weiteren
+Klötzen zu bestätigen.

@@ -4,6 +4,14 @@
 **Paket:** `roboter_tetris` (AICA Package, UR10e)
 **Status:** Entwurf zur Umsetzung
 
+> **Vorrang.** Normativ sind `docs/architektur/entscheidungen.md` und
+> `docs/architektur/datenvertraege.md`. Diese Spec ist daraus **abgeleitet** und
+> erzählt sie bewusst nach, damit sie ohne Vorkontext lesbar ist. Bei Widerspruch
+> gelten die beiden normativen Dokumente. **Sobald die Komponente gebaut und ihre
+> JSON-Beschreibung geschrieben ist, wird diese Datei gelöscht** — Code und JSON
+> tragen den Vertrag dann selbst, und eine dritte Stelle wäre nur Pflegeaufwand.
+
+
 ## Zweck
 
 Drei bereits funktionierende Komponenten müssen auf die Datenverträge gebracht
@@ -38,11 +46,45 @@ Bandkalibrierung (B1) und laufende Kontrolle, ob das Band überhaupt läuft.
 Die Plausibilitätsprüfung je Objekt rechnet `vectoring` aus der eigenen
 Messhistorie.
 
-### Warum 100 Hz kostenlos ist
+### Warum 100 Hz — und was es kostet
 
 Das Frame-Gating in `on_step_callback` (Zeile 261) kehrt sofort zurück, wenn der
-Bildstempel unverändert ist. Eine höhere Rate kostet damit nur den
-Callback-Aufruf — und halbiert den Jitter zwischen Bildeingang und Verarbeitung.
+Bildstempel unverändert ist. Die **Verarbeitung** ist damit tatsächlich fast
+kostenlos.
+
+> **Korrektur der Begründung.** Ursprünglich stand hier „halbiert den Jitter" mit
+> Bezug auf den Zeitstempel. Das galt für die Notlösung, bei der `base_cam` selbst
+> stempelt. Seit Thema 2 den Header-Stempel nutzt, trägt der Zeitstempel diesen
+> Jitter nicht. Der tatsächliche Gewinn ist kleiner, aber real: Die Wartezeit
+> zwischen Bildeingang und Verarbeitung sinkt von 0–20 ms auf 0–10 ms, und dieser
+> Anteil steckt im Regelkreis. 100 Hz bleibt richtig.
+
+### ⚠️ Zwingend dazu: `debug_image` nicht mehr je Takt publizieren
+
+AICA verschickt Ausgangsvariablen in **jedem** Takt. `debug_image` ist ein
+normaler Output — bei 100 Hz verdreifacht sich der Bildverkehr gegenüber der
+Kamerarate. Im Produktivbetrieb folgenlos (bei ausgeschaltetem Debug ist die
+Variable ein leeres `Image()`), aber **genau bei der Inbetriebnahme** schädlich:
+Die sechs Stufen von B6 arbeiten vollständig mit eingeschaltetem Debug-Bild, und
+ausbleibende Frames würde man dort der Erkennung anlasten statt dem Publizieren.
+
+```python
+self.add_output("debug_image", "_debug_msg", Image, publish_on_step=False)
+...
+self._debug_msg = self._bridge.cv2_to_imgmsg(debug_img, "bgr8")
+self.publish_output("debug_image")      # nur nach echtem Rendern
+```
+
+Gilt für `base_cam`, `robot_cam` und `robot_cam_2` gleichermaßen
+(`entscheidungen.md`, Nachtrag 3 / N5).
+
+### ⚠️ Messregion des Trackers ist ab jetzt regelungsrelevant
+
+`track_velocity_region_y_min` / `_max` waren bisher reine Tracker-Feinheit. Sie
+entscheiden aber darüber, ob die Längsposition **gemessen oder gekoppelt** wird und
+ob Tracks bei ausbleibender Detektion gelöscht werden. Sie werden deshalb in
+**B19 gemeinsam mit der Greifzone** festgelegt — Region = Greifzone plus Rand.
+Begründung: `entscheidungen.md`, Nachtrag 3 / N2.
 
 ### Zeitstempel
 
@@ -60,8 +102,24 @@ Gating jedes Bild nach dem ersten verwerfen.
 > Notlösung, falls unbrauchbar: in der Komponente selbst stempeln — der
 > ursprüngliche Plan. Kostet Jitter (wenige mm) statt Drift (bis 60 mm).
 
+### Zusätzlich: Zeitdomäne der Kamera erzwingen (umgesetzt 14.09.2026)
+
+Neuer Parameter **`camera_node`** (string, Default leer). Ist er gesetzt, legt
+`on_configure_callback` einen Service-Client auf `<camera_node>/set_parameters` an,
+und `on_step_callback` setzt darüber `rgb_camera.global_time_enabled` und
+`depth_module.global_time_enabled` auf `true` — nicht blockierend über
+`service_is_ready()` und `call_async` mit Done-Callback, mit Wiederholung, weil die
+Kamera-Node später hochkommen kann (`ARCHITECTURE.md` §3).
+
+**Warum das sein muss:** Bei der L515 steht die Option per Treiber-Default auf
+`false`. Die Kamera stempelt dann in ihrer Hardwareuhr, driftet mit rund 4 ms/s
+gegen die ROS-Zeit und bleibt nach einigen Minuten ganz stehen — dann verwirft das
+Frame-Gating jedes Bild nach dem ersten und die Objektliste ist still leer. Am
+14.09.2026 gemessen und nach dem Setzen behoben (`entscheidungen.md`, Nachtrag 4).
+Der AICA-Block exponiert den Parameter nicht, deshalb der Weg über die Komponente.
+
 ### Dateien
-`roboter_tetris/base_cam.py` · `component_descriptions/roboter_tetris_base_cam.json`
+`roboter_tetris/base_cam.py` · `component_descriptions/roboter_tetris_base_cam.json` · `package.xml` (`rcl_interfaces`)
 
 ### Abnahme
 Bestehende Tests laufen unverändert (sie prüfen nur `vision/*`). Neuer Test prüft
@@ -111,6 +169,18 @@ Graphen verdrahtet — der Rest des Systems merkt keinen Unterschied.
 ### Nicht ändern
 `vision/robot_detection.py`, `vision/robot_detection_edge.py`. Die
 Kantendetektion wird separat abgestimmt (B6).
+
+> ⚠️ **Auch nicht die Rückprojektion.** `localize_largest_blob` projiziert `x`/`y`
+> mit der Banddistanz zurück, obwohl der Punkt auf der Klotzoberseite liegt —
+> beide Werte sind dadurch um `z_band/(z_band − blockhoehe)` zu groß. Das ist ein
+> echter Fehler von 6…39 mm, er wird aber **bewusst im `object_follower`
+> korrigiert**, nicht hier: Die Komponente kennt die Klotzhöhe nicht, und der
+> gemeinsame Kern beider Varianten soll für den A/B-Test unangetastet bleiben.
+> Siehe `entscheidungen.md`, Nachtrag 3 / N1 und `datenvertraege.md` unter S2.
+> **Nicht „reparieren" — sonst wird doppelt korrigiert.**
+
+### `debug_image` auch hier mit `publish_on_step=False`
+Gleiche Begründung wie bei `base_cam` (Nachtrag 3 / N5).
 
 ### Dateien
 `roboter_tetris/robot_cam.py` · `robot_cam_2.py` · beide JSONs

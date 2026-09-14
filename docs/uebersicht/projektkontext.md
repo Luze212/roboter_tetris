@@ -46,17 +46,28 @@ demselben Band**. Sie hat:
 Erkennungsvarianten `robot_cam` (farbbasiert) und `robot_cam_2` (kantenbasiert),
 die aktuell gegeneinander getestet werden.
 
-> **Der Grund ist physikalisch und in `docs/review/robot-cam-befunde.md`
+> **Der Grund ist physikalisch und in `docs/architektur/robot-cam-befunde.md`
 > ausgeführt:** Die Tiefenkamera sitzt seitlich versetzt und sieht in Greifnähe
 > die **spiegelnden Seitenflächen** der Klötze, die ebenfalls Tiefe 0 liefern.
 > Der Verzug verschwindet mit größerer Kamerahöhe — daraus folgt die Kopplung
 > von B8 (Beobachtungshöhe) und D18. Die Vorgängergruppe ist mit ihrer eigenen
 > Lösung selbst unzufrieden (Rücksprache).
 
-Für uns relevant: Die Vorgängergruppe hat Werte, die wir brauchen — die
-Hand-Auge-Kalibrierung der Roboterkamera und den Werkzeugversatz zum Greifpunkt
-(siehe `offene-punkte.md`, C1 und C8). Und sie beantwortet indirekt, **welches
-Frame die Robotersteuerung führt** (C9).
+> **Präzisierung nach dem Archivabgleich (14.09.2026):** Die zuletzt gebaute
+> „Strategie 2" fuhr zwar eine Spurkorrektur in x an, der Griff selbst war aber
+> **Koppelnavigation** — der Roboter rechnete eine Ankunftszeit aus und
+> schlief bis dahin (`time.sleep`). Es gab keine Rückkopplung während des Griffs
+> und **keine Zielauswahl**; verarbeitet wurde immer das erste Objekt der Liste.
+> Für `vectoring`, `priority_handler` und den Regelteil des `object_follower`
+> gibt es dort also **kein Vorbild**. Einzelheiten:
+> `docs/architektur/vorgaengerprojekt-abgleich.md`.
+
+Für uns relevant: Die Vorgängergruppe hat Werte, die wir brauchen. Die
+**Hand-Auge-Kalibrierung der Roboterkamera ist damit vollständig geklärt** (C1/C4:
+Bezug ist der Flansch). Der **Werkzeugversatz zum Greifpunkt steht dagegen nicht
+im Archiv** — er saß in der UR-Installation am Teach-Pendant und muss aus der
+Robotersteuerung kommen (C8). Dass **TCP-Posen kommandiert wurden**, ist bestätigt
+(C9) — A7 beantwortet das aber nicht, denn im Archiv existiert kein URDF.
 
 ## 3. Was heute funktioniert
 
@@ -64,7 +75,7 @@ Frame die Robotersteuerung führt** (C9).
 |---|---|
 | `robotiq_gripper` | **funktionsfähig** am Aufbau |
 | `base_cam` | **funktionsfähig**, erkennt Klötze zuverlässig |
-| `robot_cam` / `robot_cam_2` | implementiert und unit-getestet, **am Aufbau noch nicht gelaufen** (B6). `robot_cam` farbbasiert (grünes Band ausmaskieren), `robot_cam_2` kantenbasiert mit Tiefenkanten-Fusion. Identische I/O, im Graphen austauschbar. Hintergrund: `review/robot-cam-befunde.md` |
+| `robot_cam` / `robot_cam_2` | implementiert und unit-getestet, **am Aufbau noch nicht gelaufen** (B6). `robot_cam` farbbasiert (grünes Band ausmaskieren), `robot_cam_2` kantenbasiert mit Tiefenkanten-Fusion. Identische I/O, im Graphen austauschbar. Hintergrund: `architektur/robot-cam-befunde.md` |
 | `move_to_pose_test`, `true_signal`, `toggle_signal` | Testhilfen |
 | AICA-Kette Attractor → IK-Velocity-Controller | **getestet**, Roboter folgt einem per Maus verschobenen Frame |
 
@@ -116,7 +127,7 @@ er sie selbst übernimmt.
 | Basiskamera | RealSense, fest **am Bandanfang** montiert |
 | Roboterkamera | RealSense, am Arm montiert |
 | Band | **grün**; konstante Geschwindigkeit, **nicht einstellbar**, Wert noch unbekannt. Spiegelungen treten **nur hier** auf, nicht auf den Klötzen |
-| Klötze | rechtwinklig, **unterschiedlich groß**, von Hand aufgelegt, realistisch 2–3 gleichzeitig. Farben **rot, blau, weiß**. 3D-gedruckt: Oberseite **matt**, Seitenflächen **spiegelnd** (siehe `review/robot-cam-befunde.md`) |
+| Klötze | rechtwinklig, **unterschiedlich groß**, von Hand aufgelegt, realistisch 2–3 gleichzeitig. Farben **rot, blau, weiß**. 3D-gedruckt: Oberseite **matt**, Seitenflächen **spiegelnd** (siehe `architektur/robot-cam-befunde.md`) |
 | Ablage | seitlich neben dem Band auf der Roboterseite; Pose in der Luft über einer Auffangkiste, der Klotz fällt hinein |
 | Freiraum | senkrecht über dem Arbeitsbereich frei; nur die Basiskamera steht am Bandanfang, den der Roboter kaum erreicht |
 
@@ -166,24 +177,25 @@ Einschränkungen, Ergänzungen sind möglich.
 
 Das Team hat **noch nicht mit Echtzeitanwendungen gearbeitet**. Entscheidungen
 werden deshalb schrittweise erarbeitet und begründet, nicht nur festgelegt —
-siehe `review/entscheidungen.md`, wo zu jeder Festlegung das *Warum* steht.
+siehe `architektur/entscheidungen.md`, wo zu jeder Festlegung das *Warum* steht.
 
 ## 7. Dokumentenlandkarte
 
 | Dokument | Inhalt |
 |---|---|
 | `ARCHITECTURE.md` | **verbindliche** AICA-Regeln — Pflichtlektüre |
-| `docs/projektkontext.md` | dieses Dokument |
+| `docs/uebersicht/projektkontext.md` | dieses Dokument |
 | `docs/Komponentenplan Robotetris - Stand 2026-09-13.docx` | Systembeschreibung für Menschen, mit Farbcode |
 | `docs/Komponentenplan Robotetris.docx` | **Original**, unverändert, historischer Stand |
-| `docs/review/entscheidungen.md` | alle Architekturentscheidungen mit Begründung (Themen 1–7) |
-| `docs/review/datenvertraege.md` | verbindliche Signalspezifikation |
-| `docs/review/offene-punkte.md` | Arbeitsliste nach Ort und Quelle |
-| `docs/review/systemgraph.md` | Graph und Signalliste |
-| `docs/review/robot-cam-befunde.md` | **Szene, Materialeigenschaften und Physik der Roboterkamera.** Warum der Loch-Trick verworfen wurde, warum die Beobachtungshöhe nicht frei wählbar ist, verworfene Wege mit Begründung, Werte aus dem Vorgängerprojekt. Vor jeder Arbeit an `robot_cam` / `robot_cam_2` lesen. |
-| `docs/review/2026-09-05-konzeptreview-komponentenplan.md` | die ursprüngliche Analyse (61 Befunde) |
-| `docs/superpowers/specs/2026-09-13-umsetzungsplan-on-the-fly-pick.md` | Reihenfolge, Phasen, Abnahmekriterien |
-| in `docs/superpowers/specs/`:<br>`2026-09-13-data-tracker-component-design.md`<br>`2026-09-13-interface-streamer-component-design.md`<br>`2026-09-13-object-follower-component-design.md`<br>`2026-09-13-priority-handler-component-design.md`<br>`2026-09-13-vectoring-component-design.md`<br>`2026-09-13-bestandskomponenten-anpassungen.md`<br>`2026-06-01-robotiq-gripper-component-design.md` | Umsetzungsvorlagen je Komponente |
+| `docs/architektur/entscheidungen.md` | alle Architekturentscheidungen mit Begründung (Themen 1–7) |
+| `docs/architektur/datenvertraege.md` | verbindliche Signalspezifikation |
+| `docs/uebersicht/offene-punkte.md` | Arbeitsliste nach Ort und Quelle |
+| `docs/uebersicht/systemgraph.md` | Graph und Signalliste |
+| `docs/architektur/vorgaengerprojekt-abgleich.md` | **Systematischer Abgleich aller offenen Punkte gegen das Vorgängerarchiv `UR10_Pick_ws`.** Was von dort beantwortet ist (C1/C4 Hand-Auge, A6, B16), was dort *nicht* zu holen ist (C8, A7, B1), Größenordnungen zur Vorbelegung von Parametern, übertragbares Know-how und fünf Fallen. |
+| `docs/architektur/robot-cam-befunde.md` | **Szene, Materialeigenschaften und Physik der Roboterkamera.** Warum der Loch-Trick verworfen wurde, warum die Beobachtungshöhe nicht frei wählbar ist, verworfene Wege mit Begründung, Werte aus dem Vorgängerprojekt. Vor jeder Arbeit an `robot_cam` / `robot_cam_2` lesen. |
+| `docs/archiv/2026-09-05-konzeptreview-komponentenplan.md` | die ursprüngliche Analyse (61 Befunde) |
+| `docs/architektur/specs/2026-09-13-umsetzungsplan-on-the-fly-pick.md` | Reihenfolge, Phasen, Abnahmekriterien |
+| in `docs/architektur/specs/`:<br>`2026-09-13-data-tracker-component-design.md`<br>`2026-09-13-interface-streamer-component-design.md`<br>`2026-09-13-object-follower-component-design.md`<br>`2026-09-13-priority-handler-component-design.md`<br>`2026-09-13-vectoring-component-design.md`<br>`2026-09-13-bestandskomponenten-anpassungen.md`<br>`2026-06-01-robotiq-gripper-component-design.md` | Umsetzungsvorlagen je Komponente |
 
 ## 8. Farbcode der Dokumentation
 

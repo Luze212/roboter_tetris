@@ -19,6 +19,8 @@ import numpy as np
 from cv_bridge import CvBridge
 from modulo_components.lifecycle_component import LifecycleComponent
 import state_representation as sr
+from rcl_interfaces.msg import Parameter as RosParameter, ParameterType, ParameterValue
+from rcl_interfaces.srv import SetParameters
 from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import Image, CameraInfo
 
@@ -34,6 +36,18 @@ DEFAULT_VEL_FILTER_ALPHA = 0.3
 STALE_TIMEOUT_S = 1.0
 # Throttle pipeline error logging.
 ERROR_LOG_PERIOD_S = 1.0
+
+# The RealSense driver stamps in the sensor's own hardware clock unless global time
+# is enabled. On the L515 that default is OFF: the stamps then sit in a foreign
+# epoch, drift ~4 ms/s against ROS time and eventually stop advancing altogether --
+# at which point the frame gating below discards every frame after the first and the
+# object list goes silently empty. Measured at the setup on 2026-09-14; enabling the
+# two parameters removed the drift (4.05 -> 0.02 ms/s). The AICA RealSense block does
+# not expose them, so the component enforces them on the camera node itself.
+GLOBAL_TIME_PARAMETERS = ("rgb_camera.global_time_enabled",
+                          "depth_module.global_time_enabled")
+GLOBAL_TIME_RETRY_PERIOD_S = 2.0
+GLOBAL_TIME_MAX_ATTEMPTS = 10
 
 
 class BaseCam(LifecycleComponent):
@@ -121,6 +135,10 @@ class BaseCam(LifecycleComponent):
 
         self.add_parameter(sr.Parameter("debug_enable", False, sr.ParameterType.BOOL),
                            "Debug-Bild erzeugen und publizieren")
+        self.add_parameter(sr.Parameter("camera_node", "", sr.ParameterType.STRING),
+                           "Node-Name des RealSense-Blocks dieser Kamera (z. B. /realsense_camera_2). "
+                           "Ist er gesetzt, erzwingt die Komponente dort global_time_enabled=true, "
+                           "damit die Bildstempel in ROS-Zeit laufen. Leer = aus.")
 
         # -- Inputs (signals from the AICA RealSense block) -----------------------
         self._color_msg = Image()
@@ -147,6 +165,10 @@ class BaseCam(LifecycleComponent):
         self._last_stamp = None          # (sec, nanosec) of the last processed frame
         self._last_frame_walltime = None  # rclpy Time of the last fresh frame
         self._last_error_walltime = None
+        self._set_param_client = None     # created in on_configure (ROS 2 service client)
+        self._global_time_done = False
+        self._global_time_attempts = 0
+        self._global_time_last_try = None
 
     # -- Parameter validation -----------------------------------------------------
 
@@ -170,6 +192,14 @@ class BaseCam(LifecycleComponent):
     # -- Lifecycle ------------------------------------------------------------------
 
     def on_configure_callback(self) -> bool:
+        # Service clients are not abstracted by AICA; create them here (not in
+        # __init__) so the UI parameters are already applied. See ARCHITECTURE.md §3.
+        node_name = self.get_parameter("camera_node").get_value().strip()
+        if node_name:
+            if not node_name.startswith("/"):
+                node_name = "/" + node_name
+            self._set_param_client = self.create_client(
+                SetParameters, f"{node_name}/set_parameters")
         return True
 
     def on_activate_callback(self) -> bool:
@@ -179,6 +209,9 @@ class BaseCam(LifecycleComponent):
         self._last_stamp = None
         self._last_frame_walltime = None
         self._objects = []
+        self._global_time_done = False
+        self._global_time_attempts = 0
+        self._global_time_last_try = None
         self.set_predicate("is_receiving_frames", False)
         self.set_predicate("has_objects", False)
         return True
@@ -241,9 +274,60 @@ class BaseCam(LifecycleComponent):
             self.set_predicate("is_receiving_frames", False)
             self.set_predicate("has_objects", False)
 
+    # -- Camera clock domain ----------------------------------------------------------
+
+    def _ensure_global_time(self) -> None:
+        """Enforce ROS-time stamps on the camera node; retried until it sticks.
+
+        Non-blocking as required in a step callback: readiness is polled via
+        ``service_is_ready()`` and the call goes out via ``call_async`` with a done
+        callback (ARCHITECTURE.md §3). The camera node may come up after this
+        component, hence the retries.
+        """
+        if self._global_time_done or self._set_param_client is None:
+            return
+        if self._global_time_attempts >= GLOBAL_TIME_MAX_ATTEMPTS:
+            return
+        now = self.get_clock().now()
+        if (self._global_time_last_try is not None
+                and (now - self._global_time_last_try).nanoseconds / 1e9
+                < GLOBAL_TIME_RETRY_PERIOD_S):
+            return
+        self._global_time_last_try = now
+        if not self._set_param_client.service_is_ready():
+            return  # camera node not up yet; try again after the retry period
+        self._global_time_attempts += 1
+
+        request = SetParameters.Request()
+        for name in GLOBAL_TIME_PARAMETERS:
+            parameter = RosParameter()
+            parameter.name = name
+            parameter.value = ParameterValue(type=ParameterType.PARAMETER_BOOL,
+                                             bool_value=True)
+            request.parameters.append(parameter)
+        future = self._set_param_client.call_async(request)
+        future.add_done_callback(self._on_global_time_response)
+
+    def _on_global_time_response(self, future) -> None:
+        try:
+            response = future.result()
+        except Exception as exc:
+            self.get_logger().warn(f"global_time_enabled konnte nicht gesetzt werden: {exc}")
+            return
+        rejected = [r.reason for r in response.results if not r.successful]
+        if rejected:
+            self.get_logger().warn(
+                "Kamera hat global_time_enabled abgelehnt: " + "; ".join(rejected)
+                + " — Bildstempel bleiben in der Hardwareuhr und driften.")
+            return
+        self._global_time_done = True
+        self.get_logger().info(
+            "global_time_enabled auf der Kamera gesetzt; Bildstempel laufen in ROS-Zeit.")
+
     # -- Periodic processing ----------------------------------------------------------
 
     def on_step_callback(self):
+        self._ensure_global_time()
         if self._depth_msg.width == 0 or self._color_msg.width == 0:
             self._handle_stale()
             return

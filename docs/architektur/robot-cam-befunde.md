@@ -164,17 +164,24 @@ Relevant für **A6** (tatsächliche Kamerarate).
 
 ## 6. Werte aus dem Vorgängerprojekt — und zwei Fallen
 
-Das Archiv `FuE_Greifen-main` liegt **auf dem Projektrechner** und ist dort
-auslesbar. Es ist die verbindliche Quelle; die folgenden Werte sind nur eine
-Abkürzung, damit die Suche nicht wiederholt werden muss.
+Das Archiv `FuE_Greifen-main` liegt **auf dem Projektrechner** unter
+`/home/tetripick/UR10_Pick_ws` und ist dort auslesbar (**read-only**). Es ist die
+verbindliche Quelle; die folgenden Werte sind nur eine Abkürzung, damit die Suche
+nicht wiederholt werden muss.
+
+> **Der vollständige Durchgang durch alle offenen Punkte steht in
+> `vorgaengerprojekt-abgleich.md`.** Dieser Abschnitt hält nur fest, was die
+> Roboterkamera betrifft.
 
 | Gesucht | Wert | Fundstelle |
 |---|---|---|
-| Hand-Auge Roboterkamera (**C1/C4**) | `camera_mount_to_camera`: x = 0,1087 · y = −0,03436 · **z = −0,05987** (m), dazu ~90°-Drehung (qw ≈ 0,70, qz ≈ 0,72) | `Robot/Calibration_results_final.yaml` |
-| Wartepose Roboterkamera (**B8**) | Strategie 2 („mitfahren"), `Kamera_2_Kalib`: TCP **Z = 0,1 m**, *geneigte* Haltung | `Robot/pose.yaml` |
-| Arbeitsraum-Indiz (**B10**) | Workspace Z_min = 0,095 · Z_max = 0,37 | `Robot/pose.yaml` |
+| Hand-Auge Roboterkamera (**C1/C4**) | `camera_mount_to_camera`: x = 0,1087 · y = −0,03436 · **z = −0,05987** (m), rpy = (0,02898 · 0,02722 · 1,597) rad ≈ (1,66° · 1,56° · **91,5°**). **Bezug geklärt: Flansch → Kamera** (Beweiskette in `vorgaengerprojekt-abgleich.md` §2) — damit direkt als `handeye_*` des `object_follower` verwendbar. | `Robot/Calibration_results_final.yaml` |
+| Wartepose Roboterkamera (**B8**) | `Kamera_2_Kalib`: die **aktive** Zeile ist TCP **Z = 0,15 m** mit *senkrechter* Orientierung; die Zeile mit **Z = 0,1 m** und geneigter Haltung ist **auskommentiert** (siehe Falle 3). | `Robot/pose.yaml` |
+| Arbeitsraum-Indiz (**B10**) | Workspace **vollständig**: X −0,05…1,05 · Y −0,8…0,3 · Z 0,095…0,37 (m). Wurde vor jeder Bewegung geprüft (`Robot/save_pos.py`). ⚠️ **TCP-Bezug, nicht Flansch** — siehe `vorgaengerprojekt-abgleich.md` Falle 5. | `Robot/pose.yaml` |
 | Bandmitte | `KAMERA_MITTE_X` = 0,418329 | `Robot/move_handler_strat2.py` |
-| Kommandiertes Frame (**C9/A7**) | Es wurden **TCP-Posen** kommandiert (`target_tcp`) | `Robot/move_handler_strat2.py` |
+| Kommandiertes Frame (**C9/A7**) | Es wurden **TCP-Posen** kommandiert (`target_tcp`, `getActualTCPPose`) | `Robot/move_handler_strat2.py`, `Robot/Robot.py:109` |
+| Werkzeugversatz (**C8**) | **Nicht im Archiv.** Der Versatz saß in der UR-Installation am Teach-Pendant; es gibt kein `set_tcp`/`setPayload`. | — (`vorgaengerprojekt-abgleich.md` §4) |
+| Kamerakonfiguration (**A6**) | Beide Kameras: **640×480 @ 30 fps**, Tiefe per `rs2::align` auf Farbe registriert | `cameras/camera_reader_base.cpp:72–73` |
 
 ### ⚠️ Falle 1 — `conveyor_z_dist: 1000`
 
@@ -188,8 +195,24 @@ vor Ort gemessenen Banddistanz. Der Eintrag ist ein Altwert.
 
 In `move_handler_strat2.py` steht `target_tcp[2] = KAMERA_2_KALIB_TCP_POS[2]`.
 Die Zeilen, die die Höhe pro Objekt anpassen würden, sind **auskommentiert**. Die
-Höhe ist also konstant 0,1 m — wer nur die aktive Zeile sieht, hält sie für einen
+Höhe ist also konstant — wer nur die aktive Zeile sieht, hält sie für einen
 gerechneten Wert.
+
+### ⚠️ Falle 3 — die 0,1 m sind die auskommentierte Pose
+
+In `pose.yaml` steht unter `Kamera_2_Kalib` **zweimal** eine TCP-Pose: aktiv mit
+**Z = 0,15 m** und senkrechter Orientierung, darunter auskommentiert unter
+„Greifstrategie 2" mit **Z = 0,1 m** und geneigter Orientierung. Geladen wird von
+`move_handler_strat2.py` die **aktive** Zeile, also 0,15 m.
+
+Widersprüchlich dazu rechnet `object_waiting_handler_strat2.py:76–108` mit einem
+festen Neigungswinkel von **25°**. Die beiden Dateien passen also nicht zusammen —
+vermutlich wurde die YAML nachträglich geändert.
+
+**Konsequenz für B8:** Der Anhaltspunkt lautet eher 0,15 m als 0,1 m — und weil
+die Quellen sich widersprechen, bleibt er genau das: ein Anhaltspunkt. Die
+Schlussfolgerung aus §8 ändert sich nicht, die Beobachtungshöhe **muss am Aufbau
+eingemessen werden**.
 
 ---
 
@@ -276,9 +299,12 @@ liefern denselben Vertrag; die Wahl ist eine Leitung im Graphen.
 
 Ehrlichkeitshalber, damit niemand auf zu dünnem Eis baut:
 
-- **C9/A7 ist erschlossen, nicht bestätigt.** Dass TCP-Posen kommandiert wurden,
-  ist aus dem Code der Vorgängergruppe gelesen — nicht mit ihr verifiziert. A7
-  (steht der Greifer im URDF?) bleibt eigenständig zu prüfen.
+- **C9 ist aus zwei Stellen gelesen, nicht mit der Gruppe verifiziert.** Dass
+  TCP-Posen kommandiert wurden, steht so im Code (`move_handler_strat2.py`,
+  `Robot.py:109`). **A7 beantwortet das nicht** — und zwar aus einem klareren
+  Grund als bisher angenommen: Im Archiv existiert **überhaupt kein URDF**, die
+  Vorgängergruppe hatte keine URDF-basierte Kette. A7 ist in AICA Studio zu
+  prüfen, eine Antwort aus dem Archiv ist nicht zu erwarten.
 - **Die Kamera↔Band-Distanz der Vorgängergruppe ist unbekannt.** Die
   Bandoberflächen-Z im Roboter-Basis-Frame ließ sich in deren Projekt nicht
   finden. Aus TCP-Z = 0,1 m allein folgt sie nicht — erst recht nicht bei

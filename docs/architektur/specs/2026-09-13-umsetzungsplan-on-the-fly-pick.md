@@ -4,6 +4,14 @@
 **Paket:** `roboter_tetris` (AICA Package, UR10e)
 **Status:** Umsetzungsbereit, mit benannten Vorbedingungen
 
+> **Vorrang.** Normativ sind `docs/architektur/entscheidungen.md` und
+> `docs/architektur/datenvertraege.md`. Diese Spec ist daraus **abgeleitet** und
+> erzählt sie bewusst nach, damit sie ohne Vorkontext lesbar ist. Bei Widerspruch
+> gelten die beiden normativen Dokumente. **Sobald die Komponente gebaut und ihre
+> JSON-Beschreibung geschrieben ist, wird diese Datei gelöscht** — Code und JSON
+> tragen den Vertrag dann selbst, und eine dritte Stelle wäre nur Pflegeaufwand.
+
+
 ## Zweck
 
 Rückgrat für die Erstellung aller Komponenten des On-the-fly-Pickvorgangs.
@@ -14,13 +22,14 @@ Voraussetzungen, betroffene Dateien und ein prüfbares Abnahmekriterium.
 
 | Dokument | Warum |
 |---|---|
-| `docs/projektkontext.md` | Rahmenbedingungen, Abgrenzungen, was **nicht** angefasst wird. Zuerst lesen. |
+| `docs/uebersicht/projektkontext.md` | Rahmenbedingungen, Abgrenzungen, was **nicht** angefasst wird. Zuerst lesen. |
 | `ARCHITECTURE.md` | Verbindliche AICA-Regeln. Nicht optional. |
-| `docs/review/entscheidungen.md` | Alle Architekturentscheidungen mit Begründung (Themen 1–7) |
-| `docs/review/datenvertraege.md` | Verbindliche Signalspezifikation |
-| `docs/review/offene-punkte.md` | Was noch zu klären/messen ist |
-| `docs/review/robot-cam-befunde.md` | Szene, Materialphysik und verworfene Wege der Roboterkamera. **Vor Schritt 2.2 und vor jeder Arbeit an der Beobachtungshöhe (B8) lesen.** |
-| `docs/superpowers/specs/2026-06-01-robotiq-gripper-component-design.md` | Format- und Qualitätsvorlage für Komponenten-Specs |
+| `docs/architektur/entscheidungen.md` | Alle Architekturentscheidungen mit Begründung (Themen 1–7). **Nachtrag 3 ist Pflicht** — er korrigiert zwei Messfehler und zwei Planwidersprüche, die sonst erst in Phase 4 auffallen. |
+| `docs/architektur/datenvertraege.md` | Verbindliche Signalspezifikation |
+| `docs/uebersicht/offene-punkte.md` | Was noch zu klären/messen ist |
+| `docs/architektur/robot-cam-befunde.md` | Szene, Materialphysik und verworfene Wege der Roboterkamera. **Vor Schritt 2.2 und vor jeder Arbeit an der Beobachtungshöhe (B8) lesen.** |
+| `docs/architektur/vorgaengerprojekt-abgleich.md` | Was aus dem Vorgängerarchiv beantwortet ist und was nicht. **Vor Phase 0 lesen** — es verschiebt die Quellen von 0.2 (C8) und 0.3 (C1/C4). |
+| `docs/archiv/2026-06-01-robotiq-gripper-component-design.md` | Format- und Qualitätsvorlage für Komponenten-Specs |
 
 ## Verbindliche Rahmenregeln
 
@@ -77,7 +86,7 @@ umgebaut werden müssen.
 |---|---|
 | **Ziel** | Ein gemeinsames Modul mit Kopflängen, Strides, Feldindizes und `pack_*`/`unpack_*` für alle elf Signale |
 | **Voraussetzung** | keine |
-| **Vorlage** | `docs/review/datenvertraege.md` — vollständig und verbindlich |
+| **Vorlage** | `docs/architektur/datenvertraege.md` — vollständig und verbindlich |
 | **Dateien** | **neu** `source/roboter_tetris/roboter_tetris/contracts.py`<br>**neu** `source/roboter_tetris/test/python_tests/test_contracts.py` |
 | **Abnahme** | Alle `pack_*`/`unpack_*` sind Round-Trip-getestet. `unpack_*` lehnt zu kurze/inkonsistente Arrays ab, statt auf halben Daten zu rechnen. Keine ROS-/cv2-Importe — rein testbar. |
 
@@ -96,7 +105,7 @@ Kleine, risikoarme Änderungen an laufendem Code. Jede einzeln testbar.
 | | |
 |---|---|
 | **Ziel** | Ausgabe auf `[t, n, v_band] + n×9` umstellen, SI-Einheiten |
-| **Änderung** | Kopf mit `t` aus `header.stamp`; mm → m beim Packen; `vy` vom Objektfeld in den Kopf; Rate auf 100 Hz |
+| **Änderung** | Kopf mit `t` aus `header.stamp`; mm → m beim Packen; `vy` vom Objektfeld in den Kopf; Rate auf 100 Hz; **`debug_image` auf `publish_on_step=False`** (N5) |
 | **Nicht ändern** | Die Vision-Module unter `vision/` bleiben unangetastet, sie rechnen weiter in mm |
 | **Dateien** | `roboter_tetris/base_cam.py`, `component_descriptions/roboter_tetris_base_cam.json` |
 | **Abnahme** | Bestehende Tests laufen unverändert durch (sie prüfen nur `vision/*`). Ein neuer Test prüft das Packen gegen `contracts.py`. |
@@ -110,10 +119,10 @@ Kleine, risikoarme Änderungen an laufendem Code. Jede einzeln testbar.
 | | |
 |---|---|
 | **Ziel** | Ausgabe auf `[t, valid, x, y, z_band, orientation]` umstellen, SI-Einheiten |
-| **Änderung** | `valid`-Flag ergänzen; Distanz-Gate über neue Parameter `min_belt_distance_m` / `max_belt_distance_m` auf `z_band`; mm → m; Rate 100 Hz |
+| **Änderung** | `valid`-Flag ergänzen; Distanz-Gate über neue Parameter `min_belt_distance_m` / `max_belt_distance_m` auf `z_band`; mm → m; Rate 100 Hz; **`debug_image` auf `publish_on_step=False`** (N5). ⚠️ Die Rückprojektion **nicht** korrigieren — das macht der Follower (N1) |
 | **Wichtig** | Bei `valid = 0` läuft `t` **weiter**. Nur so unterscheidet der Empfänger "Kamera arbeitet, sieht nichts" von "Kamera liefert nicht mehr". |
 | **Nicht ändern** | Erkennungsalgorithmik in `vision/robot_detection*.py` — **inkl. des gemeinsamen Kerns `localize_largest_blob`**, den sich beide Varianten teilen. Nur so bleibt der A/B-Test aussagekräftig. |
-| **Vorher lesen** | `docs/review/robot-cam-befunde.md` — begründet die Defaults und nennt die Fallstricke (Seitenflächen-Physik, Nah-Gate, RealSense-Konfiguration) |
+| **Vorher lesen** | `docs/architektur/robot-cam-befunde.md` — begründet die Defaults und nennt die Fallstricke (Seitenflächen-Physik, Nah-Gate, RealSense-Konfiguration) |
 | **Dateien** | `roboter_tetris/robot_cam.py`, `robot_cam_2.py` + beide JSONs |
 | **Abnahme** | Beide Varianten liefern denselben Vertrag und sind gegeneinander austauschbar. |
 
@@ -150,7 +159,7 @@ Kleine, risikoarme Änderungen an laufendem Code. Jede einzeln testbar.
 | **Ziel** | Geglättete Objektzustände plus Plausibilitätscode |
 | **Voraussetzung** | 1.1, 2.1; Bandrichtung und -geschwindigkeit als Parameter (B1) |
 | **Kern** | Querposition und Orientierung mitteln (konstant je Objekt); Längsposition auf die Bandgerade projizieren; Plausibilität gegen die kalibrierte Geschwindigkeit; Verfall ausbleibender IDs |
-| **Besonderheit** | Orientierung über den **verdoppelten Winkel** mitteln (`½·atan2(⟨sin2θ⟩, ⟨cos2θ⟩)`). Die Resultantenlänge ist das Gütemaß: unter der Schwelle gilt die Orientierung als unbrauchbar. Ein arithmetischer Mittelwert aus 0° und 90° wäre 45° — genau die Lage, in der der Greifer die Ecken erwischt. |
+| **Besonderheit** | Orientierung über den **verdoppelten Winkel** mitteln (`½·atan2(⟨sin2θ⟩, ⟨cos2θ⟩)`). Die Resultantenlänge ist das Gütemaß: unter der Schwelle gilt die Orientierung als unbrauchbar. Ein arithmetischer Mittelwert aus 0° und 90° wäre 45° — genau die Lage, in der der Greifer die Ecken erwischt. ⚠️ **Das Gütemaß schlägt bei quadratischen Klötzen nicht an** — deren Winkel friert der Tracker bereits ein. Vor der Festlegung von D11 die Korrektur in der `vectoring`-Spec lesen. |
 | **Entfällt** | Parameter `K`, `W`, `J`, `H`, "Richtung halten", "Geschwindigkeit halten", lineare Regression |
 | **Abnahme** | Reine Logiktests ohne ROS. Am Aufbau: Blöcke auflegen, Status-Codes im Log prüfen — Code 3 beim Auflegen, dann 0; Block anhalten → Code 1. |
 
@@ -170,9 +179,10 @@ Kleine, risikoarme Änderungen an laufendem Code. Jede einzeln testbar.
 |---|---|
 | **Ziel** | Zielauswahl mit Erreichbarkeits- und Greifbarkeitsprüfung, Ziel-Lock |
 | **Voraussetzung** | 1.1, 3.1; Greifzone (B19), Greifergeometrie (B15/B16) |
-| **Erreichbarkeit** | `t_verfügbar = (zonenende − position)/v_band`<br>`t_benötigt = abstand/v_max + 3/K + absenken + greifen`<br>Kandidat ⟺ `t_verfügbar > faktor · t_benötigt` |
+| **Erreichbarkeit** | `t_verfügbar = (zonenende − position)/v_band`<br>`t_benötigt = abstand/v_max + 3/K + absenken + greifen`<br>Kandidat ⟺ `t_verfügbar > faktor · t_benötigt`<br>**`abstand` = TCP → Klotz; dafür `cartesian_state` als Eingang** (N4) |
 | **Greifbarkeit** | Höhe ≥ `min_greifbare_hoehe`; Abmessung quer zur Backenrichtung ≤ `max_oeffnung − marge` |
 | **Auswahl** | Unter den Kandidaten das dringendste (kleinstes `t_verfügbar`) — die Regel aus dem Plan, nur eben unter den *erreichbaren* |
+| **Zusätzlich** | `zone_upstream` als Feld 12 in S4 ausgeben (N3). ⚠️ **Greifzone muss in der Messregion von `base_cam` liegen** — B19 legt beides gemeinsam fest (N2). |
 | **Ziel-Lock** | Einmal gewählt bleibt gewählt. Rückzug nur bei: gepickt, ID verschwunden, unplausibel. **Erreichbarkeit ist Auswahl-, kein Abbruchkriterium** — sonst wird ein fast erfolgreicher Griff abgebrochen, wenn der Block beim Greifen die Zonengrenze überschreitet. |
 | **Abnahme** | **Bei stehendem Roboter vollständig prüfbar.** Blöcke auflegen, im Log verfolgen, welches Ziel wann gewählt und warum zurückgezogen wird. Zu flache/zu breite Blöcke werden gar nicht erst gewählt. |
 
@@ -218,7 +228,7 @@ Die größte Komponente. **Nicht am Stück bauen.**
 |---|---|
 | **Ziel** | `ANFAHREN` und `FOLGEN` mit `w = 0` |
 | **Voraussetzung** | 4a, 3.3, 0.5; Bandwerte (B1) |
-| **Kern** | Zielpose = Prädiktion + Vorhalt, begrenzt auf die Greifzone. Die Begrenzung erzeugt den Abfangkurs von selbst — Block stromaufwärts heißt Warten am Zonenrand **auf der Querposition des Blocks**. |
+| **Kern** | Zielpose = Prädiktion + Vorhalt, begrenzt gegen `zone_upstream` (S4 Feld 12) — **nur stromaufwärts**, quer und stromabwärts wird nicht begrenzt (N3). Die Begrenzung erzeugt den Abfangkurs von selbst: Block stromaufwärts heißt Warten am Zonenrand **auf der Querposition des Blocks**. |
 | **Hier kalibrieren** | `lead_offset_m` (B4): Block mitfahren lassen, Restabstand ablesen, Vorhalt anpassen bis null |
 | **Abnahme** | Der Roboter fährt einem Block über die Greifzone hinterher und hält konstanten Abstand — ohne Absenken, ohne Greifen. |
 
@@ -228,7 +238,8 @@ Die größte Komponente. **Nicht am Stück bauen.**
 |---|---|
 | **Ziel** | `w`-Mischung mit Rampe, Rückfall, Identitätsprüfung |
 | **Voraussetzung** | 4b, 2.2, 0.3; **B6 abgeschlossen** — 2.2 ist nur der Vertragsumbau, den eine `robot_cam` auch besteht, die dauerhaft `valid = 0` liefert. Ohne belegte Erkennung am Aufbau ist 4c nicht beurteilbar. |
-| **Kern** | `korrektur = roboterkamera_welt − basiskamera_prädiktion`; `ziel = prädiktion + w · korrektur_gefiltert`. Die Korrektur ist nahezu konstant und damit stark glättbar — die absolute Position wäre es nicht. |
+| **Kern** | **Zuerst** die Höhenkorrektur `(x,y) · (z_band − blockhoehe)/z_band` — Pflicht, nicht Feinschliff: 6…39 mm Fehler, je Klotz verschieden, unterhalb von `max_correction_m` (N1). Danach `korrektur = roboterkamera_welt − basiskamera_prädiktion` und `ziel = prädiktion + w · korrektur_gefiltert`. Die Korrektur ist nahezu konstant und damit stark glättbar — die absolute Position wäre es nicht. |
+| **Richtung Hand-Auge** | Verbindlich **Flansch → Kamera**. Die ~91,5°-Drehung vertauscht bei falscher Richtung x und y, statt ein Vorzeichen zu drehen — der Fehler sieht plausibel aus und ist es nicht. |
 | **Schutz** | `max_korrektur_m`: zu große Korrektur → Messung verwerfen, `w = 0` (fängt einen falschen Block im Bild ab, R4). Rampe ~0,2 s beim Wechsel. |
 | **Abnahme** | `w_wirksam` in `follower_status` zeigt den Quellenwechsel. Bei abgedeckter Roboterkamera läuft die Verfolgung mit `w = 0` weiter. |
 
@@ -258,7 +269,7 @@ Die größte Komponente. **Nicht am Stück bauen.**
 
 ## Phase 6 — Inbetriebnahme und Abstimmung
 
-Reihenfolge der Labormessungen: `docs/review/offene-punkte.md`, Abschnitt B.
+Reihenfolge der Labormessungen: `docs/uebersicht/offene-punkte.md`, Abschnitt B.
 Kritischer Pfad: B13 (Uhrendrift) → B1 (Bandwerte) → B19 (Greifzone) →
 B11 (Singularitäten) → B10 (Arbeitsraum) → B4 (Vorhalt) → B18 (Toleranzen).
 

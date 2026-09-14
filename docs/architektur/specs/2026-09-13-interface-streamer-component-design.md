@@ -4,6 +4,14 @@
 **Paket:** `roboter_tetris` (AICA Package, UR10e)
 **Status:** Entwurf zur Umsetzung — **als letzte Komponente zu bauen**
 
+> **Vorrang.** Normativ sind `docs/architektur/entscheidungen.md` und
+> `docs/architektur/datenvertraege.md`. Diese Spec ist daraus **abgeleitet** und
+> erzählt sie bewusst nach, damit sie ohne Vorkontext lesbar ist. Bei Widerspruch
+> gelten die beiden normativen Dokumente. **Sobald die Komponente gebaut und ihre
+> JSON-Beschreibung geschrieben ist, wird diese Datei gelöscht** — Code und JSON
+> tragen den Vertrag dann selbst, und eine dritte Stelle wäre nur Pflegeaufwand.
+
+
 ## Zweck
 
 Setzt ein Übersichtsbild für RViz zusammen, damit der Prozess live verfolgt

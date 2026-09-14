@@ -4,6 +4,14 @@
 **Paket:** `roboter_tetris` (AICA Package, UR10e)
 **Status:** Entwurf zur Umsetzung
 
+> **Vorrang.** Normativ sind `docs/architektur/entscheidungen.md` und
+> `docs/architektur/datenvertraege.md`. Diese Spec ist daraus **abgeleitet** und
+> erzählt sie bewusst nach, damit sie ohne Vorkontext lesbar ist. Bei Widerspruch
+> gelten die beiden normativen Dokumente. **Sobald die Komponente gebaut und ihre
+> JSON-Beschreibung geschrieben ist, wird diese Datei gelöscht** — Code und JSON
+> tragen den Vertrag dann selbst, und eine dritte Stelle wäre nur Pflegeaufwand.
+
+
 ## Zweck
 
 Wählt aus den geglätteten Objektzuständen das Objekt aus, das als nächstes
@@ -17,7 +25,7 @@ sind.
 
 ## Verbindliche Rahmenregeln
 
-`ARCHITECTURE.md`. Datenverträge: `docs/review/datenvertraege.md`
+`ARCHITECTURE.md`. Datenverträge: `docs/architektur/datenvertraege.md`
 (S3 und S7 ein, S4 und S5 aus).
 
 ## Komponente
@@ -39,12 +47,19 @@ sind.
 |---|---|---|
 | `tracks` | `Float64MultiArray` | S3 aus `vectoring` |
 | `picked_id` | `Float64MultiArray` | S7 aus `object_follower` |
+| `robot_state` | `cartesian_state` | `robot_state_broadcaster` — liefert den Anfahrweg für die Erreichbarkeitsprüfung |
+
+> **Kein Zyklus.** `cartesian_state` kommt aus der Hardware, nicht aus dem
+> Regelpfad, und der `object_follower` hört es ohnehin ab — es ist eine
+> zusätzliche Abzweigung eines vorhandenen Signals. Die Entkopplung aus Thema 4
+> betrifft die Rückmeldung des **Follower-Zustands**, und die bleibt unberührt
+> (`entscheidungen.md`, Nachtrag 3 / N4).
 
 ### Outputs
 
 | Signal | Typ | Inhalt |
 |---|---|---|
-| `target` | `Float64MultiArray` | S4 — feste Länge 12 |
+| `target` | `Float64MultiArray` | S4 — feste Länge **13** (Feld 12 = `zone_upstream`) |
 | `not_pickable` | `Float64MultiArray` | S5 — nur für `data_tracker` |
 
 ### Predicates
@@ -82,12 +97,19 @@ sind.
 ```
 t_verfügbar = (zonenende_längs − position_längs) / belt_speed_mps
 
-t_benötigt  = abstand / attractor_v_max_mps        ← Fahrt
+t_benötigt  = abstand / attractor_v_max_mps        ← Fahrt, abstand = TCP (robot_state) → Klotz
             + 3 / attractor_gain                   ← Einschwingen des Attractors
             + t_descend_s + t_grasp_s
 
 kandidat ⟺ t_verfügbar > reach_safety_factor · t_benötigt
 ```
+
+`abstand` ist der Weg von der **aktuellen TCP-Position** (aus `robot_state`) zum
+Klotz. Der Term ist nicht entbehrlich: Über Bandbreite und Zonenlänge schwankt der
+Anfahrweg realistisch zwischen 0,3 und 0,8 m — rund eine Sekunde bei einem Budget
+von wenigen Sekunden. Nebeneffekt in die richtige Richtung: Steht der Roboter
+gerade weit weg, etwa mitten im Abbruchpfad, gilt korrekt nichts als erreichbar,
+bis er zurück ist.
 
 Der Term `3/K` ist wesentlich: Der Point Attractor nähert sich exponentiell, nach
 etwa drei Zeitkonstanten ist er praktisch da. Bei K = 5 sind das 0,6 s. Ohne
@@ -102,6 +124,22 @@ diesen Term plant man mit einer Ankunft, die so nie eintritt.
 
 Welche Abmessung quer zur Backenrichtung liegt, folgt aus der Blockorientierung
 und dem kommandierten Gierwinkel — gilt damit in beiden Orientierungsmodi.
+
+**Ausnahme für fast quadratische Klötze:** Liegt `min(length, width) / max(…)`
+über **0,85**, ist die Achszuordnung unsicher — der Tracker friert bei solchen
+Objekten den zuerst gemessenen Winkel ein, und der kann die beiden Achsen
+vertauscht haben. Dann **`max(length, width)` prüfen**, nicht die zugeordnete
+Abmessung. Eine Zeile, konservativ, und sie macht ein Feld `square` im Datenvertrag
+entbehrlich (Begründung in `datenvertraege.md` unter S1). Der Preis ist gering:
+Bei einem Seitenverhältnis über 0,85 unterscheiden sich die beiden Abmessungen um
+weniger als 18 %.
+
+> **Warum 0,85 und nicht die 0,92 aus `detection.py`:** Die Grundfläche wird
+> richtungsabhängig zu groß gemessen — ein exakt quadratischer 50 × 50-Klotz kam am
+> 14.09.2026 als 58,8 × 52,3 heraus (Verhältnis 0,889). Mit 0,92 hätte die Ausnahme
+> bei genau dem Klotz nicht gegriffen, für den sie gedacht ist
+> (`entscheidungen.md`, Nachtrag 4 / M5). Ein einzelner Messpunkt — an weiteren
+> Klötzen zu bestätigen.
 
 Das verhindert die frustrierendste Fehlerart: sauber anfahren, greifen, passt
 nicht.
@@ -138,6 +176,27 @@ der Sicherheitsraum; der Roboter darf dem Block ein Stück darüber hinaus folge
 
 Nebeneffekt: Es braucht keine Rückmeldung des Follower-Zustands — die Entkopplung
 aus dem Komponentenschnitt bleibt erhalten.
+
+### `zone_upstream` (S4 Feld 12)
+
+Der `priority_handler` gibt die **stromaufwärtige Längsgrenze** der Greifzone im
+`target`-Satz mit — auch bei `has_target = 0`. Der `object_follower` begrenzt in
+`ANFAHREN` seine Zielpose darauf und erzeugt damit den Abfangkurs.
+
+Nur diese eine Grenze wird übertragen: Quer darf nicht begrenzt werden (der
+Roboter wartet am Zonenrand auf der Spur des Blocks), stromabwärts ebenfalls nicht
+(P4 — der Roboter muss dem Block über die Zonengrenze hinaus folgen dürfen), und
+die Höhe deckt der Arbeitsraum-Clamp des Follower ab. Die Greifzone bleibt damit
+vollständig in **einem** Besitz (`entscheidungen.md`, Nachtrag 3 / N3).
+
+### Greifzone und Messregion des Trackers
+
+**Die Greifzone muss innerhalb der Messregion von `base_cam` liegen**
+(`track_velocity_region_y_min` / `_max`). Außerhalb dieser Region koppelt der
+Tracker die Längsposition statt sie zu messen und löscht Tracks nicht mehr bei
+ausbleibender Detektion — ein Phantom liefe dort mit Status 0 durch die Zone und
+würde hier ausgewählt. Beide Grenzen werden in **B19 gemeinsam** festgelegt.
+Begründung: `entscheidungen.md`, Nachtrag 3 / N2.
 
 ### `not_pickable`
 

@@ -37,7 +37,8 @@ Signaltypen: **D** Datensignal (Zahlenfeld) · **B** Schaltsignal (Bool) ·
      ▼               │                                    │
  ┌───────────────────┼───┐                                │
  │ ▣ priority_handler    │                                │
- │               100 Hz   │                                │
+ │               100 Hz  │                                │
+ │ ◀ R cartesian_state   │  (Anfahrweg für Erreichbarkeit)│
  │ D target              │                                │
  │ D not_pickable ───────┼──────┐                         │
  └───┬───────────────────┘      │                         │
@@ -96,25 +97,11 @@ Signaltypen: **D** Datensignal (Zahlenfeld) · **B** Schaltsignal (Bool) ·
 
 ## Signalliste
 
-| Signal | Typ | Von | Nach |
-|---|---|---|---|
-| `objects` | D | base_cam | vectoring, data_tracker |
-| `object_position` | D | robot_cam | object_follower |
-| `tracks` | D | vectoring | priority_handler, data_tracker |
-| `target` | D | priority_handler | object_follower |
-| `not_pickable` | D | priority_handler | data_tracker |
-| `target_pose` | **Z** | object_follower | signal_point_attractor |
-| `picked_id` | D | object_follower | priority_handler, data_tracker |
-| `follower_status` | D | object_follower | interface_streamer |
-| `gripper_close` | B | object_follower | robotiq_gripper |
-| `is_closed`, `has_object` | B | robotiq_gripper | object_follower |
-| `world_state` | D | data_tracker | interface_streamer |
-| `debug_image` ×2 | I | base_cam, robot_cam | interface_streamer |
-| `interface_image` | I | interface_streamer | RViz |
-| `cartesian_state` | **R** | robot_state_broadcaster | object_follower, attractor |
-| `twist` | – | attractor | ik_velocity_controller |
+Sender, Empfänger, Feldbelegung und Einheiten stehen vollständig in
+`docs/architektur/datenvertraege.md` (S1–S10). Hier bewusst **nicht** wiederholt —
+eine zweite Liste wäre eine zweite Stelle, die bei jeder Vertragsänderung
+mitgepflegt werden müsste.
 
----
 
 ## Was sich gegenüber dem ursprünglichen Plan geändert hat
 
@@ -125,7 +112,8 @@ Signaltypen: **D** Datensignal (Zahlenfeld) · **B** Schaltsignal (Bool) ·
 | Rückkanal | Listenvergleich über drei Komponenten | ein Ereignis `picked_id` mit laufender Nummer |
 | `vectoring` ← `data_tracker` | vorhanden | entfernt |
 | Greifer-Rückmeldung | nur Predicates | zwei Bool-Signale |
-| Greifzone | in zwei Komponenten parametriert | nur im `priority_handler`; Arbeitsraum nur im `object_follower` |
+| Greifzone | in zwei Komponenten parametriert | nur im `priority_handler`; Arbeitsraum nur im `object_follower`. Die stromaufwärtige Grenze reist als Feld 12 in S4 mit (Nachtrag 3 / N3) |
+| `priority_handler` ← `cartesian_state` | nicht vorgesehen | **ergänzt** — die Erreichbarkeitsprüfung braucht den Anfahrweg (Nachtrag 3 / N4) |
 
 **Der Datenfluss ist azyklisch.** Die einzige Rückkante ist `picked_id` — ein
 diskretes Ereignis pro Pickvorgang, kein kontinuierlicher Datenring.

@@ -304,6 +304,13 @@
       "parameter_type": "bool",
       "default_value": "false",
       "dynamic": true
+    },
+    {
+      "display_name": "Kamera-Node (global_time)",
+      "description": "Node-Name des RealSense-Blocks dieser Kamera, z. B. /realsense_camera_2. Ist er gesetzt, erzwingt die Komponente dort rgb_camera.global_time_enabled und depth_module.global_time_enabled auf true. Ohne das stempelt die Kamera (bei der L515 per Default) in ihrer Hardwareuhr: fremde Epoche, Drift von rund 4 ms/s gegen die ROS-Zeit, und nach einigen Minuten bleibt der Stempel stehen - dann verwirft das Frame-Gating jedes Bild nach dem ersten und die Objektliste bleibt leer. Leerer String = Funktion aus.",
+      "parameter_name": "camera_node",
+      "parameter_type": "string",
+      "default_value": ""
     }
   ]
 }

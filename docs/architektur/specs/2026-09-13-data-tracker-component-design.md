@@ -4,6 +4,14 @@
 **Paket:** `roboter_tetris` (AICA Package, UR10e)
 **Status:** Entwurf zur Umsetzung
 
+> **Vorrang.** Normativ sind `docs/architektur/entscheidungen.md` und
+> `docs/architektur/datenvertraege.md`. Diese Spec ist daraus **abgeleitet** und
+> erzählt sie bewusst nach, damit sie ohne Vorkontext lesbar ist. Bei Widerspruch
+> gelten die beiden normativen Dokumente. **Sobald die Komponente gebaut und ihre
+> JSON-Beschreibung geschrieben ist, wird diese Datei gelöscht** — Code und JSON
+> tragen den Vertrag dann selbst, und eine dritte Stelle wäre nur Pflegeaufwand.
+
+
 ## Zweck
 
 Führt die Gesamtliste aller Objekte mit den Merkmalen `gepickt` und
@@ -20,7 +28,7 @@ inkonsistent machen, und darf gemütlich mit 10 Hz laufen.
 
 ## Verbindliche Rahmenregeln
 
-`ARCHITECTURE.md`. Datenverträge: `docs/review/datenvertraege.md`
+`ARCHITECTURE.md`. Datenverträge: `docs/architektur/datenvertraege.md`
 (S3 und S5 und S7 ein, S10 aus).
 
 ## Komponente

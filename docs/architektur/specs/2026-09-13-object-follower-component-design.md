@@ -4,6 +4,14 @@
 **Paket:** `roboter_tetris` (AICA Package, UR10e)
 **Status:** Entwurf zur Umsetzung — **in vier Stufen bauen, nicht am Stück**
 
+> **Vorrang.** Normativ sind `docs/architektur/entscheidungen.md` und
+> `docs/architektur/datenvertraege.md`. Diese Spec ist daraus **abgeleitet** und
+> erzählt sie bewusst nach, damit sie ohne Vorkontext lesbar ist. Bei Widerspruch
+> gelten die beiden normativen Dokumente. **Sobald die Komponente gebaut und ihre
+> JSON-Beschreibung geschrieben ist, wird diese Datei gelöscht** — Code und JSON
+> tragen den Vertrag dann selbst, und eine dritte Stelle wäre nur Pflegeaufwand.
+
+
 ## Zweck
 
 Das Herzstück des On-the-fly-Pickvorgangs. Führt den Roboter an den fahrenden
@@ -18,8 +26,8 @@ Gelenkgeschwindigkeiten.
 
 `ARCHITECTURE.md`, besonders: nie blockieren, kein `time.sleep()`, kein
 `copy.deepcopy()` auf `state_representation`-Objekte.
-Datenverträge: `docs/review/datenvertraege.md` (S2, S4, S9 ein; S6, S7, S8 aus).
-Architekturentscheidungen: `docs/review/entscheidungen.md` Themen 1, 2, 6, 7.
+Datenverträge: `docs/architektur/datenvertraege.md` (S2, S4, S9 ein; S6, S7, S8 aus).
+Architekturentscheidungen: `docs/architektur/entscheidungen.md` Themen 1, 2, 6, 7.
 
 ## Regelkette
 
@@ -70,7 +78,7 @@ auf dem Block. Wird später der `base_frame`-Eingang des Attractors genutzt
 
 | Signal | Typ | Ziel |
 |---|---|---|
-| `target_pose` | `cartesian_state` (A2 bestätigen) | `attractor`-Eingang |
+| `target_pose` | **`cartesian_pose`** (A2 bestätigt 14.09.2026) | `attractor`-Eingang |
 | `gripper_close` | `Bool` | `robotiq_gripper` |
 | `picked_id` | `Float64MultiArray` | S7 → `priority_handler`, `data_tracker` |
 | `follower_status` | `Float64MultiArray` | S8 → `interface_streamer` |
@@ -115,9 +123,19 @@ auf dem Block. Wird später der `base_frame`-Eingang des Attractors genutzt
 
 **Kalibrierung (aus C1, C8)**
 
+> ⚠️ **Richtung verbindlich: Flansch → Kamera.** Genau so liegen die Werte vor
+> (`camera_mount_to_camera` in `Robot/Calibration_results_final.yaml`, Bezug
+> `tool0` — Beweiskette in `architektur/vorgaengerprojekt-abgleich.md` §2):
+> x = 0,1087 · y = −0,03436 · z = −0,05987 m, rpy ≈ (1,66° · 1,56° · **91,5°**).
+>
+> Die Drehung um rund 90° macht eine Richtungsverwechslung **nicht sichtbar**: Sie
+> vertauscht x und y, statt nur ein Vorzeichen zu drehen. Das Ergebnis sieht
+> plausibel aus und ist vollständig falsch. Die Richtung deshalb im Code
+> ausschreiben und im Test gegen einen von Hand gerechneten Punkt prüfen.
+
 | Name | Typ | Bedeutung |
 |---|---|---|
-| `handeye_x/y/z` | double | Hand-Auge Kamera → Flansch, Translation |
+| `handeye_x/y/z` | double | Hand-Auge **Flansch → Kamera**, Translation (m) |
 | `handeye_roll/pitch/yaw` | double | dito, Grad |
 | `tool_offset_z_m` | double | Flansch → Greifpunkt |
 | `gripper_yaw_offset_deg` | double | Montagewinkel der Backen |
@@ -156,7 +174,7 @@ auf dem Block. Wird später der `base_frame`-Eingang des Attractors genutzt
 | Zustand | Regelverhalten | Übergang | Timeout → |
 |---|---|---|---|
 | `WARTEN` | Beobachtungspose, **kein Vorhalt** | `has_target = 1` → `ANFAHREN` | – |
-| `ANFAHREN` | Ziel auf Greifzone begrenzt | Block in der Zone → `FOLGEN` | `ABBRUCH` |
+| `ANFAHREN` | Ziel auf `zone_upstream` (S4 Feld 12) begrenzt — **nur stromaufwärts** | Block in der Zone → `FOLGEN` | `ABBRUCH` |
 | `FOLGEN` | volle Regelung, Orientierung festlegen | Toleranz für `stable_cycles` gehalten → `ABSENKEN` | `ABBRUCH` |
 | `ABSENKEN` | wie `FOLGEN` + `vz` abwärts, **Korrektur eingefroren** | Greifhöhe erreicht → `GREIFEN` | Abweichung wächst → **auf Beobachtungshöhe steigen**, zurück zu `FOLGEN` |
 | `GREIFEN` | **reines Mitfahren**, Greifer schließt | `has_object` → `HEBEN` | `ABBRUCH`, `outcome = 1` |
@@ -164,6 +182,16 @@ auf dem Block. Wird später der `base_frame`-Eingang des Attractors genutzt
 | `ABLEGEN` | Ablagepose, **kein Vorhalt** | `is_in_range` → `LOESEN` | `ABBRUCH` |
 | `LOESEN` | Greifer auf, `picked_id` mit `outcome = 0` | fertig → `WARTEN` | `ABBRUCH` |
 | `ABBRUCH` | TCP halten, Greifer auf, senkrecht hoch, Beobachtungspose | → `WARTEN` | – |
+
+**Zur Begrenzung in `ANFAHREN`:** Begrenzt wird ausschließlich die
+**stromaufwärtige Längskoordinate** gegen `zone_upstream` aus S4 Feld 12. Die
+Querposition bleibt unbegrenzt — sie erzeugt gerade den Abfangkurs, weil der
+Roboter am Zonenrand auf der Spur des Blocks wartet. Stromabwärts wird **nicht**
+begrenzt, sonst bricht ein fast gelungener Griff ab, sobald der Block beim Greifen
+die Zonengrenze überschreitet (P4). Nach oben und unten schützt der
+Arbeitsraum-Clamp des Sicherheitsgates. Die Greifzone selbst gehört weiterhin
+allein dem `priority_handler`; der Follower hält keine Zonenparameter
+(`entscheidungen.md`, Nachtrag 3 / N3).
 
 **Start im Zustand `ABBRUCH`.** Beim Anwendungsstart steht der Roboter irgendwo,
 und der Attractor führe geradlinig zur Beobachtungspose — je nach Ausgangslage
@@ -191,10 +219,27 @@ bei 0,2 m/s in 6,7-mm-Stufen. Der Attractor sähe eine Treppe statt einer Fahrt.
 ### Kameramischung — Korrektur filtern, nicht Position mischen
 
 ```
-p_robotcam_welt = T_world_flansch(t_bild) · T_flansch_kamera · p_kamera
+x_korr, y_korr  = (x, y) · (z_band − blockhoehe) / z_band     ← Höhenkorrektur, ZUERST
+p_robotcam_welt = T_world_flansch(t_bild) · T_flansch_kamera · (x_korr, y_korr, …)
 korrektur       = p_robotcam_welt − p_prädiktion
 zielpunkt       = p_prädiktion + w · korrektur_gefiltert
 ```
+
+**Die Höhenkorrektur ist Pflicht, kein Feinschliff.** `robot_cam` projiziert den
+Blobmittelpunkt mit der **Banddistanz** zurück, der Punkt liegt aber auf der
+**Oberseite** des Klotzes — beide Werte sind dadurch um `z_band/(z_band − h)` zu
+groß. Weil die Kamera rund 114 mm seitlich neben der Flanschachse sitzt, steht der
+Klotz im eingeschwungenen Zustand gerade **nicht** im Bildzentrum, wo der Fehler
+null wäre, sondern weit außen, wo er maximal ist: 6…39 mm je nach Klotzhöhe und
+Arbeitsdistanz, **je Klotz verschieden**, und unterhalb von `max_correction_m`,
+also von der Identitätsprüfung nicht abgefangen. `blockhoehe` kommt aus S4
+Feld 10, `z_band` aus S2 Feld 4. Vollständige Herleitung: `entscheidungen.md`,
+Nachtrag 3 / N1.
+
+> **Reihenfolge:** Die Skalierung wirkt auf die **rohe Messung**, also vor dem
+> Korrekturfilter und damit vor dem Einfrieren beim Übergang
+> `FOLGEN → ABSENKEN` (F2). Sonst friert der unkorrigierte Wert ein und der
+> Fehler wird über den gesamten Absenkvorgang konserviert.
 
 Mathematisch identisch zur wörtlichen X/Y-Mischung, aber **filterbar**: Die
 absolute Position wandert mit Bandgeschwindigkeit und lässt sich nicht glätten,
@@ -331,6 +376,10 @@ blockierenden Aufrufe. Alle Zeitmessungen über
 
 - Jeder Zustand hat einen Timeout mit definiertem Rückfall
 - Fehlgriff (`is_closed` ohne `has_object`) → `ABBRUCH`, `outcome = 1`
+- `LOESEN` **nicht** über `has_object = 0` verlassen: Der Robotiq-Status `gOBJ`
+  meldet auch ein Objekt, auf das der Greifer **beim Öffnen** trifft, `has_object`
+  kann dort also flackern. Übergang über den Abschluss der Öffnungsbewegung
+  (`is_closed = 0`) bzw. den Timeout.
 - Verlorenes Objekt → `ABBRUCH`, `outcome = 2`
 - Nach jedem Abbruch wird `picked_id` gesendet, damit der `priority_handler` das
   Objekt als erledigt behandelt und das nächste wählt

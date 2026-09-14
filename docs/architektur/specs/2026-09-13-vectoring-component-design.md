@@ -4,6 +4,14 @@
 **Paket:** `roboter_tetris` (AICA Package, UR10e)
 **Status:** Entwurf zur Umsetzung
 
+> **Vorrang.** Normativ sind `docs/architektur/entscheidungen.md` und
+> `docs/architektur/datenvertraege.md`. Diese Spec ist daraus **abgeleitet** und
+> erzählt sie bewusst nach, damit sie ohne Vorkontext lesbar ist. Bei Widerspruch
+> gelten die beiden normativen Dokumente. **Sobald die Komponente gebaut und ihre
+> JSON-Beschreibung geschrieben ist, wird diese Datei gelöscht** — Code und JSON
+> tragen den Vertrag dann selbst, und eine dritte Stelle wäre nur Pflegeaufwand.
+
+
 ## Zweck
 
 Glättet die Objektzustände aus `base_cam` und bewertet ihre Plausibilität.
@@ -20,7 +28,7 @@ Genauigkeitsgewinn: bei ~3 mm Rauschen je Bild und 30 Messungen bleiben quer
 
 `ARCHITECTURE.md`, besonders: `LifecycleComponent`, kein Pub/Sub, nie blockieren,
 Registrierung mit `::`, JSON in `component_descriptions/`.
-Datenverträge: `docs/review/datenvertraege.md` (S1 ein, S3 aus).
+Datenverträge: `docs/architektur/datenvertraege.md` (S1 ein, S3 aus).
 
 ## Komponente
 
@@ -91,13 +99,36 @@ guete   = | ⟨e^{i2θ}⟩ |        (0…1)
 ```
 
 Grund: Die Orientierung ist π-periodisch. Ein arithmetischer Mittelwert aus 0°
-und 90° wäre 45° — genau die Lage, in der der Greifer die Ecken erwischt. Bei
-fast quadratischen Blöcken springt der Winkel aus `minAreaRect` genau so.
+und 90° wäre 45° — genau die Lage, in der der Greifer die Ecken erwischt.
 `guete < orientation_quality_min` → Orientierung unbrauchbar, Status bleibt 0,
 aber der Follower fällt auf den festen Winkel zurück (Modus-1-Verhalten).
 
+> **⚠️ Korrektur zur ursprünglichen Begründung (14.09.2026).** Hier stand, dass
+> der Winkel *bei fast quadratischen Blöcken* genau so springt. Das trifft am
+> Eingang dieser Komponente **nicht mehr zu**: `vision/detection.py` markiert
+> solche Objekte (`square`, Seitenverhältnis ≥ 0,92) und `vision/tracker.py`
+> **friert ihre Orientierung auf den zuerst gemessenen Wert ein**. Aus `base_cam`
+> kommt für sie also ein konstanter Winkel, und `guete` bleibt nahe 1.
+>
+> **Die Mittelung bleibt trotzdem richtig und nötig** — π-Periodizität betrifft
+> jede Winkelmittelung, nicht nur quadratische Objekte. Auch das Gütemaß behält
+> seinen Zweck; es schlägt nur bei anderen Ursachen an: verrauschte Detektion,
+> teilverdeckter Klotz, Objekt halb außerhalb der ROI. **Nur das Lehrbeispiel war
+> falsch.** Wichtig bei der Festlegung von D11 — wer die Schwelle an einem
+> quadratischen Klotz einzustellen versucht, wartet vergeblich auf einen
+> Ausschlag. Hintergrund: `architektur/vorgaengerprojekt-abgleich.md` §7.
+
 **Plausibilität:** gemessene Längsgeschwindigkeit aus dem Puffer gegen
 `belt_speed_mps`.
+
+> ⚠️ **Die Prüfung wirkt nur innerhalb der Messregion von `base_cam`.** Außerhalb
+> von `track_velocity_region_y_min…max` schreibt der Tracker die Längsposition aus
+> der globalen Bandgeschwindigkeit fort, statt sie zu messen — dort *ist* die
+> Längsbewegung per Konstruktion die Bandgeschwindigkeit, und Status 1
+> („steht/verklemmt") kann nie auslösen. Ebenso wenig verschwindet dort eine ID bei
+> ausbleibender Detektion, worauf die Abbruchregel des Follower beruht.
+> **Konsequenz:** Die Greifzone wird in B19 so gelegt, dass sie in der Messregion
+> liegt. Vollständig: `entscheidungen.md`, Nachtrag 3 / N2.
 
 | Bedingung | Status |
 |---|---|
@@ -146,6 +177,10 @@ zu `GripperTargetLogic` im Greifer. Ohne Hardware prüfbar:
 Mittelungskonvergenz, Statusübergänge 3→0, Erkennung eines stehenden Objekts,
 **Winkelmittelung bei 0°/90°-Sprüngen** (muss nahe 0° oder 90° liefern, nie 45°),
 Gütemaß bei konsistenten und bei springenden Winkeln, Verfall.
+
+> Der 0°/90°-Test bleibt als **Unit-Test der Funktion** sinnvoll — er prüft die
+> Mathematik. Nur als Beschreibung des realen Eingangs taugt er nicht mehr (siehe
+> Korrektur oben).
 
 ## Bewusste YAGNI-Entscheidungen
 
