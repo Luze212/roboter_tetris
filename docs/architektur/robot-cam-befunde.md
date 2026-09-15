@@ -37,6 +37,12 @@ nicht etwa `block_color_*`.
 glanzfreies Farbfeld. Bei einer glänzenden Oberseite wären Glanzlichter
 entsättigt und die HSV-Maske bräche zusammen.
 
+> ⚠️ **Am Aufbau widerlegt (15.09.2026).** „Sauberer Chroma-Key" trifft in der
+> gemessenen Szene nicht zu: Das Band liegt bei **H ≈ 88–90** (türkis), nicht bei
+> 60, und ist blass (Sättigung im Median 60, unteres Fünftel unter 9). Mit den
+> Defaults werden **5,4 %** des Bandes als Band erkannt, mit optimalen Werten
+> höchstens 74 %. Vollständig in **§9**.
+
 > **Kalibrier-Gegenprobe:** Mit `conveyor_z_dist = 865` mm misst `base_cam` den
 > hochkant stehenden Beispielklotz zu **76,6 mm** (Soll 76 mm). Der Wert 865 ist
 > damit am realen Aufbau bestätigt — nicht geraten.
@@ -123,6 +129,12 @@ Fall, den Farbe allein nicht lösen kann:
 Konkret: `near = (depth == 0) | (depth < median(gültige Tiefe) − 20 mm)`. Ein
 Blob zählt nur, wenn er diese Region zu **mindestens 10 %** überlappt. Beides ist
 im Code als Konstante hinterlegt, nicht als Parameter.
+
+> ⚠️ **Die tragende Annahme ist am Aufbau widerlegt (15.09.2026).** Die
+> Bandspiegelung liefert dort **keine** gültige Band-Tiefe, sondern **0** — sie
+> erzeugt also selbst ein Nah-Signal, statt daran zu scheitern. Gemessen: 8,4 %
+> der Pixel ohne Tiefe, Nah-Region 8,6 % — die beiden sind praktisch identisch,
+> die Nah-Region *besteht* im Wesentlichen aus dem Glanz. Vollständig in **§9**.
 
 ---
 
@@ -316,3 +328,187 @@ Ehrlichkeitshalber, damit niemand auf zu dünnem Eis baut:
 - **`robot_cam_2` ist am realen Aufbau noch ungetestet.** Die Kantenvariante
   inklusive Tiefenkanten-Fusion ist implementiert und mit synthetischen Szenen
   unit-getestet, aber noch nie gegen echte Klötze gelaufen (**B6**).
+
+
+---
+
+## 9. Messungen am Aufbau, 15.09.2026
+
+Erste Erprobung von `robot_cam` gegen einen echten Klotz (B6). Kamera senkrecht,
+Steuerframe auf 0,003° genau ausgerichtet, Klotz 50 × 50 × 100 mm hochkant,
+Kamera-Klotz-Abstand rund 425 mm. Ergebnis: **`NO OBJECT`** — und die Ursache ist
+nicht dort, wo man sie zuerst vermutet.
+
+### 9.1 Der Klotz selbst ist einwandfrei
+
+| Größe | Wert |
+|---|---|
+| eigene Farbfläche im Bild | 4 764 px (Mindestfläche 500) |
+| Tiefe auf dem Klotz | **445 mm** |
+| Tiefe auf dem Band | **539 mm** |
+| Überlappung mit der Nah-Region | **97 %** (nötig: 10 %) |
+
+Die Tiefen decken sich mit der Handmessung (425 mm plus 100 mm Klotzhöhe). Weder
+Mindestfläche noch Nah-Gate sind das Problem — der Klotz erfüllt beide mit großem
+Abstand.
+
+### 9.2 Die Bandmaske greift nicht
+
+```
+Bandfarbe gemessen:   H ≈ 88–90 (türkis)   S ≈ 60   V ≈ 104
+Parameter:            belt_h_min 35   belt_h_max 85   belt_s_min 60
+→ 5,4 % des Bandes werden als Band erkannt
+→ 95,5 % des Bildes werden zu Kandidaten
+→ nach der Morphologie bleibt EINE Kontur von 375 842 px (das ganze Bild)
+```
+
+`belt_h_max = 85` schneidet **direkt unterhalb** des Bandfarbtons ab. Band, Glanz
+und Klotz verschmelzen dadurch zu einem einzigen Blob, dessen Nah-Überlappung bei
+9,2 % liegt — knapp unter der 10-%-Schwelle. Daher `NO OBJECT`.
+
+**16 Parameterkombinationen durchgerechnet** (`belt_h_max` 85…100 × `belt_s_min`
+60…20): **keine trifft den Klotz.** Die größte qualifizierte Kontur bleibt
+zwischen 78 000 und 324 000 px.
+
+### 9.3 Feste Belichtung hilft erheblich — löst es aber nicht
+
+Die RGB-Belichtungsautomatik untergräbt die Farbmaske aktiv:
+
+| | Automatik | fest, `exposure = 166` |
+|---|---|---|
+| Bandsättigung (Median) | 60 | **118** |
+| überbelichtete Bandpixel | vorhanden | **0,0 %** |
+| größte qualifizierte Kontur | 375 842 px | **44 287 px** |
+
+Allein das Abschalten der Automatik **bei gleichem Nennwert** verdoppelt die
+Sättigung und beseitigt die Überbelichtung; die Kontur schrumpft um Faktor 8.
+
+Nebenbefund, der die ursprüngliche Annahme rehabilitiert: Je kürzer die
+Belichtung, desto mehr wandert der Bandfarbton Richtung Grün — H = 90 bei 166,
+84 bei 50, **60 bei exposure 20**, also genau der in §1 angenommene Wert. Bei so
+kurzen Zeiten wird das Bild aber zu dunkel (V = 8) und es geht gar nichts mehr.
+
+`belt_v_min` wird bei kürzerer Belichtung relevant: Bei `exposure = 80` springt die
+Kontur von 268 000 auf 40 000 px, sobald `belt_v_min` von 40 auf 20 sinkt. Bei der
+aktuellen Belichtung macht es keinen Unterschied.
+
+### 9.4 Der eigentliche Grund: das Gate prüft je Blob, nicht je Pixel
+
+Über alle 24 getesteten Kombinationen bleibt dieselbe Restkontur übrig —
+bbox ≈ **(257, 151, 215, 329)**, ein hoher schmaler Streifen. Das ist der
+**Glanzstreifen**, und der Klotz bei (399, 242, 71, 72) liegt darin.
+
+Beide sind nicht grün und berühren einander, werden also **eine** Kontur. Und weil
+der Glanz Tiefe 0 liefert (§3-Korrektur), besteht der gemeinsame Blob den
+Nah-Gate-Test, statt daran zu scheitern.
+
+**Das ist eine Grenze des Verfahrens, keine Fehleinstellung:** Das Gate ist ein
+Überlappungstest **je Blob**. Es kann einen Blob, der eine echte und eine falsche
+Region vermischt, nicht trennen. Solange der Glanz den Klotz berührt, hilft keine
+Schwelle — weder bei der Farbe noch beim Gate.
+
+### 9.5 Was daraus folgt
+
+**Die Geometrie ist der Hebel.** Der Glanzstreifen ist die Spiegelung einer
+Lichtquelle im Band. Ein Versatz von Kamera, Klotz oder Licht lässt ihn
+verschwinden oder trennt ihn vom Klotz. Erster Versuch: Klotz quer versetzen und
+erneut messen.
+
+**Feste Belichtung gehört dazu**, unabhängig davon — sie kostet nichts und bringt
+Faktor 8. ⚠️ Der AICA-RealSense-Block exponiert `rgb_camera.exposure` und
+`enable_auto_exposure` **nicht** (dieselbe Lage wie bei `global_time_enabled`),
+sie sind also nur zur Laufzeit setzbar.
+
+**`robot_cam_2` ist der zweite Weg** und genau für diesen Fall gebaut — Kanten
+statt Farbe, unabhängig von der Bandfarbe. Das ist B6 Stufe 5, der A/B-Test.
+
+> **B6 Stufe 1 ist damit durchgefallen, Stufe 3 (Höhe) noch nicht erreicht.**
+> B8 und D18 bleiben offen.
+
+
+### 9.6 Nachtrag: feste Belichtung erzeugt einen Fehlalarm
+
+Nach dem Abschalten der Belichtungsautomatik (`exposure = 80`) meldet `robot_cam`
+in etwa jedem vierten Bild ein Objekt — **53 von 199 Nachrichten**, vorher null.
+Das ist aber kein Erfolg:
+
+```
+x        Median    5,63 mm    Std 23,50   (zwei Moden: ~5 und ~74)
+y        Median  −11,59 mm    Std  0,27
+z_band   Median  530,60 mm
+orient   Median    1,57 rad   Min 0,00  Max 1,57
+```
+
+x und y liegen im **Bildzentrum**, die Orientierung springt zwischen 0 und π/2.
+Das ist die Signatur des bildfüllenden Blobs: Sein `minAreaRect` ist das
+achsparallele Bildrechteck, Mittelpunkt = Hauptpunkt, Winkel 0 oder 90°. Die
+bessere Belichtung hat lediglich die Nah-Überlappung des Riesenblobs über die
+10-%-Schwelle gehoben (vorher 9,2 %).
+
+**Das ist gefährlicher als gar keine Erkennung.** Der Wert sieht plausibel aus —
+wenige Millimeter Versatz bei plausibler Banddistanz. Die Identitätsprüfung
+`max_korrektur_m` (0,05 m, Thema 7 / R4) verwirft ihn **nicht**, weil er klein
+ist. Im Vollsystem ginge er als echte Feinortung in die Zielpose ein.
+
+### 9.7 Gegenmaßnahme: Flächenobergrenze
+
+`localize_largest_blob` prüft `min_contour_area`, hat aber **keine Obergrenze**.
+Ein Klotz belegt in dieser Szene rund **4 800 px**, der Fehlalarm-Blob **325 000**.
+Ein Faktor 70 — die beiden sind trivial zu trennen.
+
+**Vorschlag für den Vertragsumbau (Phase 2.2):** Parameter `max_contour_area`
+(oder gleichwertig eine Prüfung der rückprojizierten Kantenlängen gegen die
+erwartete Klotzgröße). Überschreitung → `valid = 0`, nicht etwa die zweitgrößte
+Kontur nehmen: Ein bildfüllender Blob heißt, dass die Bandmaske versagt hat, und
+dann ist keiner Kontur zu trauen.
+
+Das ist auch der allgemeinere Punkt: Die Komponente hat bisher **keine
+Plausibilitätsprüfung der Ausgabe**. `valid` aus S2 ist der richtige Ort dafür.
+
+
+### 9.8 Der eigentliche Befund: die **Auswahl**, nicht die Erkennung
+
+Gegenprobe mit der **Kantenvariante** (`robot_cam_2`), die parallel lief: Sie
+meldet **96 von 96** Nachrichten gefüllt — aber `x = 341 mm`, das entspricht rund
+379 px neben dem Hauptpunkt, also fast dem rechten Bildrand. Im Debug-Bild sieht
+man warum: Die orange Tiefenkante umschließt Glanzstreifen **und** Klotz als eine
+Region, die grüne Detektion sitzt aber auf der **Maschinenstruktur am rechten
+Bildrand**, außerhalb des Bandes.
+
+**Beide Varianten scheitern also am selben Punkt, und es ist nicht die Erkennung:**
+
+| | Farbvariante | Kantenvariante |
+|---|---|---|
+| gewählter Blob | bildfüllend (Glanz + Klotz) | Struktur am Bildrand |
+| gemeldete Position | Bildzentrum | x = 341 mm |
+| Klotz erkannt? | als Teil des Blobs | ja, aber nicht gewählt |
+
+#### Zwei Ursachen, beide gut behebbar
+
+**1. Der Code wählt die flächengrößte Kontur — die Doku beschreibt etwas anderes.**
+`localize_largest_blob` nimmt `area > best_area`. `entscheidungen.md` Thema 7 und
+Konzeptreview R4 gehen dagegen von *„das Objekt am nächsten zum Bildzentrum"* aus.
+**Die Annahme hinter R4 und `max_korrektur_m` stimmt damit nicht.**
+
+**2. `robot_cam` hat keine ROI.** `base_cam` hat vier ROI-Parameter und blendet
+alles außerhalb des Bandes aus; bei der Roboterkamera gibt es nichts dergleichen.
+Deshalb ist die Maschinenstruktur am Bildrand überhaupt ein Kandidat.
+
+#### Vorschlag
+
+Im eingeschwungenen Zustand liegt der Klotz **immer an derselben Bildstelle** — an
+einem festen Pixelversatz, der aus der Hand-Auge-Kalibrierung folgt (das ist genau
+der Vorteil, den Thema 6 der senkrechten Kamera zuschreibt). **Und dieser Versatz
+ist rechenbar, nicht zu messen:** Die Kameramontage am Flansch ist seit der
+Vorgängergruppe unverändert, deren Hand-Auge-Werte gelten also unmittelbar (C1).
+Damit:
+
+- **Auswahl nach Nähe zu diesem Erwartungspunkt** statt nach Fläche. Hätte in
+  beiden gemessenen Fällen den richtigen Blob genommen.
+- **ROI um den Erwartungspunkt**, analog zu `base_cam`. Schließt die
+  Maschinenstruktur konstruktiv aus.
+- **`max_contour_area`** (§9.7) als dritte, unabhängige Sicherung.
+
+Alle drei betreffen ausschließlich `localize_largest_blob` und die
+Parameterliste — die **Detektionskerne beider Varianten bleiben unangetastet**,
+der A/B-Test aus B6 bleibt also aussagekräftig.

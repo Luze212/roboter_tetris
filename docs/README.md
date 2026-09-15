@@ -11,6 +11,7 @@ Was man liest, um das System zu verstehen, zu bedienen und einzurichten.
 
 | Dokument | Inhalt |
 |---|---|
+| `uebergabe.md` | **Einstieg beim Wechsel des Rechners:** Arbeitsregeln, Stand, gemessene Werte, nächste Schritte |
 | `projektkontext.md` | Rahmen, Aufbau, Abgrenzungen, Arbeitsweise. **Einstieg für jede Sitzung.** |
 | `systemgraph.md` | Der AICA-Graph: welche Komponente hängt an welcher |
 | `offene-punkte.md` | Arbeitsliste A/B/C/D — was noch zu messen, abzulesen oder festzulegen ist |
@@ -23,7 +24,7 @@ Das Warum hinter den Entscheidungen und die verbindlichen Schnittstellen.
 
 | Dokument | Inhalt | |
 |---|---|---|
-| `entscheidungen.md` | Alle Architekturentscheidungen mit Begründung (Themen 1–7, Nachträge 1–3) | **normativ** |
+| `entscheidungen.md` | Alle Architekturentscheidungen mit Begründung (Themen 1–7, Nachträge 1–5) | **normativ** |
 | `datenvertraege.md` | Signalspezifikation S1–S10: Felder, Strides, Einheiten | **normativ** |
 | `robot-cam-befunde.md` | Szene, Materialphysik und verworfene Wege der Roboterkamera | |
 | `vorgaengerprojekt-abgleich.md` | Abgleich gegen das Vorgängerarchiv `UR10_Pick_ws`: was von dort beantwortet ist, was nicht, fünf Fallen | |
@@ -72,3 +73,5 @@ Erkenntnis in fünf Dateien schreiben.
 | Warum die Roboterkamera nicht den Loch-Trick nutzt | `architektur/robot-cam-befunde.md` §2 |
 | Was das Vorgängerprojekt beantwortet — und was nicht | `architektur/vorgaengerprojekt-abgleich.md` |
 | Welche AICA-Parameter beim Anlegen gesetzt werden müssen | `uebersicht/einrichtung-projektanwendung.md` |
+| Die gemessenen Werte des Aufbaus (Bandhöhe, Greifhöhe, Ablagepose) | ebd. Abschnitt 8; Herleitung in `architektur/entscheidungen.md` Nachtrag 5 |
+| Warum Höhen Flansch- und nicht TCP-Maße sind | `architektur/entscheidungen.md` Nachtrag 5 / M8 |

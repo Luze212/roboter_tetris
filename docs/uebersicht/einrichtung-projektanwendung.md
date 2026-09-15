@@ -31,6 +31,53 @@ Komponentenbeschreibungen im AICA-Image (`v2.0.5-jazzy`, core v5.0.0).
 > Node-Namen der Basiskamera setzen (z. B. `/realsense_camera_2`), dann erledigt
 > die Komponente es bei jeder Aktivierung. Leer lassen = Funktion aus.
 
+> ### ⚠️ Belichtungsautomatik der Roboterkamera abschalten
+>
+> `rgb_camera.enable_auto_exposure` untergräbt die Farbmaske von `robot_cam`
+> aktiv: Sie überbelichtet das Band, und Überbelichtung frisst genau die
+> Sättigung, die die Maske braucht. Am 15.09.2026 gemessen — Automatik aus, bei
+> **gleichem Nennwert** `exposure = 166`: Bandsättigung 60 → **118**,
+> überbelichtete Pixel auf **0 %**, größte Störkontur 375 842 → **44 287 px**.
+>
+> ⚠️ Auch diese Parameter exponiert der AICA-RealSense-Block **nicht** — dieselbe
+> Lage wie bei `global_time_enabled`. Zur Laufzeit setzbar mit:
+>
+> ```bash
+> ros2 param set <ROBOTERKAMERA-KNOTEN> rgb_camera.enable_auto_exposure false
+> ```
+>
+> Hintergrund und Grenzen: `architektur/robot-cam-befunde.md` §9.3.
+
+> ### ⚠️ Knotennamen nicht annehmen — über `serial_no` prüfen
+>
+> Welcher RealSense-Knoten welche Kamera ist, **hängt an der Anwendung und wechselt**.
+> Im Projekt vom 13.09. war `/realsense_camera_2` die Basiskamera, im Projekt vom
+> 15.09. ist es `/realsense_camera`. Wer den Namen aus einer anderen Anwendung
+> übernimmt, behandelt die falsche Kamera — und zwar unbemerkt, weil die
+> Roboterkamera den Parameter ohnehin richtig stehen hat.
+>
+> Maßgeblich ist der Serial: **Basiskamera `f1370107` (L515)**, **Roboterkamera
+> `241122074842` (D435i)**. Denselben Namen trägt dann auch `camera_node` bei
+> `base_kamera`.
+>
+> ### Zwischenlösung, solange das Image nicht neu gebaut werden kann
+>
+> Der Fix in `base_cam` ist im Quellcode vorhanden, aber erst nach einem Rebuild
+> **und dem anschließenden Neuerzeugen des AICA-Systemabbilds im Launcher** wirksam
+> — ein Neustart der Anwendung allein holt das neue Paket nicht nach. Gegenprobe:
+> Taucht `camera_node` in der Parameterliste von `base_kamera` auf? Wenn nein,
+> läuft noch der alte Komponentenstand. Ist ein
+> Rebuild gerade nicht möglich — etwa weil auf derselben AICA-Installation das
+> Kalibrierprojekt läuft —, hilft **nach jedem Start der Anwendung** dieser Aufruf:
+>
+> ```bash
+> docker exec -u ros2 -e ROS_DOMAIN_ID=0 $(docker ps -q | head -1) bash -lc 'source /opt/ros/jazzy/setup.bash && ros2 param set <KAMERA-KNOTEN> rgb_camera.global_time_enabled true && ros2 param set <KAMERA-KNOTEN> depth_module.global_time_enabled true'
+> ```
+>
+> Zweimal „Set parameter successful" = hat gegriffen. **Möglichst sofort nach dem
+> Start**, weil der Versatz von Beginn an mit rund 4 ms/s wegläuft. Am 15.09.2026
+> erprobt: +0,586 s → +0,067 s.
+
 > **Nach dem Setzen prüfen**, nicht annehmen: Ein Neustart verdeckt den Fehler.
 > Die Hardwareuhr startet nahe null und wird **einmal** gegen die Rechneruhr
 > synchronisiert, der Versatz sieht also direkt nach dem Start klein aus und
@@ -150,7 +197,49 @@ Kurz und in dieser Reihenfolge:
 
 ---
 
+## 8. Gemessene Werte des Aufbaus
+
+Diese Werte stammen aus Messungen am Roboter (15.09.2026) und sind beim Anlegen
+der Anwendung einzutragen. Herleitung und Unsicherheiten: `architektur/entscheidungen.md`,
+Nachtrag 5.
+
+> ⚠️ **Alle Höhen sind Flanschmaße** (`ur_tool0`), nicht TCP-Maße der UR-Steuerung.
+> Der Greifer steht nicht im URDF, `robot_state_broadcaster` und IK-Controller
+> arbeiten beide am Flansch. Wer hier einen TCP-Wert einträgt, liegt um 215 mm daneben.
+
+| Wert | Zahl | Herkunft |
+|---|---|---|
+| Bandoberfläche in `world` | **53,6 mm** (±1 mm Ebenheit, ±5 mm systematisch) | B17, drei Antastpunkte |
+| Flansch → Backenspitze (geschlossen) | **245 mm** | mit Maßstab gemessen |
+| Flansch → Auflagenmitte (Griffpunkt) | **235 mm** | Backenspitze + halbe Auflagenhöhe (B15) |
+| `tool_offset_z_m` (TCP der UR-Steuerung) | **0,215 m** | C8 — **nur** zur Umrechnung fremder TCP-Werte |
+| Greifhöhe Flansch, 100-mm-Klotz stehend | **≈ 339 mm** | 53,6 + 50 + 235 |
+| Transferhöhe Flansch, Referenzklotz | **≈ 445 mm** | D12 |
+| Ablagepose Flansch | x = **−316,49** · y = **+476,21** · z = **+419,71** mm | B9 |
+| Ablage-Orientierung (w,x,y,z) | 0,006857 · 0,680692 · 0,732524 · −0,004575 | B9 |
+| Arbeitsraum Z im Flanschmaß (Anhaltspunkt) | **0,310…0,585 m** | Vorgängerprojekt + 0,215 (B10) |
+| Bandrichtung | praktisch die **y-Achse** | M10 |
+| Bandebenheit | quer 0,39°, längs 0,01° | M9 |
+
+Allgemeine Greifhöhe: `flansch_z_greifen = 53,6 + klotzhoehe/2 + 235` [mm].
+
+⚠️ Die Ablagepose wurde aus einer Mitschrift gelesen, deren Rohdaten eingefroren
+wirkten (Programm auf dem Pendant vermutlich gestoppt). **Einmal bei laufendem
+Programm gegenlesen**, bevor sie fest eingetragen wird.
+
+---
+
 ## Offen und nicht aus AICA zu beantworten
 
-`tool_offset_z_m` (C8) steht in der Werkzeugkonfiguration der UR-Steuerung, nicht
-in AICA und nicht im Vorgängerarchiv. Muss dort ausgelesen werden.
+~~`tool_offset_z_m` (C8)~~ — **erledigt 15.09.2026: 0,215 m.** Aus der
+Werkzeugkonfiguration der UR-Steuerung gelesen, über die Vorwärtskinematik
+gegengeprüft. Der TCP liegt auf der Flanschachse und ist nicht verdreht.
+⚠️ Für Höhen am Aufbau ist **nicht** dieser Wert zu verwenden, sondern die
+gemessenen 245 mm (Abschnitt 8).
+
+~~Bandoberflächenhöhe (B17)~~ und ~~Ablagepose (B9)~~ — **erledigt 15.09.2026**,
+Werte in Abschnitt 8.
+
+Aus AICA selbst nicht zu beantworten bleiben nur noch die Werte, die am Aufbau
+gemessen werden müssen — allen voran **B1** (Bandgeschwindigkeit; die Richtung
+ist geklärt) und **C3** (Extrinsik der Basiskamera, läuft beim Kommilitonen).

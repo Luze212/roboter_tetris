@@ -922,7 +922,16 @@ dort.
 ### R4 — Identitätsprüfung der Roboterkamera-Messung
 
 `robot_cam` liefert "das Objekt am nächsten zum Bildzentrum", ohne Prüfung, ob das
-auch das Zielobjekt ist. Bei 2–3 Blöcken kann ein zweiter ins Bild geraten.
+auch das Zielobjekt ist.
+
+> ⚠️ **Die Prämisse stimmt nicht (gemessen 15.09.2026).** Der Code wählt die
+> **flächengrößte** qualifizierte Kontur (`localize_largest_blob`), nicht die
+> bildzentrumsnächste. Am Aufbau führt das dazu, dass die Farbvariante den
+> bildfüllenden Blob und die Kantenvariante die Maschinenstruktur am Bildrand
+> wählt — in beiden Fällen nicht den Klotz. `max_korrektur_m` fängt das nicht ab,
+> weil der gemeldete Versatz klein aussehen kann. Gegenmaßnahmen (Auswahl nach
+> Nähe zum Erwartungspunkt, ROI, Flächenobergrenze):
+> `robot-cam-befunde.md` §9.7/§9.8. Bei 2–3 Blöcken kann ein zweiter ins Bild geraten.
 
 Lösung fällt aus der Formulierung in Thema 6 ab: Die Korrektur
 (`roboterkamera_position − basiskamera_prädiktion`) ist im Normalfall **klein** —
@@ -1459,21 +1468,48 @@ genau deshalb an `conveyor_z_dist`, wie bei B7/B17 vermerkt.
 > Kalibrierbögen), nicht die Banddistanz unter dem Klotz. Richtig ist
 > `conveyor_z_dist`.
 
-### M5 — Die Grundfläche wird dagegen zu groß gemessen
+### M5 — Streuung der Geometrie, über 299 Messungen (korrigierte Fassung)
 
-Dieselbe Messung, anderes Ergebnis:
+> **Korrektur, 15.09.2026.** Hier stand zuvor, die Grundfläche werde
+> *richtungsabhängig um +8,8 mm zu groß* gemessen. Das war aus **einer einzigen
+> Nachricht** geschlossen und hat sich nicht bestätigt: Eine zweite Einzelmessung
+> am selben Klotz ergab 51,0 × 51,0 mm, also praktisch exakt. Beide Werte liegen
+> in der Streuung, die die Messung unten zeigt. **Aus einem Bild lässt sich hier
+> nichts ableiten.**
 
-| | gemeldet | echt | Abweichung |
-|---|---|---|---|
-| längere Seite | 58,8 mm | 50,0 mm | **+8,8 mm (+17,6 %)** |
-| kürzere Seite | 52,3 mm | 50,0 mm | +2,3 mm (+4,6 %) |
+Ordentliche Messung am ruhenden 50 × 50 × 100-Klotz, **299 Nachrichten über 30 s**:
 
-Die Überschätzung ist **richtungsabhängig**, und das passt zur Geometrie: Der Klotz
-lag bei x = 814, y = −874 mm deutlich seitlich der Basiskamera, die also eine
-Seitenfläche mitsieht. Die Tiefenkontur wächst dadurch in genau diese Richtung —
-dieselbe Physik wie beim Verdeckungsschatten der Roboterkamera
-(`robot-cam-befunde.md` §2), nur schwächer, weil die Basiskamera weiter weg steht.
-Die Erosion (`erosion_px = 5`) dämpft es bereits; ohne sie wäre es größer.
+| Größe | Median | Min | Max | Std | Soll |
+|---|---|---|---|---|---|
+| Länge | 53,52 | 49,05 | **75,32** | 5,63 | 50 |
+| Breite | 50,75 | 47,90 | 61,53 | 2,62 | 50 |
+| Höhe | **100,67** | 98,86 | 102,24 | **0,60** | 100 |
+| x | 835,04 | 833,90 | 836,29 | **0,55** | – |
+| y | −904,92 | −905,60 | −904,31 | **0,22** | – |
+| z | 108,45 | 106,39 | 110,49 | 0,75 | – |
+
+**Drei Schlüsse, und sie gehen in verschiedene Richtungen:**
+
+**Position und Höhe sind besser als angenommen.** Die Standardabweichung der
+Position liegt bei **0,2 bis 0,6 mm**, die der Höhe bei 0,6 mm. Thema 4 rechnet
+für den Genauigkeitsgewinn von `vectoring` mit „~3 mm Rauschen je Bild" — der
+Eingang ist also schon deutlich sauberer. Der Gewinn durch Mittelung fällt damit
+kleiner aus als gerechnet, aber von einem besseren Ausgangspunkt.
+
+**Die Grundfläche ist das verrauschte Feld.** Länge streut über **26 mm**
+(Std 5,63) bei einer wahren Kante von 50 mm, mit Ausreißern bis 75 mm. Der Median
+liegt mit +3,5 mm nur leicht zu hoch — das Problem ist die **Streuung**, nicht ein
+Versatz. Ursache ist die Tiefenkontur an den Klotzkanten, die von Bild zu Bild
+unterschiedlich weit auf die Seitenflächen übergreift.
+
+**Die Orientierung ist über alle 299 Messungen exakt konstant** (2,912 rad). Das
+ist die empirische Bestätigung des Befunds aus Nachtrag 3 / §7: Der Tracker friert
+den Winkel fast quadratischer Objekte auf den zuerst gemessenen Wert ein. Bisher
+war das aus dem Quellcode gelesen, jetzt ist es gemessen.
+
+> Alle Werte gelten für einen **ruhenden** Klotz. Bei laufendem Band kommen
+> Bewegungsunschärfe und wechselnder Blickwinkel dazu; die Streuung ist damit eine
+> untere Schranke, kein Betriebswert.
 
 **Zwei Konsequenzen:**
 
@@ -1482,15 +1518,193 @@ zur sicheren Seite — sie verwirft eher, als dass sie einen zu breiten Klotz
 durchlässt. Die Marge `gripper_margin_m` sollte diesen systematischen Anteil nicht
 noch einmal aufschlagen.
 
-**Für die Quadrat-Erkennung.** Das gemessene Seitenverhältnis beträgt
-52,3 / 58,8 = **0,889** — bei einem *exakt quadratischen* Klotz. Die Schwelle
-`NEAR_SQUARE_ASPECT = 0,92` wird damit **unterschritten**: Der Klotz gilt nicht als
-quadratisch, obwohl er es ist.
+**Für die Quadrat-Erkennung: die Prüfung gehört auf geglättete Werte, nicht auf
+ein Einzelbild.** Das Seitenverhältnis desselben, exakt quadratischen Klotzes
+streut über die 299 Messungen von **0,727 bis 0,999** (Median 0,952). Je Einzelbild
+griffe die Schwelle 0,92 in 208 von 299 Fällen, die Schwelle 0,85 in 265 — **keine
+der beiden ist bildweise verlässlich.** Ein Schwellenwert löst das Problem also
+nicht.
 
-Das betrifft **beide** Wege gleichermaßen — sowohl das interne `square`-Flag als
-auch die aus `length`/`width` abgeleitete Prüfung, denn beide stammen aus derselben
-verzogenen Tiefenkontur. Die Entscheidung, `square` nicht in S1 aufzunehmen,
-bleibt damit richtig und wird sogar besser begründet: Das Flag hätte denselben
-Fehler. **Anzupassen ist die Schwelle**, nicht der Übertragungsweg. Startwert für
-die abgeleitete Prüfung: **0,85** statt 0,92. Ein einzelner Messpunkt — an weiteren
-Klötzen zu bestätigen.
+Was es löst: `priority_handler` liest `length`/`width` aus **S3**, und die sind von
+`vectoring` über das Mittelungsfenster geglättet. Auf dem Median über 30 Messungen
+liegt das Verhältnis bei 0,95 und damit stabil über 0,92. **Die ursprüngliche
+Schwelle 0,92 bleibt also, sie gilt nur ausdrücklich für die geglätteten Werte.**
+
+Für das interne `square`-Flag in `detection.py` ändert das nichts — es arbeitet
+bildweise und ist derselben Streuung ausgesetzt. Die Entscheidung, es nicht in S1
+aufzunehmen, bleibt damit richtig: Es zu übertragen hätte die Streuung nur
+weitergereicht.
+
+### M6 — C8: Werkzeugversatz aus der Steuerung (15.09.2026)
+
+Aus dem Zustandspaket `CARTESIAN_INFO` der UR-Steuerung gelesen (Primary Interface,
+Port 30011, rein lesend — `rtde_control` wurde bewusst nicht verwendet):
+
+```
+konfigurierter Werkzeugversatz Flansch → TCP
+  x =   0,00 mm     y =   0,00 mm     z = 215,00 mm
+  Rotationsvektor = 0 / 0 / 0
+→ tool_offset_z_m = 0,215
+```
+
+Gegenprobe über die Vorwärtskinematik (UR10e-DH aus den Gelenkwinkeln gegen
+`getActualTCPPose`): −0,49 / −0,43 / **214,22** mm. Abweichung unter 0,8 mm, das
+liegt im Rahmen der DH-Konstanten — der Wert ist bestätigt.
+
+**Zwei Dinge bestätigen sich damit:**
+
+Die Warnung aus Thema 3 und Phase 0.1 war der Größenordnung nach genau richtig —
+„fährt der Greifer rund 20 cm zu tief, ins Band". Es sind **21,5 cm**.
+
+Und die Vereinfachung hält: **x = y = 0 und keine Verdrehung.** Der Greifpunkt
+liegt exakt auf der Flanschachse, der Versatz ist damit tatsächlich *eine einzige
+Zahl*, wie Thema 3 angenommen hatte. `ziel_flansch = ziel_greifpunkt + [0, 0,
+tool_offset_z_m]` ist keine Näherung, sondern exakt.
+
+> **Damit ist Phase 0 des Umsetzungsplans vollständig.** A2, A7, A8 und C8 — die
+> vier Punkte, die Phase 4 blockierten — sind geklärt.
+
+### M7 — C2 und A10 nebenbei
+
+**C2 — Intrinsik.** Steht in den `camera_info`-Signalen; eine externe Quelle ist
+nicht nötig, weil die Komponenten sie ohnehin zur Laufzeit von dort beziehen.
+Basiskamera (L515, 1280×720): fx = 897,83 · fy = 897,54 · cx = 647,05 · cy = 362,31,
+`plumb_bob` mit echter Verzeichnung. Roboterkamera (D435i, 848×480): fx = 608,41 ·
+fy = 608,57 · cx = 417,55 · cy = 253,28, Verzeichnung **null** — der Farbstream der
+D400-Serie ist bereits entzerrt.
+
+**A10 — Gelenkgrenzen** aus `/hardware/robot_description`: Schulter 2,094 rad/s
+(330 Nm), Ellbogen und Handgelenke 3,142 rad/s (150 bzw. 56 Nm). Herstellergrenzen
+des UR10e, nicht auf den Aufbau eingeschränkt.
+
+---
+
+## Nachtrag 5 — Messungen am Roboter (15.09.2026)
+
+Alle Werte dieses Nachtrags stammen aus einer Mitschrift von
+`/hardware/robot_state_broadcaster/cartesian_state` und `.../joint_state`,
+je 200 bzw. 50 Nachrichten pro Stellung, ausschließlich lesend. Der Roboter
+wurde von Hand gefahren; es wurde nichts kommandiert.
+
+### M8 — Der Bezugspunkt ist der Flansch, nicht der TCP der Steuerung
+
+**Das ist die wichtigste Einsicht dieser Sitzung, weil sie eine stillschweigende
+Verwechslung auflöst.**
+
+In der UR-Steuerung ist ein TCP mit **215 mm** unter dem Flansch konfiguriert
+(C8 / M6). Unsere Regelkette benutzt diesen TCP **nicht**: Der Greifer steht
+nicht im URDF (A7), `robot_state_broadcaster` meldet `ur_tool0`, und der
+IK-Velocity-Controller regelt ebenfalls den Flansch (A8). Jede Zahl, die wir
+kommandieren oder auswerten, ist damit eine **Flanschgröße**.
+
+Daraus folgt eine saubere Trennung, die ab jetzt gilt:
+
+| Zweck | zu verwendender Versatz | Herkunft |
+|---|---|---|
+| Höhen am Aufbau, Greifhöhe, Bandhöhe | **245 mm** Flansch → Backenspitze | am 15.09.2026 mit dem Maßstab gemessen |
+| Umrechnung fremder **TCP**-Werte (Vorgängerprojekt) in unser Flanschmaß | **215 mm** | Konfiguration der UR-Steuerung |
+
+Die 30 mm Differenz sind plausibel: Die Backenauflagen sind 20 mm hoch (B15),
+ein TCP in Auflagenmitte statt an der Spitze liegt in dieser Größenordnung höher.
+Die Vorgängergruppe hat den TCP offenbar auf ihren Griffpunkt gelegt.
+
+⚠️ **Die 245 mm sind mit ±5 mm behaftet.** Das Greifergehäuse zwischen Flansch
+und Greifer hat denselben Durchmesser wie der Flansch; die Flanschebene ist von
+außen nicht sicher anzulegen, gemessen wurde bis zum ersten sichtbaren silbernen
+Bauteil des Roboters. Der Fehler ist **systematisch** — er verschiebt alle Höhen
+gemeinsam und fällt beim ersten Testgriff als konstanter Versatz auf.
+
+**Kein Beleg aus dem Vorgängerprojekt.** Der Gedanke, die Arbeitsraumuntergrenze
+`Z = 0,095` aus `Robot/pose.yaml` stütze den einen oder anderen Wert, ist falsch:
+Da jene Grenze selbst eine TCP-Größe ist, kürzt sich der Versatz in der Rechnung
+heraus und liefert für beide Annahmen dieselbe Bodenfreiheit von 11 mm. Die
+245 mm ruhen allein auf der Messung mit dem Maßstab.
+
+### M9 — B17: Bandoberflächenhöhe und Ebenheit
+
+Drei Antastpunkte, Greifer **geschlossen** (Berührpunkt damit auf der
+Flanschachse, direkt unter dem Flansch), Werkzeugachse jeweils lotrecht —
+bestätigt durch `wrist_2 = −90,00°` und durch die Quaternion, die eine
+180°-Drehung um eine Achse in der xy-Ebene beschreibt und Werkzeug-z exakt
+auf Welt-−z abbildet. Der Versatz wirkt dadurch als reine z-Differenz.
+
+| Punkt | x [mm] | y [mm] | z Flansch [mm] | Bandhöhe = z − 245 |
+|---|---|---|---|---|
+| P1 | −733,80 | +73,69 | 298,22 | 53,22 |
+| P2 | −701,14 | −201,85 | 297,94 | 52,94 |
+| P3 | −931,06 | −58,10 | 299,53 | 54,53 |
+
+Streuung innerhalb einer Stellung: σ ≤ 0,03 mm — reines Zahlenrauschen.
+
+Ebene durch die drei Punkte: Gefälle **quer (x) 0,39°**, **längs (y) 0,01°**.
+Über die 230 mm abgetastete Breite sind das 1,6 mm. Ob das eine echte
+Querneigung ist oder drei unterschiedlich fest aufgesetzte Berührungen, lässt
+sich mit drei Punkten nicht trennen — die Gummiauflage gibt nach, und 1,6 mm
+liegen in genau dieser Größenordnung.
+
+> **Ergebnis B17: Bandoberfläche z = 53,6 mm in `world`, eben innerhalb ±1 mm.**
+> Dazu der systematische Anteil ±5 mm aus M8.
+
+**Greifhöhe, daraus abgeleitet.** Auflagenmitte = Backenspitze + 10 mm, also
+235 mm unter dem Flansch. Für den stehenden Referenzklotz (50×50×100 mm),
+mittig auf halber Höhe gefasst:
+
+**`flansch_z_greifen` = 53,6 + 50 + 235 ≈ 339 mm.**
+
+Allgemein: `flansch_z_greifen = 53,6 + klotzhoehe/2 + 235` (alles in mm),
+solange die halbe Klotzhöhe ≥ `min_grip_height_m` aus B15 ist.
+
+### M10 — Die Bandrichtung ist praktisch die y-Achse
+
+P1 → P2 war eine Fahrt „das Band hinunter“. Sie besteht aus **−275,5 mm in y**
+und +32,7 mm in x, wobei die x-Komponente aus dem seitlichen Versetzen von Hand
+stammt und nicht als Bandrichtung zu lesen ist.
+
+Das stützt die Annahme aus `datenvertraege.md` S1, dass `v_band_gemessen` als
+**y-Komponente** geführt wird und nicht als Betrag. Es ersetzt **B1 nicht** —
+Betrag und Vorzeichen der Bandgeschwindigkeit bleiben offen, dafür muss das
+Band laufen.
+
+### M11 — B9: Ablagepose
+
+Stellung, in der ein geöffneter Greifer den Klotz in die Auffangkiste fallen
+lässt.
+
+| Größe | Wert |
+|---|---|
+| Flanschposition | x = **−316,49** · y = **+476,21** · z = **+419,71** mm |
+| Orientierung (w,x,y,z) | 0,006857 · 0,680692 · 0,732524 · −0,004575 |
+| Abweichung von der Lotrechten | 0,94° |
+| Gelenke [°] | 105,87 · −98,24 · 124,05 · −114,87 · −89,96 · −78,33 |
+
+Abgeleitet: Auflagenmitte bei z = 184,7 mm, Unterkante eines mittig gefassten
+100-mm-Klotzes bei z = 134,7 mm — also rund 81 mm über der Bandoberfläche.
+
+Die Pose liegt mit x = −316 · y = +476 weit außerhalb des Bandbereichs
+(dort x ≈ −700…−930, y ≈ −200…+75). Der Transfer ist entsprechend eine große
+Traverse; deren Zeitbedarf geht in das Budget von D12/B19 ein und ist noch
+nicht gemessen.
+
+**Zur Singularität dieser Stellung:** `wrist_2 = −89,96°` liegt maximal weit von
+der Handgelenk-Singularität (0° bzw. ±180°) entfernt, der Ellbogen mit 124,05°
+weit von der Streckung, und der Abstand zur Basisachse beträgt 571 mm, also
+keine Nähe zur Schultersingularität. Die Ablagepose ist unkritisch. Das ersetzt
+**B11 nicht**, denn dort geht es um die Bahn entlang des Bandes, nicht um diese
+eine Stellung.
+
+⚠️ **Rohdaten-Vorbehalt.** Bei dieser letzten Mitschrift war die Streuung über
+alle 200 Nachrichten exakt null, während sie bei P1–P3 bei 0,01–0,03 mm lag.
+Nachrichten kamen also weiter an, trugen aber identische Werte — ein Hinweis
+darauf, dass der Treiber zu diesem Zeitpunkt keine frischen RTDE-Daten mehr
+einspeiste (Programm auf dem Pendant gestoppt). Die Werte sind plausibel und
+unterscheiden sich deutlich von den vorherigen Stellungen, sind also nach der
+Bewegung übernommen worden. Vor der Übernahme in eine Konfiguration sollte die
+Pose dennoch **einmal bei laufendem Programm gegengelesen** werden.
+
+### M12 — Was damit für D12/D13 feststeht
+
+`D13` (Ablagepose) ist mit M11 bestimmt. `D12` (Transferhöhe über dem Band)
+ergibt sich als Bandhöhe + höchster erwarteter Klotz + Luft, also
+53,6 + 100 + Reserve — mit dem Referenzklotz rund **200 mm** Unterkante, in
+Flanschmaß **200 + 245 = 445 mm**. Der Wert ist erst verbindlich, wenn die
+größte auftretende Klotzhöhe festgelegt ist.

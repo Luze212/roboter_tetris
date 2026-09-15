@@ -19,7 +19,13 @@ Bezug: `entscheidungen.md` Themen 1–5.
 4. **SI-Einheiten überall.** Meter, Meter/Sekunde, Radiant, Sekunden.
    Bildverarbeitung rechnet intern in mm, Umrechnung beim Packen.
 5. **Frame `world`** (= Roboterbasis) für alle Positionen, sofern nicht anders
-   vermerkt.
+   vermerkt. **Der Bezugspunkt am Roboter ist der Flansch `ur_tool0`**, nicht der
+   in der UR-Steuerung konfigurierte TCP: Der Greifer steht nicht im URDF, und
+   sowohl `robot_state_broadcaster` als auch der IK-Velocity-Controller arbeiten
+   am Flansch (Nachtrag 5 / M8). Feste Höhen in diesem Frame, gemessen am
+   15.09.2026: **Bandoberfläche z = 0,0536 m**, Flansch → Backenspitze
+   **0,245 m**, Flansch → Griffpunkt **0,235 m**. Die Bandrichtung ist praktisch
+   die **y-Achse**.
 6. **Statusfelder statt stiller Annahmen.** `valid`, `has_target`, `status`.
 7. **Verbraucher gaten auf `t` bzw. `seq`**, bevor sie rechnen. AICA publiziert
    Ausgänge in jedem Schritt — dieselben Daten werden mehrfach gesehen.
@@ -99,11 +105,10 @@ fast quadratischer Objekte einzufrieren. Das Merkmal erreicht den Vertrag heute
 nicht. Die Aufnahme als zehntes Feld wurde geprüft und **verworfen**:
 
 1. **Die Information steckt bereits im Vertrag.** `length` und `width` (Felder 6/7)
-   liefern dasselbe über einen Seitenverhältnis-Test. **Nicht mit derselben
-   Schwelle:** `detection.py` misst am *unerodierten* Pixelrechteck,
-   `length`/`width` stammen aus der *erodierten* 3D-Kontur. Ein Startwert von
-   **0,85** statt 0,92 ist am Aufbau begründet (Nachtrag 4 / M5) und an weiteren
-   Klötzen zu bestätigen.
+   liefern dasselbe über einen Seitenverhältnis-Test mit der Schwelle **0,92** —
+   allerdings **nur auf den geglätteten Werten aus S3**, nicht bildweise. Am
+   ruhenden Klotz streut das Verhältnis je Einzelbild von 0,727 bis 0,999
+   (Nachtrag 4 / M5); geglättet liegt es stabil bei 0,95.
 
    > **Wichtig, und der eigentliche Grund, warum der Übertragungsweg egal ist:** Die
    > Grundfläche wird richtungsabhängig **zu groß** gemessen — ein exakt
@@ -209,9 +214,9 @@ nicht angefahren wurde.
 > `p(t') = p + d · v_band · (t' − t)`.
 
 > **Hinweis zur Orientierung fast quadratischer Objekte.** Bei
-> `min(length, width) / max(…) ≥ 0,85` (Schwelle aus Nachtrag 4 / M5; **nicht** die
-> 0,92 aus `detection.py` — die Grundflächenmessung verzieht das Verhältnis) ist die
-> Zuordnung der beiden Achsen
+> `min(length, width) / max(…) ≥ 0,92` — **auf den hier geglätteten Werten**, nicht
+> auf einer Einzelmessung; bildweise streut das Verhältnis zu stark
+> (Nachtrag 4 / M5) — ist die Zuordnung der beiden Achsen
 > unsicher: Der Tracker in `base_cam` friert für solche Objekte den zuerst
 > gemessenen Winkel ein, und der kann Länge und Breite vertauscht haben. Das
 > Gütemaß der Winkelmittelung in `vectoring` schlägt dabei **nicht** an, weil der

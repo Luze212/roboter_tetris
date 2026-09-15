@@ -149,6 +149,32 @@ weiterfahren, im zweiten Fall abbrechen.
 Deshalb: Bei `valid = 0` sind die Felder 2–5 bedeutungslos, **`t` läuft aber
 weiter**.
 
+### ⚠️ Zusätzlich: Flächenobergrenze gegen Fehlalarme
+
+`localize_largest_blob` prüft nur `min_contour_area`. Versagt die Bandmaske,
+entsteht **ein bildfüllender Blob**, der das Nah-Gate bestehen kann — dann meldet
+die Komponente den **Bildmittelpunkt** als Objekt, mit plausibel aussehenden
+wenigen Millimetern Versatz. Am 15.09.2026 real beobachtet: 53 von 199 Nachrichten
+so entstanden (`robot-cam-befunde.md` §9.6).
+
+`max_korrektur_m` im Follower fängt das **nicht** ab, weil der Wert klein ist.
+Deshalb gehört die Prüfung hierher: Ein Klotz belegt rund 4 800 px, der
+Fehlalarm-Blob 325 000 — Faktor 70.
+
+**Und zwei weitere Punkte an derselben Stelle** (`robot-cam-befunde.md` §9.8):
+Der Code wählt die **flächengrößte** Kontur, während die Doku von der
+bildzentrumsnächsten ausgeht — am Aufbau wählt er deshalb die Maschinenstruktur am
+Bildrand. Und `robot_cam` hat **keine ROI**, anders als `base_cam`. Vorschlag:
+Auswahl nach **Nähe zum Erwartungspunkt** (fester Pixelversatz aus der
+Hand-Auge-Kalibrierung) plus ROI um diesen Punkt. Beides betrifft nur
+`localize_largest_blob` und die Parameterliste — die Detektionskerne beider
+Varianten bleiben unangetastet, der A/B-Test aus B6 bleibt aussagekräftig.
+
+**Neuer Parameter `max_contour_area`** (oder eine Prüfung der rückprojizierten
+Kantenlängen gegen die erwartete Klotzgröße). Überschreitung → **`valid = 0`**,
+nicht die zweitgrößte Kontur nehmen: Ein bildfüllender Blob heißt, dass die
+Bandmaske versagt hat, und dann ist keiner Kontur zu trauen.
+
 ### Distanzgate (Befund R3)
 
 Der Plan nannte "Min-Distanz / Max-Distanz" ohne Bezug. Gemeint ist der gemessene

@@ -112,6 +112,21 @@ im `object_follower` und nicht in `robot_cam`.
 
 Nach der Wizard-Ausführung nicht mehr ändern (`ARCHITECTURE.md`).
 
+### Kein Rebuild der AICA-Anwendung ohne Absprache
+
+Auf derselben AICA-Installation läuft das **Kalibrierprojekt des Kommilitonen**.
+Ein Neubauen des Pakets und Neuladen der Anwendung stört es. **Stand 15.09.2026
+ist beides nicht möglich.**
+
+Die Folge für die Planung ist erheblich: **Änderungen an Komponenten lassen sich
+derzeit am Aufbau nicht erproben.** Sie können geschrieben und ROS-frei getestet
+werden — am Aufbau wirksam werden sie erst nach einem abgestimmten Rebuild.
+Messungen, die nur die vorhandenen Komponenten beobachten, sind davon nicht
+betroffen.
+
+Betroffen ist insbesondere der `global_time`-Fix in `base_cam`. Zwischenlösung:
+`uebersicht/einrichtung-projektanwendung.md` §1.
+
 ### GitHub
 
 **Es wird nichts committet und nichts gepusht.** Der Nutzer bedient git
@@ -123,9 +138,9 @@ er sie selbst übernimmt.
 | | |
 |---|---|
 | Roboter | UR10e, steht **direkt neben dem Band**, etwa auf einem Drittel vom Bandende aus gerechnet |
-| Greifer | Robotiq 2-Finger (2F-140), über USB/Modbus direkt angesteuert — **nicht** als ros2_control-Hardware-Interface |
-| Basiskamera | RealSense, fest **am Bandanfang** montiert |
-| Roboterkamera | RealSense, am Arm montiert |
+| Greifer | Robotiq 2-Finger (2F-140), über USB/Modbus direkt angesteuert — **nicht** als ros2_control-Hardware-Interface. An den letzten Fingergliedern sitzen **verschraubte 3D-Druck-Aufsätze** (Gewindeeinsätze); darauf eine mit Isolierband befestigte Gummi-Grippmatte, Greiffläche **20 mm hoch × 15 mm breit**. Öffnungsweite **127 mm** |
+| Basiskamera | RealSense, am Bandanfang auf einem **beweglichen Gestell** — daher die automatisierte Extrinsik-Kalibrierung als Parallelprojekt (C3) |
+| Roboterkamera | RealSense, am Arm montiert — **festes Bauteil am Flansch, unverändert seit der Vorgängergruppe**. Deren Hand-Auge-Kalibrierung gilt damit unmittelbar (C1) |
 | Band | **grün**; konstante Geschwindigkeit, **nicht einstellbar**, Wert noch unbekannt. Spiegelungen treten **nur hier** auf, nicht auf den Klötzen |
 | Klötze | rechtwinklig, **unterschiedlich groß**, von Hand aufgelegt, realistisch 2–3 gleichzeitig. Farben **rot, blau, weiß**. 3D-gedruckt: Oberseite **matt**, Seitenflächen **spiegelnd** (siehe `architektur/robot-cam-befunde.md`) |
 | Ablage | seitlich neben dem Band auf der Roboterseite; Pose in der Luft über einer Auffangkiste, der Klotz fällt hinein |

@@ -62,6 +62,13 @@ Aus `ARCHITECTURE.md`, besonders relevant hier:
 Billig, aber blockierend. Ohne diese Werte entstehen Komponenten, die später
 umgebaut werden müssen.
 
+> ✅ **Phase 0 ist seit 15.09.2026 vollständig abgeschlossen.** 0.1 (A7/A8: der
+> Greifer steht nicht im URDF, geregelt wird der Flansch), 0.2 (C8:
+> `tool_offset_z_m` = **0,215** aus der UR-Steuerung), 0.3 (C1: Hand-Auge ist
+> Flansch → Kamera), 0.4 (A2: `cartesian_pose`), 0.5 (A1: Defaults abgelesen, als
+> Anforderung in `uebersicht/einrichtung-projektanwendung.md` §2) und 0.6 (B13:
+> Uhrendrift gemessen und behoben). Einzelheiten: `entscheidungen.md`, Nachtrag 4.
+
 | Schritt | Aufgabe | Quelle | Blockiert |
 |---|---|---|---|
 | 0.1 | **Welches Frame regelt der IK-Velocity-Controller** — Flansch oder Greifpunkt? Steht der Greifer im URDF? (A7/A8) | AICA Studio; zuverlässiger: wie hat die **Vorgängergruppe** kommandiert (C9) — gleicher Aufbau | Phase 4 |

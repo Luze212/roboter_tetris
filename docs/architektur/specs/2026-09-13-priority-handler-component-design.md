@@ -126,20 +126,19 @@ Welche Abmessung quer zur Backenrichtung liegt, folgt aus der Blockorientierung
 und dem kommandierten Gierwinkel — gilt damit in beiden Orientierungsmodi.
 
 **Ausnahme für fast quadratische Klötze:** Liegt `min(length, width) / max(…)`
-über **0,85**, ist die Achszuordnung unsicher — der Tracker friert bei solchen
+über **0,92**, ist die Achszuordnung unsicher — der Tracker friert bei solchen
 Objekten den zuerst gemessenen Winkel ein, und der kann die beiden Achsen
 vertauscht haben. Dann **`max(length, width)` prüfen**, nicht die zugeordnete
 Abmessung. Eine Zeile, konservativ, und sie macht ein Feld `square` im Datenvertrag
 entbehrlich (Begründung in `datenvertraege.md` unter S1). Der Preis ist gering:
-Bei einem Seitenverhältnis über 0,85 unterscheiden sich die beiden Abmessungen um
-weniger als 18 %.
+Bei einem Seitenverhältnis über 0,92 unterscheiden sich die beiden Abmessungen um
+weniger als 8 %.
 
-> **Warum 0,85 und nicht die 0,92 aus `detection.py`:** Die Grundfläche wird
-> richtungsabhängig zu groß gemessen — ein exakt quadratischer 50 × 50-Klotz kam am
-> 14.09.2026 als 58,8 × 52,3 heraus (Verhältnis 0,889). Mit 0,92 hätte die Ausnahme
-> bei genau dem Klotz nicht gegriffen, für den sie gedacht ist
-> (`entscheidungen.md`, Nachtrag 4 / M5). Ein einzelner Messpunkt — an weiteren
-> Klötzen zu bestätigen.
+> ⚠️ **Die Prüfung gilt für die geglätteten Werte aus S3, nicht für eine
+> Einzelmessung.** Am ruhenden 50 × 50-Klotz streut das Seitenverhältnis bildweise
+> von 0,727 bis 0,999 (299 Messungen, 15.09.2026) — bildweise wäre die Schwelle
+> wertlos, egal wo man sie ansetzt. Über das Mittelungsfenster von `vectoring`
+> liegt sie stabil bei 0,95. Einzelheiten: `entscheidungen.md`, Nachtrag 4 / M5.
 
 Das verhindert die frustrierendste Fehlerart: sauber anfahren, greifen, passt
 nicht.
