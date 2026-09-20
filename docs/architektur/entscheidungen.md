@@ -566,7 +566,7 @@ hat (im Plan gar nicht vorgesehen).
 
 ### Einzige Änderung an einer laufenden Komponente
 
-`robotiq_gripper` bekommt **zwei Bool-Ausgänge**: `is_closed` und `has_object`.
+`robotiq_gripper` bekommt **zwei Bool-Ausgänge**: `motion_done` und `has_object`.
 Der Plan sah nur "Greifer zu" vor — ein Echo des Eingangs und als Rückmeldung
 wertlos. Der Follower wertet `has_object` aus. Die vorhandenen Predicates
 bleiben für die UI.

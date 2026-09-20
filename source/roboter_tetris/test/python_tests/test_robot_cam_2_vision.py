@@ -115,3 +115,53 @@ def test_belt_filter_averages_in_detection():
     r2 = detect_object_edges(c2, d2, fx, fy, cx, cy, params, f)
     assert abs(r1.z_band_mm - 1000.0) < 1e-6
     assert abs(r2.z_band_mm - 1100.0) < 1e-6
+
+
+# -- The shared selection guards apply identically here ------------------------
+#
+# This is what keeps the A/B test of B6 meaningful: both variants differ only in
+# how they build the candidate mask. Selection, gate, orientation and
+# back-projection come from localize_largest_blob and are the same code.
+
+
+def _two_blob_scene(belt_mm=1000.0, near=(140, 90, 40, 40), far=(250, 40, 60, 160)):
+    """A small block near the optical axis and a much larger structure at the
+    frame border -- exactly what the edge variant reported on 15.09. (x = 341 mm,
+    roughly 379 px off the principal point)."""
+    h, w = 240, 320
+    color = np.full((h, w, 3), BELT_GRAY, dtype=np.uint8)
+    depth = np.full((h, w), belt_mm, dtype=np.float32)
+    for (x, y, bw, bh) in (near, far):
+        color[y:y + bh, x:x + bw] = BLOCK_GRAY
+        depth[y:y + bh, x:x + bw] = 0.0
+    return color, depth
+
+
+def test_edge_variant_without_guards_picks_the_border_structure():
+    """Negative control: today's behaviour, and the observed failure."""
+    color, depth = _two_blob_scene()
+    fx, fy, cx, cy = _intrinsics()
+    res = detect_object_edges(color, depth, fx, fy, cx, cy,
+                              EdgeDetectionParams(depth_average_frames=1))
+    assert res is not None
+    assert res.ref_px[0] > 250
+
+
+def test_edge_variant_inherits_the_roi():
+    color, depth = _two_blob_scene()
+    fx, fy, cx, cy = _intrinsics()
+    params = EdgeDetectionParams(depth_average_frames=1, roi_radius_px=60.0)
+    res = detect_object_edges(color, depth, fx, fy, cx, cy, params)
+    assert res is not None
+    assert abs(res.ref_px[0] - 160) < 10
+
+
+def test_edge_variant_inherits_the_area_ceiling():
+    h, w = 240, 320
+    color = np.full((h, w, 3), BELT_GRAY, dtype=np.uint8)
+    depth = np.full((h, w), 1000.0, dtype=np.float32)
+    color[20:220, 10:310] = BLOCK_GRAY
+    depth[20:220, 10:310] = 0.0
+    fx, fy, cx, cy = _intrinsics()
+    guarded = EdgeDetectionParams(depth_average_frames=1, max_contour_area=50000.0)
+    assert detect_object_edges(color, depth, fx, fy, cx, cy, guarded) is None

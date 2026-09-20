@@ -44,6 +44,14 @@ class EdgeDetectionParams:
     depth_search_radius_px: int = 2       # search window for a valid belt depth
     depth_average_frames: int = 5         # moving average window (1 = off)
 
+    # -- Blob selection (identical to the color variant, so the A/B test from
+    # B6 compares detection cores and nothing else) ------------------------
+    max_contour_area: float = 50000.0     # px, 0 = off; oversized blob -> reject frame
+    roi_radius_px: float = 0.0            # px, 0 = off; cutoff around the expected point
+    expect_offset_x_mm: float = 0.0       # mm at the belt distance, height-independent
+    expect_offset_y_mm: float = 0.0
+    select_nearest_to_expect: bool = False
+
 
 def color_edge_map(color_bgr: np.ndarray, params: EdgeDetectionParams) -> np.ndarray:
     """Canny edges on the (blurred) grayscale image."""
@@ -104,4 +112,9 @@ def detect_object_edges(color_bgr: np.ndarray, depth_mm: np.ndarray,
         depth_search_radius_px=params.depth_search_radius_px,
         depth_average_frames=params.depth_average_frames,
         belt_filter=belt_filter,
+        max_contour_area=params.max_contour_area,
+        roi_radius_px=params.roi_radius_px,
+        expect_offset_x_mm=params.expect_offset_x_mm,
+        expect_offset_y_mm=params.expect_offset_y_mm,
+        select_nearest_to_expect=params.select_nearest_to_expect,
     )

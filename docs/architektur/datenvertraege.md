@@ -341,7 +341,7 @@ der zentrale Wert für euren geplanten Vergleich base_cam ↔ robot_cam.
 
 | Signal | Richtung | Typ | Bedeutung |
 |---|---|---|---|
-| `is_closed` | gripper → object_follower | `Bool` | Bewegung abgeschlossen |
+| `motion_done` | gripper → object_follower | `Bool` | Bewegung abgeschlossen (beide Richtungen: Schließen **und** Öffnen) |
 | `has_object` | gripper → object_follower | `Bool` | Objekt tatsächlich gefasst |
 
 Die vorhandenen Predicates `is_connected` / `is_object_grasped` bleiben für die

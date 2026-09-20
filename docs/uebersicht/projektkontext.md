@@ -1,11 +1,11 @@
 # Projektkontext Robotetris
 
-**Stand 13.09.2026.** Rahmenbedingungen, Abgrenzungen und Arbeitsweise.
+**Stand 20.09.2026.** Rahmenbedingungen, Abgrenzungen und Arbeitsweise.
 Gedacht als Einstieg für jede Sitzung, die ohne Vorkontext startet — vor den
 technischen Dokumenten zu lesen.
 
-> Dies ist **nicht** die `CLAUDE.md`. Die existiert separat und ist in
-> `.gitignore` eingetragen.
+> Dies ist **nicht** die `CLAUDE.md`. Die existiert separat, ist in `.gitignore`
+> eingetragen und damit **pro Rechner eigen** — sie wandert nicht mit dem Push.
 
 ---
 
@@ -64,10 +64,12 @@ die aktuell gegeneinander getestet werden.
 
 Für uns relevant: Die Vorgängergruppe hat Werte, die wir brauchen. Die
 **Hand-Auge-Kalibrierung der Roboterkamera ist damit vollständig geklärt** (C1/C4:
-Bezug ist der Flansch). Der **Werkzeugversatz zum Greifpunkt steht dagegen nicht
-im Archiv** — er saß in der UR-Installation am Teach-Pendant und muss aus der
-Robotersteuerung kommen (C8). Dass **TCP-Posen kommandiert wurden**, ist bestätigt
-(C9) — A7 beantwortet das aber nicht, denn im Archiv existiert kein URDF.
+Bezug ist der Flansch). Der **Werkzeugversatz zum Greifpunkt stand dagegen nicht
+im Archiv** — er saß in der UR-Installation am Teach-Pendant und wurde am
+15.09.2026 direkt aus der Steuerung ausgelesen: **215 mm**, auf der Flanschachse,
+unverdreht (C8). Dass **TCP-Posen kommandiert wurden**, ist bestätigt (C9) — A7
+beantwortet das aber nicht, denn im Archiv existiert kein URDF; die Frage ist
+inzwischen eigenständig geklärt (kein Greifer im URDF, geregelt wird der Flansch).
 
 ## 3. Was heute funktioniert
 
@@ -75,7 +77,7 @@ Robotersteuerung kommen (C8). Dass **TCP-Posen kommandiert wurden**, ist bestät
 |---|---|
 | `robotiq_gripper` | **funktionsfähig** am Aufbau |
 | `base_cam` | **funktionsfähig**, erkennt Klötze zuverlässig |
-| `robot_cam` / `robot_cam_2` | implementiert und unit-getestet, **am Aufbau noch nicht gelaufen** (B6). `robot_cam` farbbasiert (grünes Band ausmaskieren), `robot_cam_2` kantenbasiert mit Tiefenkanten-Fusion. Identische I/O, im Graphen austauschbar. Hintergrund: `architektur/robot-cam-befunde.md` |
+| `robot_cam` / `robot_cam_2` | implementiert und unit-getestet, **am Aufbau am 15.09.2026 durchgefallen** (B6). `robot_cam` farbbasiert (Band ausmaskieren), `robot_cam_2` kantenbasiert mit Tiefenkanten-Fusion. Identische I/O, im Graphen austauschbar. ⚠️ Beide scheitern **nicht an der Erkennung, sondern an der Auswahl** — Einzelheiten und Gegenmaßnahmen: `architektur/robot-cam-befunde.md` §9 |
 | `move_to_pose_test`, `true_signal`, `toggle_signal` | Testhilfen |
 | AICA-Kette Attractor → IK-Velocity-Controller | **getestet**, Roboter folgt einem per Maus verschobenen Frame |
 
@@ -112,26 +114,35 @@ im `object_follower` und nicht in `robot_cam`.
 
 Nach der Wizard-Ausführung nicht mehr ändern (`ARCHITECTURE.md`).
 
-### Kein Rebuild der AICA-Anwendung ohne Absprache
+### Rebuild und Laden der Anwendung — Sache des Nutzers
 
 Auf derselben AICA-Installation läuft das **Kalibrierprojekt des Kommilitonen**.
-Ein Neubauen des Pakets und Neuladen der Anwendung stört es. **Stand 15.09.2026
-ist beides nicht möglich.**
+Ein Neubauen des Pakets und Neuladen der Anwendung stört es, deshalb schaut der
+Nutzer **kurz vor dem Testen und Laden** nach, ob das gerade passt.
 
-Die Folge für die Planung ist erheblich: **Änderungen an Komponenten lassen sich
-derzeit am Aufbau nicht erproben.** Sie können geschrieben und ROS-frei getestet
-werden — am Aufbau wirksam werden sie erst nach einem abgestimmten Rebuild.
-Messungen, die nur die vorhandenen Komponenten beobachten, sind davon nicht
-betroffen.
+**Das ist eine Handreichung vor Ort, keine Planungsschranke.** Es betrifft weder
+die Umsetzung der Komponenten noch das mobile Setup: Die Arbeit findet in der
+eigenen Branch statt, die davon unabhängig ist, und vor Ort wird ohnehin immer
+diese Branch geladen. Innerhalb der Branch bestehen keine Einschränkungen.
 
-Betroffen ist insbesondere der `global_time`-Fix in `base_cam`. Zwischenlösung:
+⚠️ **Eine technische Eigenheit ist trotzdem wichtig, wenn geladen wird:** Ein
+Rebuild allein genügt nicht — das neue Paket wird erst wirksam, wenn danach das
+**AICA-Systemabbild im Launcher neu erzeugt** wird. Ein Neustart der Anwendung
+holt es nicht nach, und zwar ohne Fehlermeldung. Gegenprobe und Zwischenlösung
+für den `global_time`-Fix in `base_cam`:
 `uebersicht/einrichtung-projektanwendung.md` §1.
 
 ### GitHub
 
-**Es wird nichts committet und nichts gepusht.** Der Nutzer bedient git
-ausschließlich manuell. Dateien werden lokal angelegt und bleiben untracked, bis
-er sie selbst übernimmt.
+**Kein Git durch den Assistenten** — kein `commit`, `push`, `fetch`, `pull`,
+`merge`, `checkout`, `rebase`, `stash`. Der Nutzer bedient git ausschließlich
+selbst. Lesende Befehle (`status`, `log`, `diff`) sind in Ordnung. Ist ein
+Git-Schritt nötig, wird er **vorgeschlagen, nicht ausgeführt** — auch dann, wenn
+eine Aufgabe dadurch unfertig bleibt.
+
+Dateien werden lokal angelegt und bleiben untracked, bis der Nutzer sie selbst
+übernimmt. GitHub ist zugleich der **einzige Austauschweg zwischen den beiden
+Setups** (§6) — was nicht gepusht ist, existiert auf dem anderen Rechner nicht.
 
 ## 5. Der Aufbau
 
@@ -141,7 +152,7 @@ er sie selbst übernimmt.
 | Greifer | Robotiq 2-Finger (2F-140), über USB/Modbus direkt angesteuert — **nicht** als ros2_control-Hardware-Interface. An den letzten Fingergliedern sitzen **verschraubte 3D-Druck-Aufsätze** (Gewindeeinsätze); darauf eine mit Isolierband befestigte Gummi-Grippmatte, Greiffläche **20 mm hoch × 15 mm breit**. Öffnungsweite **127 mm** |
 | Basiskamera | RealSense, am Bandanfang auf einem **beweglichen Gestell** — daher die automatisierte Extrinsik-Kalibrierung als Parallelprojekt (C3) |
 | Roboterkamera | RealSense, am Arm montiert — **festes Bauteil am Flansch, unverändert seit der Vorgängergruppe**. Deren Hand-Auge-Kalibrierung gilt damit unmittelbar (C1) |
-| Band | **grün**; konstante Geschwindigkeit, **nicht einstellbar**, Wert noch unbekannt. Spiegelungen treten **nur hier** auf, nicht auf den Klötzen |
+| Band | **grün-türkis** — gemessen **H ≈ 88–90**, nicht die ursprünglich angenommenen 60; der Farbton wandert zudem mit der Belichtungszeit (`architektur/robot-cam-befunde.md` §9.3). Konstante Geschwindigkeit, **nicht einstellbar**, Betrag noch unbekannt (B1); Richtung ist praktisch die **y-Achse**. Spiegelungen treten **nur hier** auf, nicht auf den Klötzen |
 | Klötze | rechtwinklig, **unterschiedlich groß**, von Hand aufgelegt, realistisch 2–3 gleichzeitig. Farben **rot, blau, weiß**. 3D-gedruckt: Oberseite **matt**, Seitenflächen **spiegelnd** (siehe `architektur/robot-cam-befunde.md`) |
 | Ablage | seitlich neben dem Band auf der Roboterseite; Pose in der Luft über einer Auffangkiste, der Klotz fällt hinein |
 | Freiraum | senkrecht über dem Arbeitsbereich frei; nur die Basiskamera steht am Bandanfang, den der Roboter kaum erreicht |
@@ -155,22 +166,48 @@ abgelegte Klötze gegenseitig behindern. Der Pickvorgang ist der Fokus.
 
 ## 6. Arbeitsweise
 
-### Zwei Systeme
+### Zwei Setups
 
-| System | Rolle |
+| Setup | Rolle |
 |---|---|
-| Heimrechner | Konzeptarbeit, Architektur, Dokumentation (diese Sitzung) |
-| Laptop | Umsetzung der Komponenten, Zeit am realen Aufbau begrenzt |
+| **Lokal** — der Rechner am Roboter | Messungen, Tests, Inbetriebnahme, Build. Alles, was Hardware braucht. Hier ist auch das Vorgängerarchiv verfügbar. |
+| **Mobil** — Arbeit abseits des Aufbaus | Konzept, Architektur, Code am Schreibtisch, Dokumentation. **Kein Roboter, kein Build.** |
 
-Daraus folgt: **Alles, was am Schreibtisch entschieden werden kann, wird vorab
-entschieden.** Die Umsetzungssitzung soll nicht neu herleiten müssen — deshalb
-die ausführlichen Specs.
+Ein früher genutzter dritter Rechner (Stand-PC, ursprünglich für die
+Konzeptarbeit) **entfällt.** Sein Stand ist überholt — die tragenden
+Informationen stammen aus den Pushs des lokalen Setups.
 
-### Ein zweiter Projekt-Chat
+Austausch läuft ausschließlich über GitHub, und der Nutzer pusht und pullt selbst
+(§4). Daraus folgt die Arbeitsweise: **Alles, was am Schreibtisch entschieden
+werden kann, wird vorab entschieden.** Die Umsetzung am Aufbau soll nicht neu
+herleiten müssen — deshalb die ausführlichen Specs. Zeit am Aufbau ist die knappe
+Ressource, nicht Zeit am Schreibtisch.
 
-Auf dem Laptop existiert eine weitere Sitzung, in der die `robot_cam`-Varianten
-entstanden sind. Sie kennt unter anderem den Ablageort der
-Attractor-Parameter (`offene-punkte.md`, C7).
+### Pfadunterschiede zum Vorgängerprojekt
+
+Das Archiv der Vorgängergruppe liegt auf beiden Setups, aber **unter
+verschiedenen Namen**. Die Dokumentation zitiert durchgängig die Variante des
+lokalen Setups:
+
+| | Pfad |
+|---|---|
+| **Lokal** (Name in der Doku) | `/home/tetripick/UR10_Pick_ws` |
+| **Mobil** | `FuE_Greifen-main/` im Projektroot, in `.gitignore` |
+
+**Die Struktur darunter ist identisch** — `Robot/`, `cameras/`, `docs/`,
+`models/`, `zeroMQ/`. Jede Pfadangabe in der Dokumentation ist relativ zur
+Archivwurzel zu lesen; nur die Wurzel unterscheidet sich. Ein Verweis wie
+`cameras/tracker.hpp` oder `Robot/pose.yaml` ist also auf beiden Setups ohne
+Umrechnung auffindbar.
+
+⚠️ **Read-only, auf beiden Setups.** Im Archiv wird nichts verändert, nur
+ausgelesen.
+
+Ein zweiter Unterschied betrifft die Dateien, die `.gitignore` zurückhält und die
+deshalb auf einem frisch gepullten Rechner **fehlen**: `CLAUDE.md`, `GEMINI.md`,
+das Archiv selbst und `docs/archiv/2026-06-01-robotiq-gripper-component-design.md`.
+Letztere wird in mehreren Dokumenten als Formatvorlage genannt — sie ist dort
+nicht vorhanden, ohne dass das ein Fehler wäre.
 
 ### AICA-Aufbau
 
@@ -196,21 +233,20 @@ siehe `architektur/entscheidungen.md`, wo zu jeder Festlegung das *Warum* steht.
 
 ## 7. Dokumentenlandkarte
 
-| Dokument | Inhalt |
-|---|---|
-| `ARCHITECTURE.md` | **verbindliche** AICA-Regeln — Pflichtlektüre |
-| `docs/uebersicht/projektkontext.md` | dieses Dokument |
-| `docs/Komponentenplan Robotetris - Stand 2026-09-13.docx` | Systembeschreibung für Menschen, mit Farbcode |
-| `docs/Komponentenplan Robotetris.docx` | **Original**, unverändert, historischer Stand |
-| `docs/architektur/entscheidungen.md` | alle Architekturentscheidungen mit Begründung (Themen 1–7) |
-| `docs/architektur/datenvertraege.md` | verbindliche Signalspezifikation |
-| `docs/uebersicht/offene-punkte.md` | Arbeitsliste nach Ort und Quelle |
-| `docs/uebersicht/systemgraph.md` | Graph und Signalliste |
-| `docs/architektur/vorgaengerprojekt-abgleich.md` | **Systematischer Abgleich aller offenen Punkte gegen das Vorgängerarchiv `UR10_Pick_ws`.** Was von dort beantwortet ist (C1/C4 Hand-Auge, A6, B16), was dort *nicht* zu holen ist (C8, A7, B1), Größenordnungen zur Vorbelegung von Parametern, übertragbares Know-how und fünf Fallen. |
-| `docs/architektur/robot-cam-befunde.md` | **Szene, Materialeigenschaften und Physik der Roboterkamera.** Warum der Loch-Trick verworfen wurde, warum die Beobachtungshöhe nicht frei wählbar ist, verworfene Wege mit Begründung, Werte aus dem Vorgängerprojekt. Vor jeder Arbeit an `robot_cam` / `robot_cam_2` lesen. |
-| `docs/archiv/2026-09-05-konzeptreview-komponentenplan.md` | die ursprüngliche Analyse (61 Befunde) |
-| `docs/architektur/specs/2026-09-13-umsetzungsplan-on-the-fly-pick.md` | Reihenfolge, Phasen, Abnahmekriterien |
-| in `docs/architektur/specs/`:<br>`2026-09-13-data-tracker-component-design.md`<br>`2026-09-13-interface-streamer-component-design.md`<br>`2026-09-13-object-follower-component-design.md`<br>`2026-09-13-priority-handler-component-design.md`<br>`2026-09-13-vectoring-component-design.md`<br>`2026-09-13-bestandskomponenten-anpassungen.md`<br>`2026-06-01-robotiq-gripper-component-design.md` | Umsetzungsvorlagen je Komponente |
+**Die Landkarte steht in `docs/README.md`** — dort, wo sie hingehört, samt
+Vorrangregeln und Kurzregister („welche Frage wurde wo entschieden"). Sie wird
+hier bewusst **nicht** wiederholt: Mehrfachpflege ist genau der Fehler, den
+Nachtrag 3 in `entscheidungen.md` einmal teuer bezahlt hat.
+
+Das Nötigste für den Einstieg:
+
+- **`ARCHITECTURE.md`** (Projektroot) — verbindliche AICA-Regeln, gilt über
+  allem in `docs/`
+- **`architektur/entscheidungen.md`** und **`architektur/datenvertraege.md`** —
+  **normativ.** Bei Widerspruch gelten diese beiden.
+- **`uebersicht/uebergabe.md`** — Einstieg beim Rechnerwechsel: Stand, gemessene
+  Werte, nächste Schritte
+- Alles Weitere: `docs/README.md`
 
 ## 8. Farbcode der Dokumentation
 
@@ -240,6 +276,8 @@ Ohne Handlungsbedarf, aber gut zu wissen:
   übernommen werden, solange das so ist.
 - `Calibration/calibration.json` enthält Legacy-Werte, markiert als
   `legacy_initial_values` — noch nicht validiert.
-- Die bestehenden Tests prüfen ausschließlich die Module unter `vision/`, nicht
-  das Packen der Komponentenausgaben. Eine Änderung des Ausgabeformats bricht
-  daher keine Tests.
+- **Kein bestehender Test prüft das Packen der Komponentenausgaben.** Die sechs
+  Tests decken die Module unter `vision/` ab sowie `Calibration/`,
+  `move_to_pose_test` und `robotiq_gripper` — aber keine Ausgabearrays. Eine
+  Änderung des Ausgabeformats bricht daher keine Tests, und *deshalb* schreibt
+  Phase 1.1 einen eigenen Test gegen `contracts.py` vor.

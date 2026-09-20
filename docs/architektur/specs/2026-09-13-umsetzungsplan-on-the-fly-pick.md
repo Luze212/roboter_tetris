@@ -128,7 +128,7 @@ Kleine, risikoarme Änderungen an laufendem Code. Jede einzeln testbar.
 | **Ziel** | Ausgabe auf `[t, valid, x, y, z_band, orientation]` umstellen, SI-Einheiten |
 | **Änderung** | `valid`-Flag ergänzen; Distanz-Gate über neue Parameter `min_belt_distance_m` / `max_belt_distance_m` auf `z_band`; mm → m; Rate 100 Hz; **`debug_image` auf `publish_on_step=False`** (N5). ⚠️ Die Rückprojektion **nicht** korrigieren — das macht der Follower (N1) |
 | **Wichtig** | Bei `valid = 0` läuft `t` **weiter**. Nur so unterscheidet der Empfänger "Kamera arbeitet, sieht nichts" von "Kamera liefert nicht mehr". |
-| **Nicht ändern** | Erkennungsalgorithmik in `vision/robot_detection*.py` — **inkl. des gemeinsamen Kerns `localize_largest_blob`**, den sich beide Varianten teilen. Nur so bleibt der A/B-Test aussagekräftig. |
+| **Nicht ändern** | Die **Detektionskerne** `belt_candidate_mask` (Farbe) und `edge_candidate_mask` (Kanten) — sie sind das, was der A/B-Test aus B6 vergleicht. Ebenso die **Rückprojektion** (N1, der Follower korrigiert sie; sonst doppelt). ⚠️ **Korrektur 20.09.2026:** Hier stand zusätzlich `localize_largest_blob`. Diese Sperre ist **aufgehoben** — die gemeinsame Auswahl- und Geometriestufe *muss* geändert werden (`robot-cam-befunde.md` §9.7/§9.8), und weil sie für beide Varianten identisch wirkt, bleibt der A/B-Test aussagekräftig. |
 | **Vorher lesen** | `docs/architektur/robot-cam-befunde.md` — begründet die Defaults und nennt die Fallstricke (Seitenflächen-Physik, Nah-Gate, RealSense-Konfiguration) |
 | **Dateien** | `roboter_tetris/robot_cam.py`, `robot_cam_2.py` + beide JSONs |
 | **Abnahme** | Beide Varianten liefern denselben Vertrag und sind gegeneinander austauschbar. |
@@ -137,7 +137,7 @@ Kleine, risikoarme Änderungen an laufendem Code. Jede einzeln testbar.
 
 | | |
 |---|---|
-| **Ziel** | `is_closed` und `has_object` als `Bool`-Signale ergänzen |
+| **Ziel** | `motion_done` und `has_object` als `Bool`-Signale ergänzen |
 | **Begründung** | Der Plan sah nur "Greifer zu" vor — ein Echo des Eingangs und als Rückmeldung wertlos. Der Follower braucht `has_object`, um einen Fehlgriff zu erkennen. |
 | **Nicht ändern** | Worker-Thread, Port-pro-Operation-Muster (`ARCHITECTURE.md` §13), vorhandene Predicates |
 | **Dateien** | `roboter_tetris/robotiq_gripper.py`, `component_descriptions/roboter_tetris_robotiq_gripper.json` |

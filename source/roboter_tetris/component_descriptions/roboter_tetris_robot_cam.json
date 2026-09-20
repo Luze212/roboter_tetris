@@ -32,7 +32,7 @@
   "outputs": [
     {
       "display_name": "Objektposition [t, x, y, z, orientation]",
-      "description": "Flaches Array [t, x, y, z, orientation]: t = Frame-Zeitstempel in s; x/y = Block-Mittelpunkt in mm im Kamera-Frame; z = gemessene Band-Distanz in mm (Kamera→Förderband, NICHT die Greifhöhe — nachgelagert mit der Objekthöhe der Basiskamera korrigieren); orientation = Winkel der Top-Fläche in rad [0, pi). Leer, wenn kein Objekt sichtbar.",
+      "description": "Flaches Array [t, valid, x, y, z_band, orientation] in SI-Einheiten. t = Frame-Zeitstempel in s. valid = 1, wenn ein Block erkannt wurde UND die Band-Distanz im gueltigen Fenster liegt, sonst 0. Bei valid=0 sind die Felder 2-5 bedeutungslos, t laeuft aber weiter - so unterscheidet der Empfaenger 'Kamera arbeitet, sieht nichts' von 'Kamera liefert nicht mehr' (dann steht t). x/y = Block-Mittelpunkt in m im KAMERA-Frame (nicht world). z_band = gemessene Kamera-Band-Distanz in m. orientation in rad [0, pi), nur fuer Diagnose - der Regelpfad nutzt den geglaetteten Winkel der Basiskamera. ACHTUNG: x/y sind mit der Band-Distanz rueckprojiziert, der Messpunkt liegt aber auf der Klotz-Oberseite; die Hoehenkorrektur macht der object_follower.",
       "signal_name": "object_position",
       "signal_type": "double_array"
     },
@@ -135,6 +135,62 @@
       "parameter_name": "depth_scale_to_mm",
       "parameter_type": "double",
       "default_value": "1.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Max. Blobflaeche (px)",
+      "description": "Obergrenze der Blobflaeche in Pixeln (0 = aus). Wird sie ueberschritten, meldet die Komponente valid=0 fuer das ganze Bild: Eine bildfuellende Kontur heisst, dass die Maske versagt hat, und dann ist keiner Kontur zu trauen - es wird bewusst NICHT die zweitgroesste genommen. Anhaltspunkt vom 15.09.: ein Klotz belegt rund 4800 px, der beobachtete Fehlalarm 325000 px.",
+      "parameter_name": "max_contour_area",
+      "parameter_type": "double",
+      "default_value": "50000",
+      "dynamic": true
+    },
+    {
+      "display_name": "Suchradius um Erwartungspunkt (px)",
+      "description": "Kandidaten weiter als dieser Radius vom Erwartungspunkt entfernt werden verworfen (0 = aus, ganzes Bild). Schliesst Maschinenstruktur am Bildrand konstruktiv aus. Wert am Debug-Bild ablesen, sobald der Klotz sicher erkannt wird. Gefiltert wird ueber den Box-Mittelpunkt, die Maske wird nicht beschnitten - sonst verschoebe sich die gemeldete Position.",
+      "parameter_name": "roi_radius_px",
+      "parameter_type": "double",
+      "default_value": "0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Erwartungspunkt x (mm)",
+      "description": "Erwarteter seitlicher Versatz des Klotzes zur optischen Achse, in mm (Bild-x). 0 = Bildmitte. Bewusst in mm statt in Pixeln: Ein Pixelwert gilt nur fuer genau eine Kamerahoehe, ein mm-Versatz fuer alle - wichtig, solange die Beobachtungshoehe (B8) nicht festliegt.",
+      "parameter_name": "expect_offset_x_mm",
+      "parameter_type": "double",
+      "default_value": "0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Erwartungspunkt y (mm)",
+      "description": "Wie Erwartungspunkt x, in Bild-y-Richtung.",
+      "parameter_name": "expect_offset_y_mm",
+      "parameter_type": "double",
+      "default_value": "0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Auswahl nach Erwartungspunkt",
+      "description": "Aus mehreren Kandidaten den zum Erwartungspunkt naechsten waehlen statt den flaechengroessten. Erst sinnvoll, wenn der Erwartungspunkt gesetzt ist. Behebt den Fall, in dem ein grosser Stoerblob den kleinen echten Klotz verdraengt.",
+      "parameter_name": "select_nearest_to_expect",
+      "parameter_type": "bool",
+      "default_value": "false",
+      "dynamic": true
+    },
+    {
+      "display_name": "Min. Band-Distanz (m)",
+      "description": "Untergrenze der gemessenen Kamera-Band-Distanz in m (0 = aus). Darunter valid=0 - zu nah, der Seitenflaechen-Verzug setzt ein. Gehoert zu D18 und wird mit der Beobachtungshoehe (B8) gemeinsam festgelegt.",
+      "parameter_name": "min_belt_distance_m",
+      "parameter_type": "double",
+      "default_value": "0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Max. Band-Distanz (m)",
+      "description": "Obergrenze der gemessenen Kamera-Band-Distanz in m (0 = aus). Darueber valid=0 - zu wenig Bildaufloesung auf dem Klotz. Gehoert zu D18.",
+      "parameter_name": "max_belt_distance_m",
+      "parameter_type": "double",
+      "default_value": "0",
       "dynamic": true
     },
     {

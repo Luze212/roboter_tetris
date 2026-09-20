@@ -1,7 +1,9 @@
 # Befunde zur Roboterkamera — Szene, Physik, verworfene Wege
 
-**Stand 14.09.2026.**
-**Quelle:** die Laptop-Sitzung, in der `robot_cam` und `robot_cam_2` entstanden sind.
+**Stand 15.09.2026** (§1–8 vom 14.09., §9 die Messungen vom 15.09.).
+**Quellen:** §1–8 aus der Sitzung des **mobilen Setups**, in der `robot_cam` und
+`robot_cam_2` entstanden sind; §9 aus der Erprobung am **lokalen Setup** (Rechner
+am Roboter).
 **Zweck:** Wissen festhalten, das **in keinem Repo und in keinem Archiv steht** —
 es stammt aus Versuchen an den realen Kameras und aus der Rücksprache mit der
 Vorgängergruppe.

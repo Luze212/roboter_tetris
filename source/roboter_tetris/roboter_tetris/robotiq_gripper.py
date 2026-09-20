@@ -100,6 +100,48 @@ class GripperTargetLogic:
         return GripperCommand("move_mm", clamp_mm(value))
 
 
+class GripperMotionState:
+    """Hardware-free tracking of the two feedback signals of the gripper.
+
+    Same shape as :class:`GripperTargetLogic` — no I/O, so the transitions are
+    fully unit-testable without the modulo runtime or real hardware.
+
+    ``motion_done`` covers **both** directions, closing and opening. The
+    ``object_follower`` needs it that way: it leaves ``LOESEN`` on the
+    completion of the *opening* motion, not on ``has_object == 0``. The reason
+    is that ``has_object`` follows the Robotiq ``gOBJ`` status, which also
+    reports an object the jaws run into *while opening*
+    (``GOBJ_OBJECT_WHILE_OPENING``) — so it can flicker there.
+    """
+
+    def __init__(self) -> None:
+        self._motion_done = False
+        self._has_object = False
+
+    @property
+    def motion_done(self) -> bool:
+        return self._motion_done
+
+    @property
+    def has_object(self) -> bool:
+        return self._has_object
+
+    def on_command_start(self) -> None:
+        """A new target was queued: the gripper is about to move."""
+        self._motion_done = False
+
+    def on_status(self, gobj: int) -> None:
+        """Fold one ``gOBJ`` readout into the two signals."""
+        self._motion_done = gobj != GOBJ_IN_MOTION
+        self._has_object = gobj in (GOBJ_OBJECT_WHILE_OPENING,
+                                    GOBJ_OBJECT_WHILE_CLOSING)
+
+    def reset(self) -> None:
+        """Forget the state: deactivation, teardown or a lost connection."""
+        self._motion_done = False
+        self._has_object = False
+
+
 class RobotiqGripperComponent(LifecycleComponent):
     """Lifecycle component that controls a Robotiq 2F-140 gripper over USB."""
 
@@ -123,6 +165,14 @@ class RobotiqGripperComponent(LifecycleComponent):
             "gripper_change", "_gripper_change", Int32,
             user_callback=self._on_gripper_change,
         )
+
+        # Outputs (S9). The existing predicates stay for the AICA UI, but a
+        # predicate cannot be wired into a data input — the follower needs
+        # these as signals to detect a missed grip at all.
+        self._motion_done = False
+        self._has_object = False
+        self.add_output("motion_done", "_motion_done", Bool)
+        self.add_output("has_object", "_has_object", Bool)
 
         # Connection parameters (read once at configure time).
         self.add_parameter(
@@ -154,6 +204,7 @@ class RobotiqGripperComponent(LifecycleComponent):
         self.add_predicate("is_object_grasped", False)
 
         self._logic = GripperTargetLogic()
+        self._motion = GripperMotionState()
         self._gripper = None
 
         # Worker-thread coordination.
@@ -193,7 +244,21 @@ class RobotiqGripperComponent(LifecycleComponent):
     def _enqueue(self, command: GripperCommand) -> None:
         with self._lock:
             self._pending = command
+            self._motion.on_command_start()
         self._wake.set()
+
+    # -- Step (executor thread) -----------------------------------------------
+
+    def on_step_callback(self) -> None:
+        """Copy the worker's state into the output variables.
+
+        The worker thread only ever writes :class:`GripperMotionState` under the
+        lock; the outputs themselves are written here, in the executor thread.
+        That keeps the two Bools from ever being read as a half-updated pair.
+        """
+        with self._lock:
+            self._motion_done = self._motion.motion_done
+            self._has_object = self._motion.has_object
 
     # -- Lifecycle ------------------------------------------------------------
 
@@ -259,6 +324,7 @@ class RobotiqGripperComponent(LifecycleComponent):
         # Drop any command that arrived while inactive.
         with self._lock:
             self._pending = None
+            self._motion.reset()
         self._wake.clear()
         self._stop.clear()
         self._worker = threading.Thread(
@@ -277,6 +343,10 @@ class RobotiqGripperComponent(LifecycleComponent):
             except Exception as exc:
                 self.get_logger().warn(f"Failed to disconnect gripper on deactivate: {exc}")
         self.set_predicate("is_connected", False)
+        with self._lock:
+            self._motion.reset()
+        self._motion_done = False
+        self._has_object = False
         return True
 
     def on_cleanup_callback(self) -> bool:
@@ -362,6 +432,10 @@ class RobotiqGripperComponent(LifecycleComponent):
         except Exception as exc:
             self.get_logger().error(f"Gripper connect failed: {exc}")
             self.set_predicate("is_connected", False)
+            # No connection means no completed motion — do not let a stale
+            # motion_done from an earlier command stand.
+            with self._lock:
+                self._motion.reset()
             return
         self.set_predicate("is_connected", True)
         try:
@@ -382,10 +456,10 @@ class RobotiqGripperComponent(LifecycleComponent):
                     return  # newer command overrides; the outer loop picks it up
                 self._gripper.readStatus()
                 gobj = self._gripper.status.get("gOBJ", GOBJ_IN_MOTION)
-                self.set_predicate(
-                    "is_object_grasped",
-                    gobj in (GOBJ_OBJECT_WHILE_OPENING, GOBJ_OBJECT_WHILE_CLOSING),
-                )
+                with self._lock:
+                    self._motion.on_status(gobj)
+                    grasped = self._motion.has_object
+                self.set_predicate("is_object_grasped", grasped)
                 if gobj != GOBJ_IN_MOTION:
                     return  # reached target or stopped on an object / blockage
         finally:

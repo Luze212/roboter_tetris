@@ -17,6 +17,7 @@ import state_representation as sr
 from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import Image, CameraInfo
 
+from .contracts import pack_object_position
 from .vision.robot_detection import BeltDistanceFilter, near_mask
 from .vision.robot_detection_edge import (
     EdgeDetectionParams, color_edge_map, depth_edge_map,
@@ -78,6 +79,39 @@ class RobotCam2(LifecycleComponent):
             "mm pro Tiefen-Rohwert (16UC1-Bild). 1.0 = bereits mm (D400-Serie); für "
             "Kameras mit anderer Tiefen-Einheit entsprechend setzen.")
         self.add_parameter(
+            sr.Parameter("max_contour_area", 50000.0, sr.ParameterType.DOUBLE),
+            "Obergrenze der Blobflaeche in Pixeln (0 = aus). Wird sie ueberschritten, "
+            "meldet die Komponente valid=0 fuer das ganze Bild: Eine bildfuellende "
+            "Kontur heisst, dass die Maske versagt hat, und dann ist keiner Kontur zu "
+            "trauen. Anhaltspunkt vom 15.09.: ein Klotz belegt rund 4800 px, der "
+            "beobachtete Fehlalarm 325000 px.")
+        self.add_parameter(
+            sr.Parameter("roi_radius_px", 0.0, sr.ParameterType.DOUBLE),
+            "Suchradius (px) um den Erwartungspunkt; Kandidaten weiter draussen werden "
+            "verworfen (0 = aus, ganzes Bild). Schliesst Maschinenstruktur am Bildrand "
+            "konstruktiv aus. Wert am Debug-Bild ablesen, sobald der Klotz sicher "
+            "erkannt wird.")
+        self.add_parameter(
+            sr.Parameter("expect_offset_x_mm", 0.0, sr.ParameterType.DOUBLE),
+            "Erwarteter seitlicher Versatz des Klotzes zur optischen Achse, in mm "
+            "(Bild-x). 0 = Bildmitte. Bewusst in mm statt in Pixeln: So bleibt der "
+            "Wert gueltig, wenn sich die Beobachtungshoehe aendert.")
+        self.add_parameter(
+            sr.Parameter("expect_offset_y_mm", 0.0, sr.ParameterType.DOUBLE),
+            "Wie expect_offset_x_mm, in Bild-y-Richtung.")
+        self.add_parameter(
+            sr.Parameter("select_nearest_to_expect", False, sr.ParameterType.BOOL),
+            "Aus mehreren Kandidaten den zum Erwartungspunkt naechsten waehlen statt "
+            "den flaechengroessten. Erst sinnvoll, wenn der Erwartungspunkt gesetzt ist.")
+        self.add_parameter(
+            sr.Parameter("min_belt_distance_m", 0.0, sr.ParameterType.DOUBLE),
+            "Untergrenze der gemessenen Kamera-Band-Distanz in m (0 = aus). Darunter "
+            "valid=0 - zu nah, der Seitenflaechen-Verzug setzt ein.")
+        self.add_parameter(
+            sr.Parameter("max_belt_distance_m", 0.0, sr.ParameterType.DOUBLE),
+            "Obergrenze der gemessenen Kamera-Band-Distanz in m (0 = aus). Darueber "
+            "valid=0 - zu wenig Bildaufloesung auf dem Klotz.")
+        self.add_parameter(
             sr.Parameter("debug_enable", False, sr.ParameterType.BOOL),
             "Debug-Bild erzeugen und publizieren (kostet Rechenzeit).")
 
@@ -91,10 +125,15 @@ class RobotCam2(LifecycleComponent):
 
         # -- Outputs ---------------------------------------------------------------
         # std_msgs signals are plain Python values: list -> Float64MultiArray.
-        self._object_position = []
+        # S2: fixed length 6. Never empty -- before the first frame t = 0, which
+        # fails any age check the receiver applies.
+        self._object_position = pack_object_position(0.0, False)
         self.add_output("object_position", "_object_position", Float64MultiArray)
         self._debug_msg = Image()
-        self.add_output("debug_image", "_debug_msg", Image)
+        # Not on every step: at 100 Hz that would treble the image traffic over
+        # the camera rate and make dropped frames look like detection failures
+        # during commissioning (N5).
+        self.add_output("debug_image", "_debug_msg", Image, publish_on_step=False)
 
         # -- Predicates -------------------------------------------------------------
         self.add_predicate("is_object_visible", False)
@@ -103,6 +142,7 @@ class RobotCam2(LifecycleComponent):
         # -- State ------------------------------------------------------------------
         self._belt_filter = BeltDistanceFilter()
         self._last_stamp = None
+        self._last_t = 0.0
         self._last_frame_walltime = None
         self._last_error_walltime = None
         self._logged_shapes = False
@@ -130,6 +170,7 @@ class RobotCam2(LifecycleComponent):
     def on_activate_callback(self) -> bool:
         self._belt_filter.reset()
         self._last_stamp = None
+        self._last_t = 0.0
         self._last_frame_walltime = None
         self._logged_shapes = False
         self._color_msg = Image()
@@ -156,6 +197,12 @@ class RobotCam2(LifecycleComponent):
             use_depth_gate=bool(self.get_parameter("use_depth_gate").get_value()),
             depth_search_radius_px=int(self.get_parameter("depth_search_radius_px").get_value()),
             depth_average_frames=int(self.get_parameter("depth_average_frames").get_value()),
+            max_contour_area=self.get_parameter("max_contour_area").get_value(),
+            roi_radius_px=self.get_parameter("roi_radius_px").get_value(),
+            expect_offset_x_mm=self.get_parameter("expect_offset_x_mm").get_value(),
+            expect_offset_y_mm=self.get_parameter("expect_offset_y_mm").get_value(),
+            select_nearest_to_expect=bool(
+                self.get_parameter("select_nearest_to_expect").get_value()),
         )
 
     def _log_error_throttled(self, message: str) -> None:
@@ -165,15 +212,21 @@ class RobotCam2(LifecycleComponent):
             self.get_logger().error(message)
             self._last_error_walltime = now
 
-    def _clear_outputs(self) -> None:
-        self._object_position = []
+    def _publish_invalid(self) -> None:
+        """S2 with ``valid = 0``, keeping the last known ``t``.
+
+        While frames keep arriving ``t`` advances, so the receiver can tell
+        "camera works, sees nothing" (fall back to w = 0) from "camera no longer
+        delivers" (abort) -- which is the whole point of the flag.
+        """
+        self._object_position = pack_object_position(self._last_t, False)
         self.set_predicate("is_object_visible", False)
 
     def _handle_stale(self) -> None:
         if self._last_frame_walltime is None:
             return
         if (self.get_clock().now() - self._last_frame_walltime).nanoseconds / 1e9 > STALE_TIMEOUT_S:
-            self._clear_outputs()
+            self._publish_invalid()
             self.set_predicate("is_receiving_frames", False)
 
     @staticmethod
@@ -236,13 +289,26 @@ class RobotCam2(LifecycleComponent):
             result = detect_object_edges(color_bgr, depth_mm, fx, fy, cx, cy,
                                          self._params(), self._belt_filter)
 
+            # S2 in SI units. t is set first and kept even when nothing is
+            # detected, so a running t means "camera alive".
+            self._last_t = stamp[0] + stamp[1] / 1e9
             if result is None:
-                self._clear_outputs()
+                self._publish_invalid()
             else:
-                t = stamp[0] + stamp[1] / 1e9
-                self._object_position = [t, result.x_mm, result.y_mm,
-                                         result.z_band_mm, result.orientation_rad]
-                self.set_predicate("is_object_visible", True)
+                z_band_m = result.z_band_mm / 1000.0
+                lo = self.get_parameter("min_belt_distance_m").get_value()
+                hi = self.get_parameter("max_belt_distance_m").get_value()
+                if (lo > 0.0 and z_band_m < lo) or (hi > 0.0 and z_band_m > hi):
+                    # Outside the usable distance window (R3/D18): too close and
+                    # the side-face distortion sets in, too far and the block has
+                    # too few pixels. Either way the measurement is not usable.
+                    self._publish_invalid()
+                else:
+                    self._object_position = pack_object_position(
+                        self._last_t, True,
+                        result.x_mm / 1000.0, result.y_mm / 1000.0,
+                        z_band_m, result.orientation_rad)
+                    self.set_predicate("is_object_visible", True)
 
             if self.get_parameter("debug_enable").get_value():
                 self._publish_debug(color_bgr, depth_mm, result)
@@ -311,3 +377,4 @@ class RobotCam2(LifecycleComponent):
         cv2.putText(debug_img, legend, (8, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.38, (200, 200, 200), 1)
         self._debug_msg = self._bridge.cv2_to_imgmsg(debug_img, "bgr8")
+        self.publish_output("debug_image")

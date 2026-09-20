@@ -57,6 +57,19 @@ class RobotDetectionParams:
     depth_search_radius_px: int = 2       # search window for a valid belt depth
     depth_average_frames: int = 5         # moving average window (1 = off)
 
+    # -- Blob selection (see localize_largest_blob) -------------------------
+    # Upper area bound: a blob far larger than any block means the candidate
+    # mask failed and the whole frame is rejected. 0 = off.
+    max_contour_area: float = 50000.0     # px
+    # Hard cutoff around the expected image position. 0 = off (whole image).
+    roi_radius_px: float = 0.0            # px
+    # Expected lateral offset of the block from the optical axis, in mm at the
+    # belt distance. Kept in mm so it survives a change of observation height.
+    expect_offset_x_mm: float = 0.0
+    expect_offset_y_mm: float = 0.0
+    # Rank candidates by distance to the expected point instead of by area.
+    select_nearest_to_expect: bool = False
+
 
 @dataclass
 class RobotDetection:
@@ -120,14 +133,27 @@ def belt_candidate_mask(color_bgr: np.ndarray, params: RobotDetectionParams) -> 
     return cv2.morphologyEx(candidate, cv2.MORPH_OPEN, kernel)
 
 
+def belt_reference_mm(depth_mm: np.ndarray) -> Optional[float]:
+    """Median of the valid depth, i.e. a robust pre-estimate of the camera->belt
+    distance (the belt dominates the frame).
+
+    Available *before* any blob has been chosen, which is what the expected-point
+    calculation in :func:`localize_largest_blob` needs -- the precise belt
+    distance is only sampled next to the selected blob, later in the pipeline.
+    """
+    valid = depth_mm[depth_mm > 0]
+    if not valid.size:
+        return None
+    return float(np.median(valid))
+
+
 def near_mask(depth_mm: np.ndarray) -> np.ndarray:
     """Pixels that read as an object: invalid depth (too close / glossy) or
     clearly elevated above the belt. Belt and belt reflections read valid belt
     depth and are excluded."""
     near = depth_mm == 0
-    valid = depth_mm[depth_mm > 0]
-    if valid.size:
-        belt_ref = float(np.median(valid))
+    belt_ref = belt_reference_mm(depth_mm)
+    if belt_ref is not None:
         near = near | (depth_mm < belt_ref - GATE_HEIGHT_MARGIN_MM)
     return near
 
@@ -141,7 +167,12 @@ def localize_largest_blob(candidate: np.ndarray, depth_mm: np.ndarray,
                           fx: float, fy: float, cx: float, cy: float, *,
                           min_contour_area: float, use_depth_gate: bool,
                           depth_search_radius_px: int, depth_average_frames: int,
-                          belt_filter: Optional[BeltDistanceFilter] = None
+                          belt_filter: Optional[BeltDistanceFilter] = None,
+                          max_contour_area: float = 0.0,
+                          roi_radius_px: float = 0.0,
+                          expect_offset_x_mm: float = 0.0,
+                          expect_offset_y_mm: float = 0.0,
+                          select_nearest_to_expect: bool = False,
                           ) -> Optional[RobotDetection]:
     """Shared core for every endeffector detector: pick the largest qualifying
     blob of a binary ``candidate`` mask, gate it against the depth near-region,
@@ -150,20 +181,68 @@ def localize_largest_blob(candidate: np.ndarray, depth_mm: np.ndarray,
     Both detection approaches (color region, edge detection) differ ONLY in how
     they build ``candidate``; the selection, gate, orientation and back-projection
     are identical here so the two components stay directly comparable.
+
+    The four selection guards default to "off" (except ``max_contour_area``,
+    which the callers set from their parameters), so an unconfigured call behaves
+    exactly as before:
+
+    * ``max_contour_area`` -- an oversized blob rejects the **whole frame**. It
+      means the candidate mask failed (belt, glare and block merged), and then no
+      contour is trustworthy; taking the next largest would just swap one wrong
+      answer for another.
+    * ``roi_radius_px`` and ``expect_offset_*`` -- hard cutoff around the
+      expected image position of the block, which excludes machine structure at
+      the frame border by construction.
+    * ``select_nearest_to_expect`` -- rank by distance to that point instead of
+      by area. Both guards share the same distance, so they cost one hypot per
+      contour.
+
+    Filtering happens on the ``minAreaRect`` centre, never by cropping the
+    candidate mask: a blob clipped at the ROI edge would have its rectangle --
+    and therefore the reported position and orientation -- shifted.
     """
     contours, _ = cv2.findContours(candidate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
         return None
 
+    # Areas are needed twice (ceiling check and ranking); compute them once --
+    # the image processing already runs close to the CPU budget.
+    areas = [cv2.contourArea(c) for c in contours]
+
+    # An oversized blob means the candidate mask failed -- reject the frame.
+    if max_contour_area > 0.0 and max(areas) > max_contour_area:
+        return None
+
     near = near_mask(depth_mm) if use_depth_gate else None
 
-    # Largest qualifying contour: above min area and (optionally) overlapping the
-    # depth near-region.
+    # Expected image position of the block. The mm offset is converted with the
+    # current belt distance, so the same parameter holds at any camera height.
+    belt_ref_mm = belt_reference_mm(depth_mm)
+    if belt_ref_mm and (expect_offset_x_mm or expect_offset_y_mm):
+        u_expect = cx + expect_offset_x_mm * fx / belt_ref_mm
+        v_expect = cy + expect_offset_y_mm * fy / belt_ref_mm
+    else:
+        u_expect, v_expect = cx, cy
+
+    # Best qualifying contour: above min area, inside the ROI and (optionally)
+    # overlapping the depth near-region. Ranked by distance to the expected
+    # point, or by area when no expectation is configured.
     best = None
+    best_rect = None
     best_area = 0.0
-    for c in contours:
-        area = cv2.contourArea(c)
-        if area < min_contour_area or area <= best_area:
+    best_dist = float("inf")
+    for c, area in zip(contours, areas):
+        if area < min_contour_area:
+            continue
+        rect = cv2.minAreaRect(c)
+        (rect_cx, rect_cy), _, _ = rect
+        dist = math.hypot(rect_cx - u_expect, rect_cy - v_expect)
+        if roi_radius_px > 0.0 and dist > roi_radius_px:
+            continue
+        if select_nearest_to_expect:
+            if dist >= best_dist:
+                continue
+        elif area <= best_area:
             continue
         if near is not None:
             blob = np.zeros(candidate.shape, dtype=np.uint8)
@@ -173,7 +252,9 @@ def localize_largest_blob(candidate: np.ndarray, depth_mm: np.ndarray,
             if blob_px == 0 or overlap / blob_px < GATE_MIN_OVERLAP:
                 continue
         best = c
+        best_rect = rect
         best_area = area
+        best_dist = dist
     if best is None:
         return None
 
@@ -186,8 +267,9 @@ def localize_largest_blob(candidate: np.ndarray, depth_mm: np.ndarray,
     max_y = int(ys.max())
     mean_x = int(round(float(xs.mean())))
 
-    # Center + orientation from the oriented bounding box of the top face.
-    (rect_cx, rect_cy), _, angle = cv2.minAreaRect(best)
+    # Center + orientation from the oriented bounding box of the top face
+    # (captured during selection, so minAreaRect runs once per contour).
+    (rect_cx, rect_cy), _, angle = best_rect
     ref_px = (int(round(rect_cx)), int(round(rect_cy)))
     orientation_rad = _normalize_orientation(angle)
 
@@ -230,4 +312,9 @@ def detect_object(color_bgr: np.ndarray, depth_mm: np.ndarray,
         depth_search_radius_px=params.depth_search_radius_px,
         depth_average_frames=params.depth_average_frames,
         belt_filter=belt_filter,
+        max_contour_area=params.max_contour_area,
+        roi_radius_px=params.roi_radius_px,
+        expect_offset_x_mm=params.expect_offset_x_mm,
+        expect_offset_y_mm=params.expect_offset_y_mm,
+        select_nearest_to_expect=params.select_nearest_to_expect,
     )

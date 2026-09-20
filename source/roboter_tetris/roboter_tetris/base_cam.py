@@ -24,11 +24,39 @@ from rcl_interfaces.srv import SetParameters
 from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import Image, CameraInfo
 
+from .contracts import ObjectEntry, pack_objects
 from .vision.color_estimation import COLOR_NAMES
 from .vision.detection import (
     DetectionParams, build_cam_to_robot, conveyor_mask, detect_objects, roi_bounds,
 )
 from .vision.tracker import VisionTracker
+
+def pack_tracked_objects(timestamp: float, velocity_y_mm_s: float, tracks) -> list:
+    """Pack tracker output into the S1 signal.
+
+    The unit conversion mm -> m happens here, at the signal boundary: the vision
+    modules keep working in mm, the contract is SI throughout.
+
+    ``velocity_y_mm_s`` goes into the header rather than onto each object. The
+    tracker assigns one global velocity to all tracks (``set_global_velocity``),
+    so per object the value would be misleading -- a jammed block would still be
+    tagged with the full belt speed.
+
+    Module-level and free of component state, so the packing is testable without
+    the modulo runtime.
+    """
+    return pack_objects(
+        timestamp,
+        velocity_y_mm_s / 1000.0,
+        [ObjectEntry(id=float(obj.id), color=float(obj.color),
+                     x=obj.x / 1000.0, y=obj.y / 1000.0, z=obj.z / 1000.0,
+                     orientation=obj.orientation,
+                     length=obj.length / 1000.0,
+                     width=obj.width / 1000.0,
+                     height=obj.height / 1000.0)
+         for obj in tracks],
+    )
+
 
 # EMA low-pass for the global conveyor velocity (C++ VEL_FILTER_ALPHA).
 DEFAULT_VEL_FILTER_ALPHA = 0.3
@@ -150,10 +178,15 @@ class BaseCam(LifecycleComponent):
 
         # -- Outputs ---------------------------------------------------------------
         # std_msgs signals are plain Python values: list -> Float64MultiArray.
-        self._objects = []
+        # S1: [t, n, v_band] + n*9. The header is sent even with no objects,
+        # so "sees nothing" stays distinguishable from "no longer sending".
+        self._objects = pack_tracked_objects(0.0, 0.0, [])
         self.add_output("objects", "_objects", Float64MultiArray)
         self._debug_msg = Image()
-        self.add_output("debug_image", "_debug_msg", Image)
+        # Not on every step: at 100 Hz that would treble the image traffic over
+        # the camera rate and make dropped frames look like detection failures
+        # during commissioning (N5).
+        self.add_output("debug_image", "_debug_msg", Image, publish_on_step=False)
 
         # -- Predicates --------------------------------------------------------------
         self.add_predicate("is_receiving_frames", False)
@@ -161,7 +194,8 @@ class BaseCam(LifecycleComponent):
 
         # -- State -------------------------------------------------------------------
         self._tracker = VisionTracker()
-        self._filtered_velocity_y = 0.0
+        self._filtered_velocity_y = 0.0   # mm/s, as the tracker reports it
+        self._last_t = 0.0                # header stamp (s) of the last processed frame
         self._last_stamp = None          # (sec, nanosec) of the last processed frame
         self._last_frame_walltime = None  # rclpy Time of the last fresh frame
         self._last_error_walltime = None
@@ -206,9 +240,10 @@ class BaseCam(LifecycleComponent):
         # Fresh tracking state per activation; parameters stay as configured.
         self._tracker = VisionTracker()
         self._filtered_velocity_y = 0.0
+        self._last_t = 0.0
         self._last_stamp = None
         self._last_frame_walltime = None
-        self._objects = []
+        self._objects = pack_tracked_objects(0.0, 0.0, [])
         self._global_time_done = False
         self._global_time_attempts = 0
         self._global_time_last_try = None
@@ -265,12 +300,17 @@ class BaseCam(LifecycleComponent):
             self._last_error_walltime = now
 
     def _handle_stale(self) -> None:
-        """No fresh frame: after the timeout, clear outputs instead of freezing."""
+        """No fresh frame: drop the objects but keep sending the header.
+
+        ``t`` stops advancing, and that is how a receiver tells "camera works,
+        sees nothing" from "camera no longer delivers" (contract rule 2).
+        """
         if self._last_frame_walltime is None:
             return
         age_s = (self.get_clock().now() - self._last_frame_walltime).nanoseconds / 1e9
         if age_s > STALE_TIMEOUT_S:
-            self._objects = []
+            self._objects = pack_tracked_objects(
+                self._last_t, self._filtered_velocity_y, [])
             self.set_predicate("is_receiving_frames", False)
             self.set_predicate("has_objects", False)
 
@@ -381,11 +421,9 @@ class BaseCam(LifecycleComponent):
             self._tracker.set_global_velocity(self._filtered_velocity_y)
 
             tracks = self._tracker.get_active_objects()
-            out = []
-            for obj in tracks:
-                out.extend([float(obj.id), float(obj.color), obj.x, obj.y, obj.z,
-                            obj.orientation, obj.vy, obj.length, obj.width, obj.height])
-            self._objects = out
+            self._last_t = timestamp
+            self._objects = pack_tracked_objects(
+                timestamp, self._filtered_velocity_y, tracks)
             self.set_predicate("has_objects", len(tracks) > 0)
 
             if self.get_parameter("debug_enable").get_value():
@@ -424,3 +462,4 @@ class BaseCam(LifecycleComponent):
             cv2.putText(debug_img, f"ID:{det.id} {COLOR_NAMES[det.color]}", info.center_px,
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         self._debug_msg = self._bridge.cv2_to_imgmsg(debug_img, "bgr8")
+        self.publish_output("debug_image")

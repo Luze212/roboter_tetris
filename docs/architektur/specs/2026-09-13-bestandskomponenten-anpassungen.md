@@ -193,8 +193,16 @@ Vertrag** und bleiben gegeneinander austauschbar. Welche produktiv läuft, wird 
 Graphen verdrahtet — der Rest des Systems merkt keinen Unterschied.
 
 ### Nicht ändern
-`vision/robot_detection.py`, `vision/robot_detection_edge.py`. Die
-Kantendetektion wird separat abgestimmt (B6).
+Die **Detektionskerne**: `belt_candidate_mask` in `vision/robot_detection.py` und
+`edge_candidate_mask` in `vision/robot_detection_edge.py`. Die Kantendetektion
+wird separat abgestimmt (B6).
+
+> ⚠️ **Korrektur 20.09.2026.** Hier standen zuvor die beiden Dateien als Ganzes —
+> im Widerspruch zu den drei Gegenmaßnahmen, die dieser Abschnitt wenige Zeilen
+> weiter unten selbst vorschlägt. Aufgelöst: Geändert wird die **gemeinsame
+> Auswahl- und Geometriestufe** `localize_largest_blob`, und zwar für beide
+> Varianten identisch — damit bleibt der A/B-Test aussagekräftig. Die
+> Detektionskerne selbst bleiben unangetastet.
 
 > ⚠️ **Auch nicht die Rückprojektion.** `localize_largest_blob` projiziert `x`/`y`
 > mit der Banddistanz zurück, obwohl der Punkt auf der Klotzoberseite liegt —
@@ -221,7 +229,7 @@ Zwei neue `Bool`-**Ausgänge**:
 
 | Signal | Bedeutung |
 |---|---|
-| `is_closed` | Bewegung abgeschlossen |
+| `motion_done` | Bewegung abgeschlossen (beide Richtungen) |
 | `has_object` | Objekt tatsächlich gefasst |
 
 ### Warum

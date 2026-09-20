@@ -71,7 +71,7 @@ auf dem Block. Wird später der `base_frame`-Eingang des Attractors genutzt
 | `target` | `Float64MultiArray` | S4 aus `priority_handler` |
 | `object_position` | `Float64MultiArray` | S2 aus `robot_cam` |
 | `robot_state` | `cartesian_state` | `robot_state_broadcaster` |
-| `gripper_is_closed` | `Bool` | `robotiq_gripper` |
+| `gripper_motion_done` | `Bool` | `robotiq_gripper` |
 | `gripper_has_object` | `Bool` | `robotiq_gripper` |
 
 ### Outputs
@@ -375,11 +375,13 @@ blockierenden Aufrufe. Alle Zeitmessungen über
 ## Fehlerbehandlung
 
 - Jeder Zustand hat einen Timeout mit definiertem Rückfall
-- Fehlgriff (`is_closed` ohne `has_object`) → `ABBRUCH`, `outcome = 1`
+- Fehlgriff (`motion_done` ohne `has_object`) → `ABBRUCH`, `outcome = 1`
 - `LOESEN` **nicht** über `has_object = 0` verlassen: Der Robotiq-Status `gOBJ`
   meldet auch ein Objekt, auf das der Greifer **beim Öffnen** trifft, `has_object`
   kann dort also flackern. Übergang über den Abschluss der Öffnungsbewegung
-  (`is_closed = 0`) bzw. den Timeout.
+  (`motion_done = 1` nach dem Öffnen-Kommando) bzw. den Timeout. ⚠️ Hier stand
+  vorher `is_closed = 0` — unter der Vertragssemantik „Bewegung abgeschlossen"
+  hieße das *Bewegung läuft noch*, also genau das Gegenteil.
 - Verlorenes Objekt → `ABBRUCH`, `outcome = 2`
 - Nach jedem Abbruch wird `picked_id` gesendet, damit der `priority_handler` das
   Objekt als erledigt behandelt und das nächste wählt

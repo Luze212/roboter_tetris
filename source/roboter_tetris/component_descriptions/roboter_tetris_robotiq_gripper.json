@@ -2,7 +2,7 @@
   "name": "Robotiq Gripper",
   "description": {
     "brief": "Steuert einen per USB angeschlossenen Robotiq 2F-140 Greifer.",
-    "details": "Lifecycle-Komponente zur Ansteuerung eines Robotiq 2-Finger-Greifers 2F-140 über Modbus RTU (USB). 'Gripper Close' schließt bzw. öffnet vollständig, 'Gripper Change' fährt eine Ziel-Öffnungsweite in mm an und stoppt bei Erreichen oder Blockade. 'Gripper Close' hat Vorrang."
+    "details": "Lifecycle-Komponente zur Ansteuerung eines Robotiq 2-Finger-Greifers 2F-140 über Modbus RTU (USB). 'Gripper Close' schließt bzw. öffnet vollständig, 'Gripper Change' fährt eine Ziel-Öffnungsweite in mm an und stoppt bei Erreichen oder Blockade. 'Gripper Close' hat Vorrang. Die beiden Bool-Ausgänge 'Motion Done' und 'Has Object' melden Abschluss der Bewegung und tatsächlichen Griff zurück; die gleichnamigen Predicates bleiben für die Oberfläche erhalten."
   },
   "registration": "roboter_tetris::RobotiqGripperComponent",
   "inherits": "modulo_components::LifecycleComponent",
@@ -18,6 +18,20 @@
       "description": "Ziel-Öffnungsweite in mm (0-130). Nur wirksam, wenn Gripper Close False ist. Schließt bis zur Weite oder bis der Greifer blockiert wird.",
       "signal_name": "gripper_change",
       "signal_type": "int"
+    }
+  ],
+  "outputs": [
+    {
+      "display_name": "Motion Done",
+      "description": "True, sobald die angeforderte Bewegung abgeschlossen ist - beim Schließen UND beim Öffnen. Geht mit jedem neuen Kommando auf False. Die Rückmeldung, auf die der Ablauf wartet: 'Motion Done' ohne 'Has Object' bedeutet Fehlgriff.",
+      "signal_name": "motion_done",
+      "signal_type": "bool"
+    },
+    {
+      "display_name": "Has Object",
+      "description": "True, wenn der Greifer auf ein Objekt gestoppt hat. ACHTUNG: folgt dem Robotiq-Status gOBJ und meldet auch ein Objekt, auf das der Greifer beim ÖFFNEN trifft - der Wert kann beim Lösen kurz flackern. Zum Beenden einer Öffnungsbewegung deshalb 'Motion Done' verwenden, nicht dieses Signal.",
+      "signal_name": "has_object",
+      "signal_type": "bool"
     }
   ],
   "parameters": [

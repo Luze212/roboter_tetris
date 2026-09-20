@@ -54,7 +54,7 @@ Signaltypen: **D** Datensignal (Zahlenfeld) · **B** Schaltsignal (Bool) ·
  └──────────▲───────▲─────────┘ │  │   │        │
             │       │           │  │   │        │
    R cartesian_state│           │  │   │        │
-            │  B is_closed      │  │   │        │
+            │  B motion_done    │  │   │        │
             │  B has_object     │  │   │        │
             │       │           │  │   │        │
             │  ┌────┴─────────┐ │  │   │        │

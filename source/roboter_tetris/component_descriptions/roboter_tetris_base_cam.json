@@ -32,7 +32,7 @@
   "outputs": [
     {
       "display_name": "Erkannte Objekte (Array)",
-      "description": "Flaches Array mit Stride 10 [id, color, x, y, z, orientation, vy, length, width, height]; x/y/z in mm im Roboter-Frame, vy in mm/s, orientation in rad [0, pi). Farben: 0=Rot, 1=Gelb, 2=Grün, 3=Blau, 4=Weiß, 5=Schwarz, 6=Unbekannt.",
+      "description": "Flaches Array [t, n, v_band] + n Eintraege mit Stride 9, in SI-Einheiten. Kopf: t = Bild-Zeitstempel in s (aus header.stamp), n = Anzahl Objekte, v_band = global geschaetzte Bandgeschwindigkeit in m/s. Je Eintrag: [id, color, x, y, z, orientation, length, width, height] - x/y/z und Abmessungen in m im Roboter-Frame, orientation in rad [0, pi). Farben: 0=Rot, 1=Gelb, 2=Gruen, 3=Blau, 4=Weiss, 5=Schwarz, 6=Unbekannt. Der Kopf wird auch ohne Objekte gesendet ([t, 0, v_band]); bleibt t stehen, liefert die Kamera nicht mehr. ACHTUNG v_band: Das ist die y-Komponente, nicht der Betrag, und sie gilt global fuer alle Tracks - der Tracker weist sie gemeinsam zu. Unter 30 mm/s verwirft er die Messung und meldet 0. Der Wert wird gehalten, nicht zurueckgesetzt: Vor dem ersten Klotz in der Messregion steht er auf 0. Zur Plausibilitaetspruefung einzelner Objekte ist er nicht geeignet.",
       "signal_name": "objects",
       "signal_type": "double_array"
     },
