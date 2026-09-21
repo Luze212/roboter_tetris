@@ -38,12 +38,14 @@
     {
       "display_name": "Move To Target",
       "description": "Liest die Zielparameter ein und startet die Zieltrajektorie.",
-      "service_name": "move_to_target"
+      "service_name": "move_to_target",
+      "payload_format": "Optionaler Text wird ignoriert. Die Zielwerte werden aus den Komponentenparametern gelesen."
     },
     {
       "display_name": "Stop Motion",
       "description": "Hält die aktuelle gemessene EE-Pose als neues Ziel.",
-      "service_name": "stop_motion"
+      "service_name": "stop_motion",
+      "payload_format": "Optionaler Text wird ignoriert."
     }
   ],
   "predicates": [

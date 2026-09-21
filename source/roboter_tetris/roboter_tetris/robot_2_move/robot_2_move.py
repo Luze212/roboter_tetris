@@ -113,8 +113,12 @@ class Robot2Move(LifecycleComponent):
         self._state = "IDLE"
         self._state_start_time = None
         # Load this already on activation so the operator can inspect the
-        # conveyor-frame position before issuing the first move command.
-        self._T_robot_conveyor = self._load_robot_conveyor_transform()
+        # conveyor-frame position before issuing the first move command.  A
+        # world-frame move is independent of the calibration file.
+        frame = str(self.get_parameter("coordinate_frame").get_value()).lower()
+        self._T_robot_conveyor = (
+            self._load_robot_conveyor_transform() if frame == "conveyor" else None
+        )
         self._current_position_world_mm = []
         self._current_position_conveyor_mm = []
         self.set_predicate("is_moving", False)
@@ -273,11 +277,18 @@ class Robot2Move(LifecycleComponent):
         else:
             self._current_position_conveyor_mm = []
 
-        if self._state != "MOVING":
+        if self._state == "IDLE":
             # Holding the current measured pose avoids publishing an uninitialized
             # target to the Point Attractor before the first service call.
             self._target_pose.set_position(current_position)
             self._target_pose.set_orientation(current_orientation)
+            return
+
+        if self._state == "HOLDING_TARGET":
+            # Keep the final target published.  The Point Attractor can then
+            # finish converging even after this generator's trajectory ends.
+            self._target_pose.set_position(self._target_position)
+            self._target_pose.set_orientation(self._held_orientation)
             return
 
         elapsed_s = (self.get_clock().now() - self._state_start_time).nanoseconds / 1e9
@@ -288,7 +299,7 @@ class Robot2Move(LifecycleComponent):
         self._target_pose.set_orientation(self._held_orientation)
 
         if progress >= 1.0:
-            self._state = "IDLE"
+            self._state = "HOLDING_TARGET"
             self.set_predicate("is_moving", False)
             self.set_predicate("at_target", True)
             self.get_logger().info("Target trajectory completed.")
