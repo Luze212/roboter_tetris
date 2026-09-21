@@ -1,0 +1,54 @@
+{
+  "name": "Data Tracker",
+  "description": {
+    "brief": "Führt die Liste aller Klötze mit gepickt, hinter der Greifebene und im Bild - nur für die Anzeige.",
+    "details": "Blatt im Graphen: Von hier führt keine Leitung zurück in den Regelpfad. Je Klotz-ID ein Eintrag in der Reihenfolge des ersten Auftauchens, gespeist aus tracks. picked wird gesetzt, wenn picked_id outcome 0 für die ID meldet; out_of_bounds, wenn die ID in not_pickable erscheint (Greifebene ungegriffen überschritten). present = 0 heißt: aus tracks verschwunden, die Werte sind die letzten bekannten - der Klotz liegt im Greifer oder ist verloren. Einträge bleiben nach dem Verschwinden erhalten, weil picked_id erst nach dem Ablegen kommt. Ein erledigter Eintrag (gepickt, hinter der Greifebene oder verschwunden) fällt expiry_after_done_s nach der letzten dieser Änderungen heraus, gemessen in Bildzeit. Der S3-Kopf mit der geschätzten Bandgeschwindigkeit wird unverändert übernommen."
+  },
+  "registration": "roboter_tetris::DataTracker",
+  "inherits": "modulo_components::LifecycleComponent",
+  "inputs": [
+    {
+      "display_name": "Tracks",
+      "description": "S3 aus vectoring: Kopf [t, n, v_belt_x, v_belt_y, n_pool], Stride 14.",
+      "signal_name": "tracks",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Nicht mehr greifbar",
+      "description": "S5 aus priority_handler: [t, n, id...] - IDs hinter der Greifebene.",
+      "signal_name": "not_pickable",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Gepickt-Meldung",
+      "description": "S7 aus object_follower: [seq, id, outcome]. Jede neue seq (außer 0) mit outcome 0 setzt picked.",
+      "signal_name": "picked_id",
+      "signal_type": "double_array"
+    }
+  ],
+  "outputs": [
+    {
+      "display_name": "Weltzustand",
+      "description": "S10: Kopf wie S3 [t, n, v_belt_x, v_belt_y, n_pool], dann n Einträge mit Stride 17 - Felder 0-13 wie S3, 14 picked, 15 out_of_bounds, 16 present (0 = Nachlauf mit den letzten bekannten Werten).",
+      "signal_name": "world_state",
+      "signal_type": "double_array"
+    }
+  ],
+  "predicates": [
+    {
+      "display_name": "Hat Objekte",
+      "description": "Die Liste ist nicht leer.",
+      "predicate_name": "has_objects"
+    }
+  ],
+  "parameters": [
+    {
+      "display_name": "Nachlaufzeit (s)",
+      "description": "So lange bleibt ein erledigter Eintrag noch sichtbar - gepickt, hinter der Greifebene oder aus dem Bild verschwunden, gezählt ab der letzten dieser Änderungen, in Bildzeit. Muss länger sein als Heben, Transfer und Ablegen, sonst kommt picked nicht mehr an.",
+      "parameter_name": "expiry_after_done_s",
+      "parameter_type": "double",
+      "default_value": "10.0",
+      "dynamic": true
+    }
+  ]
+}

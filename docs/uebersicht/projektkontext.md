@@ -1,6 +1,6 @@
 # Projektkontext Robotetris
 
-**Stand 20.09.2026.** Rahmenbedingungen, Abgrenzungen und Arbeitsweise.
+**Stand 21.09.2026.** Rahmenbedingungen, Abgrenzungen und Arbeitsweise.
 Gedacht als Einstieg für jede Sitzung, die ohne Vorkontext startet — vor den
 technischen Dokumenten zu lesen.
 
@@ -15,17 +15,33 @@ Ein **UR10e** greift farbige Klötze von einem laufenden Förderband — **im La
 ohne dass das Band angehalten wird**. Die Klötze werden vorn von Hand aufgelegt
 und durchlaufen den Arbeitsbereich.
 
-Die Aufgabenstellung umfasst vier Punkte:
+### Die Projektziele (offizielle Vorgabe)
 
-| Nr. | Aufgabe | Stand |
-|---|---|---|
-| 1 | AICA implementieren, Hardware zum Laufen bringen | **erledigt** |
-| 2 | Automatische Kamerakalibrierung einrichten | läuft — **anderer Kommilitone, getrenntes Projekt** |
-| 3 | **Pickvorgang on-the-fly umsetzen** | Gegenstand dieser Arbeit |
-| 4 | Prozess nachvollziehbar darstellen | `interface_streamer`, zuletzt |
+| Nr. | Ziel | Umsetzung | Stand |
+|---|---|---|---|
+| 1 | Ansteuerung des UR10e mit AICA | AICA-Kette Attractor → IK-Velocity-Controller | **erledigt** |
+| 2 | Entwicklung eines schnellen Kalibrierungsverfahrens | Kommilitone, **getrenntes Projekt** (`Calibration/*`). Wir sind Abnehmer; offen ist nur die Übergabeform (C6). | läuft |
+| 3 | Verfahren zur **Geschwindigkeitsschätzung** und Positionsberechnung der Gegenstände | `base_cam` (Position), `vectoring` (Geschwindigkeit je Klotz und gepoolt) | Position läuft am Aufbau; Schätzung **gebaut**, am Aufbau offen (B21, B23) |
+| 4 | Algorithmus zur **Priorisierung** des zuerst zu greifenden Gegenstandes und zur **Bahnplanung** für das kontrollierte Greifen | `priority_handler` (Auswahl, Erreichbarkeit, Greifebene); `object_follower` mit den AICA-Bausteinen (Bahn) | **gebaut**, am Aufbau offen |
 
-Punkt 3 ist der eigentliche Kern. **Genau daran ist das Vorgängerprojekt
-gescheitert.**
+**Zusätzlich, als eigenes Ziel:** den Prozess nachvollziehbar darstellen —
+`data_tracker` (ein Blatt ohne Rückwirkung auf den Regelpfad) und
+`interface_streamer` (ein Übersichtsbild für RViz). **Beide gebaut.**
+
+Den Aufbau des Systems als Graph, die Komponenten und die Kopplungen zwischen
+ihren Parametern zeigt **`uebersicht/systemgraph.md`**.
+
+> ⚠️ **Geschwindigkeit ist eine Vorgabe, keine Kalibrierung.** Ziel 3 verlangt ein
+> *entwickeltes Verfahren* zur Geschwindigkeitsschätzung aus den Bilddaten. Die Doku
+> hatte das bis zum 21.09.2026 anders angenommen — Bandgeschwindigkeit als
+> einmalig kalibrierte Konstante — und die Schätzung ausdrücklich gestrichen.
+> Korrigiert in `architektur/entscheidungen.md`, **Nachtrag 6**.
+
+> **Bahnplanung über AICA:** Die Nutzung der von AICA bereitgestellten Bausteine
+> (Attractor, IK-Velocity-Controller) gilt als Lösung der Vorgabe.
+
+Der eigentliche Kern ist der **Pickvorgang im Lauf** — Ziele 3 und 4 zusammen.
+**Genau daran ist das Vorgängerprojekt gescheitert.**
 
 ## 2. Was das Vorgängerprojekt erreicht hat
 
@@ -64,21 +80,34 @@ die aktuell gegeneinander getestet werden.
 
 Für uns relevant: Die Vorgängergruppe hat Werte, die wir brauchen. Die
 **Hand-Auge-Kalibrierung der Roboterkamera ist damit vollständig geklärt** (C1/C4:
-Bezug ist der Flansch). Der **Werkzeugversatz zum Greifpunkt stand dagegen nicht
-im Archiv** — er saß in der UR-Installation am Teach-Pendant und wurde am
-15.09.2026 direkt aus der Steuerung ausgelesen: **215 mm**, auf der Flanschachse,
-unverdreht (C8). Dass **TCP-Posen kommandiert wurden**, ist bestätigt (C9) — A7
+Bezug ist der Flansch). Der **TCP der UR-Steuerung stand dagegen nicht im
+Archiv** — er saß in der UR-Installation am Teach-Pendant und wurde am 15.09.2026
+direkt aus der Steuerung ausgelesen: **215 mm**, auf der Flanschachse, unverdreht
+(C8). ⚠️ **Das ist nicht der Abstand zum Griffpunkt.** Unsere Kette regelt den
+Flansch; der Follower braucht **Flansch → Griffpunkt = 235 mm**
+(`flange_to_grip_point_m`, gemessen). Die 215 mm dienen nur der Umrechnung fremder
+TCP-Werte (`architektur/entscheidungen.md` Nachtrag 6 / Z7). Dass **TCP-Posen kommandiert wurden**, ist bestätigt (C9) — A7
 beantwortet das aber nicht, denn im Archiv existiert kein URDF; die Frage ist
 inzwischen eigenständig geklärt (kein Greifer im URDF, geregelt wird der Flansch).
 
 ## 3. Was heute funktioniert
 
+**Stand 21.09.2026: Alle Komponenten sind gebaut** und lokal getestet (259 Tests,
+davon 8 nur in der AICA-Testumgebung lauffähig). In AICA ist von den neuen noch
+keine gelaufen — das ist der erste Schritt am Aufbau.
+
 | Komponente | Stand |
 |---|---|
-| `robotiq_gripper` | **funktionsfähig** am Aufbau |
-| `base_cam` | **funktionsfähig**, erkennt Klötze zuverlässig |
-| `robot_cam` / `robot_cam_2` | implementiert und unit-getestet, **am Aufbau am 15.09.2026 durchgefallen** (B6). `robot_cam` farbbasiert (Band ausmaskieren), `robot_cam_2` kantenbasiert mit Tiefenkanten-Fusion. Identische I/O, im Graphen austauschbar. ⚠️ Beide scheitern **nicht an der Erkennung, sondern an der Auswahl** — Einzelheiten und Gegenmaßnahmen: `architektur/robot-cam-befunde.md` §9 |
-| `move_to_pose_test`, `true_signal`, `toggle_signal` | Testhilfen |
+| `robotiq_gripper` | **funktionsfähig** am Aufbau; seit 2.3 mit `motion_done`/`has_object` |
+| `base_cam` | **funktionsfähig**, erkennt Klötze zuverlässig; seit 2.1/2.4 Vertrag S1 und gemessene Längsposition. ⚠️ Alte Kalibrierwerte passen nicht zu den Antastpunkten des Roboters (B23) |
+| `vectoring` | gebaut — Geschwindigkeitsschätzung je Klotz und gepoolt (Ziel 3) |
+| `priority_handler` | gebaut — Zielauswahl, Erreichbarkeit, Greifebene (Ziel 4); Greifzone auf Platzhaltern bis B19 |
+| `data_tracker` | gebaut — Klotzliste für die Anzeige |
+| `object_follower` | gebaut, alle vier Stufen — Start, Folgen, Roboterkamera als Korrektur, Greifzyklus mit Ablage |
+| `interface_streamer` | gebaut — Übersichtsbild für RViz |
+| `robot_cam` / `robot_cam_2` | implementiert und unit-getestet, **am Aufbau am 15.09.2026 durchgefallen** (B6). `robot_cam` farbbasiert (Band ausmaskieren), `robot_cam_2` kantenbasiert mit Tiefenkanten-Fusion. Identische I/O, im Graphen austauschbar. ⚠️ Beide scheitern **nicht an der Erkennung, sondern an der Auswahl** — Einzelheiten: `architektur/robot-cam-befunde.md` §9. **Auswahlkorrektur seit 2.2 umgesetzt**, am Aufbau noch nicht erprobt. |
+| `move_to_pose_test`, `true_signal`, `toggle_signal` | Testhilfen; `toggle_signal` ersetzt am virtuellen Roboter die Greifer-Rückmeldung |
+| `test/tools/fake_objects.py` | synthetische Klötze statt `base_cam` — treibt die ganze Kette ohne Kamera, im Robotersystem |
 | AICA-Kette Attractor → IK-Velocity-Controller | **getestet**, Roboter folgt einem per Maus verschobenen Frame |
 
 ## 4. Abgrenzungen — was nicht angefasst wird
@@ -98,12 +127,19 @@ gespiegelt, wie in `Calibration/README.md` beschrieben.
 
 ### `roboter_tetris/vision/*` — Bildverarbeitung
 
-Die Algorithmik steht und wird **gesondert behandelt**. Sie ist ausdrücklich
-nicht Teil dieser Überarbeitung. Geändert wird ausschließlich, **wie ihre
-Ergebnisse ausgegeben werden** — also das Packen der Ausgabearrays in
-`base_cam.py`, `robot_cam.py` und `robot_cam_2.py`.
+**Geändert 21.09.2026:** Die Komponenten rund um Kameras und Greifer **dürfen**
+geändert werden; tabu ist nur die Kalibrierung. Für `vision/` heißt das:
 
-**Grund für die Zurückhaltung:** Das System ist bei der Bildverarbeitung an der
+| Datei | Regel |
+|---|---|
+| `vision/board.py` | **nicht anfassen** — die Kalibrierung nutzt sie (`Calibration/board_detection.py`) |
+| `vision/tracker.py` | ein beschlossener Eingriff: gemessene statt gerechneter Längsposition (Umsetzungsplan 2.4) |
+| `vision/robot_detection*.py` | nur die gemeinsame Blob-Auswahl (seit 2.2 umgesetzt); **die beiden Detektionskerne und die Rückprojektion bleiben**, weil der A/B-Test aus B6 die Kerne vergleicht und der Follower die Rückprojektion korrigiert |
+| `vision/detection.py`, `color_estimation.py` | kein Anlass zur Änderung |
+
+Geprüft: Die Kalibrierung importiert aus `vision/` ausschließlich `board.py`.
+
+**Grund für die Zurückhaltung, die trotzdem gilt:** Das System ist bei der Bildverarbeitung an der
 Leistungsgrenze. Die Kamerakomponenten sind bewusst so gehalten, dass neben der
 Bildverarbeitung möglichst wenig gerechnet wird, damit sie ohne spürbare
 Verzögerung in Echtzeit laufen. Zusatzrechnungen gehören in andere Komponenten —
@@ -152,14 +188,20 @@ Setups** (§6) — was nicht gepusht ist, existiert auf dem anderen Rechner nich
 | Greifer | Robotiq 2-Finger (2F-140), über USB/Modbus direkt angesteuert — **nicht** als ros2_control-Hardware-Interface. An den letzten Fingergliedern sitzen **verschraubte 3D-Druck-Aufsätze** (Gewindeeinsätze); darauf eine mit Isolierband befestigte Gummi-Grippmatte, Greiffläche **20 mm hoch × 15 mm breit**. Öffnungsweite **127 mm** |
 | Basiskamera | RealSense, am Bandanfang auf einem **beweglichen Gestell** — daher die automatisierte Extrinsik-Kalibrierung als Parallelprojekt (C3) |
 | Roboterkamera | RealSense, am Arm montiert — **festes Bauteil am Flansch, unverändert seit der Vorgängergruppe**. Deren Hand-Auge-Kalibrierung gilt damit unmittelbar (C1) |
-| Band | **grün-türkis** — gemessen **H ≈ 88–90**, nicht die ursprünglich angenommenen 60; der Farbton wandert zudem mit der Belichtungszeit (`architektur/robot-cam-befunde.md` §9.3). Konstante Geschwindigkeit, **nicht einstellbar**, Betrag noch unbekannt (B1); Richtung ist praktisch die **y-Achse**. Spiegelungen treten **nur hier** auf, nicht auf den Klötzen |
+| Band | **grün-türkis** — gemessen **H ≈ 88–90**, nicht die ursprünglich angenommenen 60; der Farbton wandert zudem mit der Belichtungszeit (`architektur/robot-cam-befunde.md` §9.3). Konstante Geschwindigkeit, **nicht einstellbar**; sie wird im Betrieb **geschätzt** (Ziel 3), B1 prüft das nur gegen. Richtung ist praktisch die **y-Achse**; im Robotersystem angetastet bei x ≈ −0,70 … −0,93 m (die Basiskamera sieht es mit alten Kalibrierwerten woanders, B23). Spiegelungen treten **nur hier** auf, nicht auf den Klötzen |
 | Klötze | rechtwinklig, **unterschiedlich groß**, von Hand aufgelegt, realistisch 2–3 gleichzeitig. Farben **rot, blau, weiß**. 3D-gedruckt: Oberseite **matt**, Seitenflächen **spiegelnd** (siehe `architektur/robot-cam-befunde.md`) |
 | Ablage | seitlich neben dem Band auf der Roboterseite; Pose in der Luft über einer Auffangkiste, der Klotz fällt hinein |
 | Freiraum | senkrecht über dem Arbeitsbereich frei; nur die Basiskamera steht am Bandanfang, den der Roboter kaum erreicht |
 
-Herunterfallende Klötze sind **kein Problem** — sie müssen nur erkannt werden,
-damit der Roboter ihnen nicht hinterherfährt. Das leistet die
-Plausibilitätsprüfung in `vectoring`.
+**Klotzverhalten auf dem Band** (klargestellt 21.09.2026): Die Klötze werden frei
+und ungehindert aufgelegt und laufen mit Bandgeschwindigkeit. **Festhängen oder
+Anstoßen kommt nicht vor.** Ein Klotz kann aber **beim Aufsetzen umkippen** — bis
+er wieder gleichmäßig läuft, gilt er als einschwingend.
+
+**Herunterfallen gibt es nur am Bandende**, wenn ein Klotz nicht rechtzeitig
+gegriffen wurde — und das ist aus Position und geschätzter Geschwindigkeit
+berechenbar. Von Hand vom Band genommen wird keiner. (`architektur/entscheidungen.md`,
+Nachtrag 6 / Z3, Z5)
 
 Die Ablage ist **kein Aufgabenpunkt**. Sie muss nur funktionieren, ohne dass sich
 abgelegte Klötze gegenseitig behindern. Der Pickvorgang ist der Fokus.
@@ -219,7 +261,8 @@ frame_to_signal → signal_point_attractor → ik_velocity_controller
               robot_state_broadcaster (cartesian_state)
 ```
 
-Hardware-Rate 100 Hz. Der `object_follower` ersetzt `frame_to_signal` im Betrieb.
+Hardware-Rate 100 Hz. Im Betrieb ersetzt der `object_follower` den
+`frame_to_signal`; der vollständige Graph steht in `uebersicht/systemgraph.md`.
 
 Die Kenntnisse über verfügbare AICA-Controller sind im Team begrenzt — der
 Aufbau entstand aus dem, was verstanden wurde. Auf AICA-Seite bestehen keine
@@ -276,8 +319,9 @@ Ohne Handlungsbedarf, aber gut zu wissen:
   übernommen werden, solange das so ist.
 - `Calibration/calibration.json` enthält Legacy-Werte, markiert als
   `legacy_initial_values` — noch nicht validiert.
-- **Kein bestehender Test prüft das Packen der Komponentenausgaben.** Die sechs
-  Tests decken die Module unter `vision/` ab sowie `Calibration/`,
-  `move_to_pose_test` und `robotiq_gripper` — aber keine Ausgabearrays. Eine
-  Änderung des Ausgabeformats bricht daher keine Tests, und *deshalb* schreibt
-  Phase 1.1 einen eigenen Test gegen `contracts.py` vor.
+- **Tests:** Seit 1.1 prüft `test_contracts.py` jedes Signalformat. Jede neue
+  Komponente hat ein Logikmodul ohne ROS mit eigenen Tests (Ende-zu-Ende-Läufe mit
+  `fake_objects.py` eingeschlossen) und einen Konstruktionstest, der nur in der
+  AICA-Testumgebung läuft (`ros_context`). Lokal fehlt `pytest`; die Tests laufen
+  in einer venv im Scratchpad mit einem kleinen Runner, der die AICA-Module
+  nachbildet.

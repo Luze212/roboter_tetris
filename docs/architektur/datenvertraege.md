@@ -4,7 +4,23 @@
 Grundlage für die Implementierung. Änderungen nur hier — und dann in
 `roboter_tetris/contracts.py` nachziehen, nie umgekehrt.
 
-Bezug: `entscheidungen.md` Themen 1–5.
+Bezug: `entscheidungen.md` Themen 1–7 und Nachträge 3–11. **Stand 21.09.2026**,
+alle Signale in `contracts.py` umgesetzt.
+
+## Übersicht
+
+| | Signal | von → an | Typ | Länge |
+|---|---|---|---|---|
+| S1 | `objects` | base_cam → vectoring | double_array | `3 + 9·n` |
+| S2 | `object_position` | robot_cam → object_follower | double_array | 6 |
+| S3 | `tracks` | vectoring → priority_handler, data_tracker | double_array | `5 + 14·n` |
+| S4 | `target` | priority_handler → object_follower | double_array | 17 |
+| S5 | `not_pickable` | priority_handler → data_tracker | double_array | `2 + n` |
+| S6 | `target_pose` | object_follower → signal_point_attractor | cartesian_pose | – |
+| S7 | `picked_id` | object_follower → priority_handler, data_tracker | double_array | 3 |
+| S8 | `follower_status` | object_follower → interface_streamer | double_array | 7 |
+| S9 | `gripper_close` / `motion_done` / `has_object` | object_follower ↔ robotiq_gripper | bool | – |
+| S10 | `world_state` | data_tracker → interface_streamer | double_array | `5 + 17·n` |
 
 ---
 
@@ -36,7 +52,7 @@ Bezug: `entscheidungen.md` Themen 1–5.
 
 ---
 
-## S1 — `objects` · base_cam → vectoring, data_tracker
+## S1 — `objects` · base_cam → vectoring
 
 ```
 [ t, n, v_band_gemessen,  <obj_0>, <obj_1>, ... ]
@@ -47,7 +63,7 @@ Bezug: `entscheidungen.md` Themen 1–5.
 |---|---|
 | `t` | Zeitstempel des Bildes (`header.stamp`), Sekunden |
 | `n` | Anzahl Objekte |
-| `v_band_gemessen` | global geschätzte Bandgeschwindigkeit, m/s. **Frame-Größe, kein Objektmerkmal** — der Tracker weist sie allen Tracks gemeinsam zu (`set_global_velocity`). Dient der Kalibrierung (B1) und als Laufkontrolle des Bandes, **nicht** zur Plausibilitätsprüfung einzelner Objekte. ⚠️ Drei Eigenheiten der Quelle, siehe unten. |
+| `v_band_gemessen` | global geschätzte Bandgeschwindigkeit, m/s. **Frame-Größe, kein Objektmerkmal** — der Tracker weist sie allen Tracks gemeinsam zu (`set_global_velocity`). Dient nur noch als **grobe Laufkontrolle** des Bandes. Die maßgebliche Geschwindigkeit schätzt `vectoring` selbst (S3, `entscheidungen.md` Nachtrag 6 / Z2). ⚠️ Drei Eigenheiten der Quelle, siehe unten. |
 
 | # | Feld | Einheit | Bemerkung |
 |---|---|---|---|
@@ -55,7 +71,7 @@ Bezug: `entscheidungen.md` Themen 1–5.
 | 1 | `color` | – | 0=Rot 1=Gelb 2=Grün 3=Blau 4=Weiß 5=Schwarz 6=Unbekannt |
 | 2 | `x` | m | world |
 | 3 | `y` | m | world |
-| 4 | `z` | m | world, Oberkante des Blocks — ⚠️ Semantik am Code nicht nachvollzogen, siehe unten |
+| 4 | `z` | m | world, **gemessen etwa halbe Blockhöhe über dem Band** — nicht die Oberkante, siehe unten |
 | 5 | `orientation` | rad | Längsachse, Bereich [0, π) |
 | 6 | `length` | m | |
 | 7 | `width` | m | |
@@ -93,7 +109,11 @@ rückprojizierten Ecken der **Oberseite** stammt. **Am 14.09.2026 am Aufbau
 nachgemessen:** gemeldet wurden 103,1 mm, die unabhängige Rückrechnung über
 dieselben Boxecken ergab 53,1 mm — die Differenz ist exakt die halbe gemeldete
 Höhe. Das Feld ist damit **weder Oberkante noch Mittelpunkt**, sondern liegt eine
-halbe Höhe über der Ecken-Referenz. Regelungsrelevant ist es nicht — die
+halbe Höhe über der Ecken-Referenz. Weil diese Referenz praktisch auf der
+Bandoberfläche lag (53,1 gegen gemessene 53,6 mm, B17), ergibt sich in der Summe
+**`z ≈ Bandoberfläche + halbe Blockhöhe`** — für den 100-mm-Klotz 103,6 mm gegen
+gemessene 103,1. Eine einzelne Messung; der Befund gilt für diese Szene, nicht als
+Garantie. Regelungsrelevant ist es nicht — die
 Greifhöhe wird aus `belt_surface_z_m` und `height` gebildet, nicht aus `z`. **Vor
 jeder regelungsrelevanten Verwendung von `z` nachrechnen.**
 
@@ -177,41 +197,71 @@ erhalten. Wer eine Verwendung im Regelpfad sucht, sucht vergeblich.
 ## S3 — `tracks` · vectoring → priority_handler, data_tracker
 
 ```
-[ t, n,  <track_0>, <track_1>, ... ]
-  Kopf 2            Stride 10
+[ t, n, v_belt_x, v_belt_y, n_pool,  <track_0>, <track_1>, ... ]
+  Kopf 5                             Stride 14
 ```
+
+**Kopf — die gepoolte Bandgeschwindigkeit** (`entscheidungen.md` Nachtrag 6 / Z2):
+
+| Kopf | Einheit | Bedeutung |
+|---|---|---|
+| `t` | s | Zeitstempel, übernommen aus S1 |
+| `n` | – | Anzahl Tracks |
+| `v_belt_x`, `v_belt_y` | m/s | gemeinsame Ausgleichsrechnung über **alle Messungen seit dem Einschwingen** aller Tracks des laufenden Durchlaufs — gemeinsame Steigung, je Track eigener Achsenabschnitt (`entscheidungen.md` Nachtrag 6 / Z9). Wird mit jeder Messung genauer |
+| `n_pool` | – | Anzahl der Tracks, die dazu beitragen (auch bereits verschwundene). **`n_pool = 0` heißt: noch kein Schätzwert** — `v_belt_*` ist dann bedeutungslos und darf nicht verwendet werden |
+
+> `n_pool` ist die ausdrückliche Antwort auf eine Falle von `base_cam`: Dessen
+> `v_band` startet stumm bei 0,0 und sieht damit aus wie „Band steht". Hier ist
+> „noch nichts geschätzt" vom Wert unterscheidbar.
+
+**Je Track:**
 
 | # | Feld | Einheit | Bemerkung |
 |---|---|---|---|
 | 0 | `id` | – | identisch zur base_cam-ID |
 | 1 | `color` | – | durchgereicht |
-| 2 | `x` | m | **geglättet**, gültig für `t` im Kopf |
-| 3 | `y` | m | geglättet |
-| 4 | `z` | m | geglättet |
-| 5 | `orientation` | rad | geglättet, [0, π) |
-| 6 | `length` | m | geglättet |
-| 7 | `width` | m | geglättet |
-| 8 | `height` | m | geglättet |
+| 2 | `x` | m | ab Status 0 **geglättet**, gültig für `t` im Kopf; davor letzte Einzelmessung |
+| 3 | `y` | m | dito |
+| 4 | `z` | m | dito |
+| 5 | `orientation` | rad | dito, [0, π) |
+| 6 | `length` | m | ab Status 0 gemittelt, davor letzte Einzelmessung (nur Anzeige) |
+| 7 | `width` | m | dito |
+| 8 | `height` | m | dito — ein beim Aufsetzen umgekippter Klotz ändert genau diesen Wert |
 | 9 | `status` | – | siehe Tabelle unten |
+| 10 | `vx` | m/s | **eigene** Geschwindigkeitsschätzung dieses Tracks — ab Status 0 aus allen seinen Messungen seit dem Einschwingen, fortlaufend genauer. Anzeige und Diagnose; gerechnet wird mit dem Pool |
+| 11 | `vy` | m/s | dito |
+| 12 | `v_change` | m/s | Betrag der Differenz zwischen den Geschwindigkeiten der jüngeren und der älteren Halbsekunde — **das Maß für „konstant gemessen"**; entscheidet den Übergang 3 → 0 |
+| 13 | `ori_quality` | – | Güte der Orientierungsmittelung, 0…1 — Resultantenlänge der Winkel über den doppelten Winkel. Klein heißt: Winkel verrauscht, Klotz teilverdeckt oder halb außerhalb der ROI. **Bewertet wird sie beim Verbraucher**, der Follower fällt unter seiner Schwelle auf die Bandrichtung zurück (`entscheidungen.md` Nachtrag 6 / Z13). Vor Status 0: 0
 
-**Länge:** `2 + 10·n`
+**Länge:** `5 + 14·n`
+
+> Felder 0–9 stehen an denselben Indizes wie vorher. Neu sind nur die vier
+> Felder am Ende und der erweiterte Kopf.
+>
+> Feld 12 hieß in der ersten Fassung `v_sigma` (Streuung der Schätzung). Das
+> Kriterium dahinter versagte beim Umkippen — nachgerechnet in Nachtrag 6 / Z9.
 
 ### Statuscodes
 
 | Code | Bedeutung | Folge |
 |---|---|---|
-| 0 | plausibel, wird verfolgt | Kandidat für `priority_handler` |
-| 1 | zu langsam / steht — vermutlich verklemmt oder umgekippt | ausgeschlossen |
-| 2 | Sprung / zu schnell — Fehldetektion oder angestoßen | ausgeschlossen |
-| 3 | noch zu wenige Messungen, Mittelung nicht eingeschwungen | noch nicht Kandidat |
+| 0 | **final** — Geschwindigkeit konstant gemessen; der Klotz wird nicht mehr in Frage gestellt | Kandidat für `priority_handler`; seine Messungen fließen in den Pool |
+| 3 | **einschwingend** — gerade aufgelegt, kippt womöglich noch | noch nicht Kandidat |
+| ~~1~~, ~~2~~ | **entfallen, werden nicht wiederverwendet** | — |
 
 Code 3 ist kein Fehler, sondern der Normalzustand direkt nach dem Auflegen.
-`priority_handler` nimmt ausschließlich Status 0. `data_tracker` und
-`interface_streamer` zeigen den Code an, damit **erkennbar ist, warum** ein Block
-nicht angefahren wurde.
+`priority_handler` nimmt ausschließlich Status 0.
 
-> Die Position ist auf `t` extrapoliert — der Empfänger rechnet weiter mit
-> `p(t') = p + d · v_band · (t' − t)`.
+> **Warum 1 und 2 entfallen** (Nachtrag 6 / Z3): Sie standen für „steht /
+> verklemmt" und „Sprung / angestoßen". Beides gibt es nicht — die Klötze werden
+> frei aufgelegt und laufen mit dem Band. Eine Fehldetektion in einem einzelnen
+> Bild bekommt keinen Status; `vectoring` verwirft die einzelne Messung. Die
+> Nummern bleiben unbelegt, damit eine ältere Notiz über „Status 1" nie etwas
+> anderes bedeuten kann als früher.
+
+> Die Position ist auf `t` extrapoliert. Der Empfänger rechnet weiter mit der
+> **Pool-Geschwindigkeit** aus dem Kopf: `p(t') = p + v_belt · (t' − t)`, sofern
+> `n_pool ≥ 1`.
 
 > **Hinweis zur Orientierung fast quadratischer Objekte.** Bei
 > `min(length, width) / max(…) ≥ 0,92` — **auf den hier geglätteten Werten**, nicht
@@ -220,8 +270,10 @@ nicht angefahren wurde.
 > unsicher: Der Tracker in `base_cam` friert für solche Objekte den zuerst
 > gemessenen Winkel ein, und der kann Länge und Breite vertauscht haben. Das
 > Gütemaß der Winkelmittelung in `vectoring` schlägt dabei **nicht** an, weil der
-> Winkel konstant hereinkommt. Verbraucher, für die die Achszuordnung zählt —
-> konkret die Greifbarkeitsprüfung im `priority_handler` — prüfen in diesem Fall
+> Winkel konstant hereinkommt. Die Greifbarkeitsprüfung im `priority_handler` ist
+> davon **nicht mehr betroffen**: Sie prüft die Diagonale, und die ändert sich durch
+> vertauschte Achsen nicht (`entscheidungen.md` Nachtrag 7 / H2). Ein künftiger
+> Verbraucher, für den die Achszuordnung zählt, prüft in diesem Fall
 > `max(length, width)`. Ausführlich unter S1, „Geprüft und bewusst nicht
 > aufgenommen: `square`".
 
@@ -229,7 +281,7 @@ nicht angefahren wurde.
 
 ## S4 — `target` · priority_handler → object_follower
 
-Feste Länge 13, kein Kopf/Stride (immer genau ein Ziel oder keines).
+Feste Länge 17, kein Kopf/Stride (immer genau ein Ziel oder keines).
 
 | # | Feld | Einheit | Bemerkung |
 |---|---|---|---|
@@ -244,8 +296,31 @@ Feste Länge 13, kein Kopf/Stride (immer genau ein Ziel oder keines).
 | 8 | `length` | m | |
 | 9 | `width` | m | für die Greifer-Vorpositionierung |
 | 10 | `height` | m | für die Greifhöhe |
-| 11 | `t_rest` | s | geschätzte Restzeit, bis das Objekt die Greifzone verlässt |
+| 11 | `t_rest` | s | geschätzte Restzeit, bis das Objekt die **Greifebene** erreicht — die Frist, bis zu der das Absenken begonnen haben muss (Feld 15). **Negativ**, sobald das Ziel die Ebene überschritten hat: Das Ziel bleibt gewählt, ob der Griff noch beginnt, entscheidet der Follower |
 | 12 | `zone_upstream` | m | **stromaufwärtige Längsgrenze der Greifzone**, als Koordinate entlang der Bandrichtung. Der `object_follower` begrenzt seine Zielpose in `ANFAHREN` darauf — und **nur** darauf. Auch bei `has_target = 0` gültig. |
+| 13 | `vx` | m/s | Geschwindigkeit, mit der der Follower das Ziel vorhersagt: die **Pool-Geschwindigkeit** aus dem S3-Kopf |
+| 14 | `vy` | m/s | dito |
+| 15 | `grasp_plane` | m | **Greifebene** — letzte Längsposition, von der aus der Greifprozess noch vor dem Zonenende fertig wird. Koordinate entlang der Bandrichtung wie Feld 12. Der Follower beginnt `ABSENKEN` nur, solange der Block davor liegt (`entscheidungen.md` Nachtrag 6 / Z11). Auch bei `has_target = 0` gültig. |
+| 16 | `ori_quality` | – | Güte der Orientierung des Ziels, durchgereicht aus S3 Feld 13. Der Follower verwendet `orientation` nur, wenn die Güte über `orientation_quality_min` liegt, sonst die Bandrichtung `atan2(vy, vx)` |
+
+**Die Längskoordinate `s` der Felder 12 und 15** ist die Projektion auf die
+Bandrichtung aus den Feldern 13/14 **derselben Nachricht**:
+`s = (x · vx + y · vy) / |v|`, Ursprung im Ursprung von `world`, wächst
+stromabwärts. Erzeuger und Verbraucher rechnen sie über **eine** Funktion,
+`contracts.along_belt` — sonst wartet der Roboter woanders, als der
+`priority_handler` in seiner Erreichbarkeitsrechnung annimmt (derselbe Grund wie in
+Nachtrag 3 / N3).
+
+**Zu Feld 15 — ein Tor, keine Begrenzung.** Die Greifebene begrenzt die Zielpose
+nicht; sie entscheidet nur, ob das Absenken noch **beginnen** darf. Die Aussage
+zu Feld 12, dass stromabwärts nicht begrenzt wird, bleibt damit richtig: Ein
+laufender Griff darf dem Block über das Zonenende hinaus folgen (P4).
+
+**Zu Feld 13/14 — warum der Pool und nicht die eigene Schätzung des Ziels.** Das
+Ziel ist immer ein finaler Track (Status 0), gehört also selbst zum Pool — bei
+`has_target = 1` ist `n_pool ≥ 1` garantiert. Pool und eigene Schätzung messen
+dieselbe Größe, der Pool nur mit mehr Daten. Der Follower bekommt die Geschwindigkeit
+über S4, weil er S3 nicht liest (ein Eingang, ein Vertrag).
 
 **Zu Feld 12 — warum nur eine Grenze.** Quer wird nicht begrenzt (Thema 6: der
 Roboter wartet am Zonenrand „auf der Querposition des Blocks"), stromabwärts darf
@@ -255,9 +330,21 @@ Arbeitsraum-Clamp des Sicherheitsgates ab. Die Greifzone bleibt vollständig im
 Besitz des `priority_handler` (Thema 4); der Follower wendet nur diesen einen Wert
 an. Begründung: `entscheidungen.md`, Nachtrag 3 / N3.
 
-Bei `has_target = 0` sind Felder 2–11 bedeutungslos, **Feld 12 bleibt gültig**. **Das Zurückziehen des Ziels
-ist die Abbruchregel** — wird ein Objekt unerreichbar, gepickt oder unplausibel,
-setzt `priority_handler` `has_target = 0` und der Follower bricht ab.
+Bei `has_target = 0` sind die Felder 2–11 und 16 bedeutungslos. **Die Felder 12–15
+bleiben gültig, solange eine Bandschätzung vorliegt** — 12 und 15 sind Koordinaten
+entlang der Richtung aus 13/14 und ohne sie nicht lesbar. **Ohne Bandschätzung**
+(`n_pool = 0` in S3 oder Band unter 0,01 m/s) sind die Felder 12–15 null und
+bedeutungslos: Es gibt dann weder eine Richtung noch eine Greifebene, und
+`has_target` ist ohnehin 0 (`entscheidungen.md` Nachtrag 7 / H4). **Das Zurückziehen des Ziels
+ist die Abbruchregel** — wird ein Objekt gepickt oder verpasst (`picked_id`),
+verschwindet seine ID oder fällt sein Status auf 3 zurück, setzt
+`priority_handler` `has_target = 0` und der Follower bricht ab.
+
+> ⚠️ Hier stand zusätzlich „unerreichbar" und „unplausibel". **Unerreichbarkeit
+> war nie ein Rückzugsgrund** — P4 schließt sie ausdrücklich aus, damit ein fast
+> gelungener Griff nicht abbricht. Ob ein Griff noch *beginnen* darf, entscheidet
+> seit Nachtrag 6 / Z11 der Follower an der Greifebene (Feld 15). „Unplausibel"
+> entfiel mit den Statuscodes 1/2 (Z3).
 
 ---
 
@@ -267,6 +354,12 @@ setzt `priority_handler` `has_target = 0` und der Follower bricht ab.
 [ t, n,  id_0, id_1, ... ]     Stride 1
 ```
 Reine Buchhaltung für die Anzeige. Nicht im Regelpfad.
+
+Inhalt: die IDs aller **aktuellen** Tracks, die die Greifebene überschritten haben,
+jeder Status — ohne das aktuelle Ziel, solange es gewählt ist. Die Liste ist keine
+Historie: Sie ist durch die Zahl der Tracks begrenzt, das Festhalten
+(`out_of_bounds`) übernimmt der `data_tracker`. Ohne Bandschätzung gibt es keine
+Ebene, die Liste ist dann leer.
 
 **Länge:** `2 + n`
 
@@ -287,7 +380,8 @@ als `cartesian_pose` aus. **A2 erledigt.**
 
 - `reference_frame`: `world`, **explizit gesetzt**
 - Inhalt: Zielpose des **Flansches** (nicht des Greifpunkts), einschließlich
-  Werkzeugversatz `tool_offset_z_m` und Vorhalt `lead_offset_m`
+  Versatz Flansch → Griffpunkt `flange_to_grip_point_m` (0,235 m) und Vorhalt
+  `v · lead_time_s` (`entscheidungen.md` Nachtrag 6 / Z6, Z7)
 
 Ersetzt `frame_to_signal` im Betrieb.
 
@@ -299,11 +393,19 @@ Feste Länge 3.
 
 | # | Feld | Bemerkung |
 |---|---|---|
-| 0 | `seq` | zählt bei jedem **abgeschlossenen** Versuch hoch, ab 0 |
+| 0 | `seq` | zählt bei jedem **abgeschlossenen** Versuch hoch. **0 = noch kein Versuch seit der Aktivierung** des Followers, der erste Versuch trägt 1 |
 | 1 | `id` | betroffene Objekt-ID |
-| 2 | `outcome` | 0 = erfolgreich abgelegt · 1 = Fehlgriff · 2 = Objekt verloren |
+| 2 | `outcome` | 0 = erfolgreich abgelegt · 1 = Fehlgriff · 2 = Objekt verloren · **3 = verpasst** — Greifebene überschritten, bevor abgesenkt wurde (Nachtrag 6 / Z11) · **4 = abgebrochen**, bevor gegriffen wurde, aus einem anderen Grund: Ziel zurückgezogen oder gewechselt, Zeitüberschreitung, Eingang steht still, Datenfehler, Arbeitsraum (Nachtrag 9 / G2). Der Grund steht im Log |
 
-Verbraucher merken sich die zuletzt gesehene `seq` und reagieren genau einmal.
+`outcome = 0` heißt: Der Klotz liegt in der Kiste. Das gilt auch, wenn der
+Follower mit Klotz im Greifer abbrechen musste — er fährt dann zur Ablage und
+öffnet erst dort (`entscheidungen.md` Nachtrag 6 / Z12); der Abbruchgrund steht im
+Log, nicht im Signal.
+
+Verbraucher merken sich die zuletzt gesehene `seq` und reagieren genau einmal —
+auf jede Änderung außer auf 0. Ein Rücksprung auf 0 heißt, dass der Follower neu
+aktiviert wurde; danach zählt wieder jede Änderung. Die Regel steckt in
+`contracts.AttemptWatcher`, den alle Verbraucher nutzen.
 **Ersetzt das "1 Sekunde lang True"-Muster aus dem Plan** — kein Zeitfenster,
 keine Flankenerkennung, kein Verpassen bei Lastspitzen.
 
@@ -321,7 +423,25 @@ Feste Länge 7. Reine Diagnose.
 | 3 | `err_laengs` | m | Regelabweichung in Bandrichtung |
 | 4 | `err_quer` | m | Regelabweichung quer |
 | 5 | `err_z` | m | Höhenabweichung |
-| 6 | `w_wirksam` | – | tatsächlich verwendete Gewichtung 0…1 (nach Rampe und Rückfall) |
+| 6 | `w_wirksam` | – | tatsächlich verwendete Gewichtung 0…1 (nach Rampe und Rückfall): der **Anteil der eingestellten Gewichte** `weight_along`/`weight_across`, der gerade wirkt — 0 = nur Basiskamera (Nachtrag 10 / J3) |
+
+**Zustandscodes (Feld 1)** — Reihenfolge wie im Zustandsautomaten (Thema 6):
+
+| Code | Zustand | Code | Zustand |
+|---|---|---|---|
+| 0 | `WARTEN` | 5 | `HEBEN` |
+| 1 | `ANFAHREN` | 6 | `ABLEGEN` |
+| 2 | `FOLGEN` | 7 | `LOESEN` |
+| 3 | `ABSENKEN` | 8 | `ABBRUCH` |
+| 4 | `GREIFEN` | | |
+
+Die Regelabweichungen (Felder 3–5) beziehen sich auf den Block: Flansch minus
+**vorhergesagte** Klotzposition, ohne Vorhalt. `err_laengs` entlang der geschätzten
+Bandrichtung, **positiv = Flansch voraus**; `err_quer` senkrecht dazu, **positiv =
+links der Laufrichtung**; `err_z` = Flanschhöhe minus kommandierte Höhe. Im
+eingeschwungenen `FOLGEN` ist `err_laengs` das Maß für `lead_time_s` (Nachtrag 9 /
+G7). In Zuständen ohne Block (`WARTEN`, `ABLEGEN`, `LOESEN`, `ABBRUCH`) sind sie 0,
+ebenso `target_id` (Nachtrag 8 / F5).
 
 `w_wirksam` macht sichtbar, aus welcher Quelle die Zielposition gerade stammt —
 der zentrale Wert für euren geplanten Vergleich base_cam ↔ robot_cam.
@@ -362,44 +482,71 @@ vor dem Zugreifen vorpositionieren — schneller und sicherer. Ausbaustufe.
 ## S10 — `world_state` · data_tracker → interface_streamer
 
 ```
-[ t, n,  <entry_0>, ... ]     Stride 12
+[ t, n, v_belt_x, v_belt_y, n_pool,  <entry_0>, ... ]
+  Kopf 5 wie S3                      Stride 17
 ```
 
-Felder 0–9 wie `tracks` (S3), zusätzlich:
+**Kopf** unverändert aus S3 übernommen — damit die Anzeige die geschätzte
+Bandgeschwindigkeit zeigen kann (das eigene Ziel „Prozess nachvollziehbar
+darstellen", `entscheidungen.md` Nachtrag 6 / Z1).
+
+Felder 0–13 wie `tracks` (S3), zusätzlich:
 
 | # | Feld | Bemerkung |
 |---|---|---|
-| 10 | `picked` | 1 = erfolgreich abgelegt |
-| 11 | `out_of_bounds` | 1 = Greifzone verlassen, ohne gepickt zu werden |
+| 14 | `picked` | 1 = erfolgreich abgelegt |
+| 15 | `out_of_bounds` | 1 = **Greifebene** überschritten, ohne gegriffen zu werden — ab dort ist der Klotz nicht mehr zu holen und fällt später am Bandende herunter (Nachtrag 6 / Z5, Z11) |
+| 16 | `present` | 1 = steht in den aktuellen `tracks`, Felder 0–13 sind aktuell · 0 = **Nachlauf**: aus `tracks` verschwunden, Felder 0–13 sind die letzten bekannten Werte (Nachtrag 7 / T1) |
 
-**Länge:** `2 + 12·n`
+**Länge:** `5 + 17·n`
 
-**Verfallsregel:** Einträge mit `picked = 1` oder `out_of_bounds = 1` verschwinden
-nach einer konfigurierbaren Frist aus dem Array. Ohne diese Regel wächst das
-Signal über den Programmlauf monoton — bei periodischem Publizieren ein echtes
-Problem. Historie gehört ins Log, nicht ins Signal.
+**Warum es den Nachlauf gibt.** Bei jedem Griff verschwindet der Klotz beim Heben
+aus dem Bild, `picked_id` mit `outcome = 0` kommt aber erst nach dem Ablegen,
+Sekunden später. Ohne Nachlauf wäre der Eintrag dann schon weg und `picked` käme
+nie an. `present = 0` sagt der Anzeige, dass die Werte eingefroren sind — der Klotz
+liegt im Greifer oder ist verloren, nicht mehr an der gezeigten Stelle.
+
+**Verfallsregel:** Ein Eintrag ist **erledigt**, sobald `picked`, `out_of_bounds`
+oder `present = 0` gilt. Er verschwindet eine konfigurierbare Frist nach der
+**letzten** dieser Änderungen aus dem Array, gemessen in der S3-Zeit (`t` im
+Kopf). Ein Eintrag, der dabei noch in `tracks` steht, kommt nicht wieder. Ohne
+diese Regel wächst das Signal über den Programmlauf monoton — bei periodischem
+Publizieren ein echtes Problem. Historie gehört ins Log, nicht ins Signal.
 
 ---
 
 ## `contracts.py` — Aufbau
 
 ```python
-# Je Signal: Kopflänge, Stride, Feldindizes, pack/unpack.
+# Je Signal: Kopflänge, Stride bzw. feste Länge, Feldindizes, NamedTuple, pack/unpack.
 OBJECTS_HEADER = 3
 OBJECTS_STRIDE = 9
-OBJ_ID, OBJ_COLOR, OBJ_X, OBJ_Y, OBJ_Z, OBJ_ORI, OBJ_LEN, OBJ_WID, OBJ_HGT = range(9)
+(OBJ_ID, OBJ_COLOR, OBJ_X, OBJ_Y, OBJ_Z, OBJ_ORI, OBJ_LEN, OBJ_WID, OBJ_HGT) = range(9)
 
-def pack_objects(t: float, v_belt: float, objects: list) -> list: ...
-def unpack_objects(arr: list) -> tuple[float, float, list]: ...
+def pack_objects(t, v_belt, objects) -> list: ...
+def unpack_objects(arr) -> ObjectsMsg | None: ...
+
+# Gemeinsame Vokabeln
+TRACK_FINAL, TRACK_SETTLING          # S3 Status (1, 2 stillgelegt)
+OUTCOME_PLACED … OUTCOME_ABORTED     # S7 outcome 0–4
+STATE_WAIT … STATE_ABORT             # S8 Zustandscodes 0–8
+COLOR_RED … COLOR_UNKNOWN            # S1 Farben 0–6
+
+# Zwei gemeinsame Regeln, die jede Seite gleich rechnen muss
+def along_belt(x, y, v_belt) -> float: ...   # Längskoordinate der S4-Felder 12, 15
+class AttemptWatcher: ...                    # S7: jede neue seq einmal, nie die 0
 ```
 
 Regeln:
-- `unpack_*` prüft die Länge gegen `kopf + n·stride` und wirft bzw. liefert leer
-  bei Verstoß — ein Empfänger darf nie auf halben Daten rechnen.
+- `unpack_*` liefert `None` für ein leeres Signal (noch nichts empfangen) und wirft
+  `ContractError` bei falscher Länge (`kopf + n·stride` bzw. feste Länge) — ein
+  Empfänger darf nie auf halben Daten rechnen.
 - `unpack_*` rechnet **nicht** um und interpretiert nicht; Extrapolation und
-  Transformationen macht der Verbraucher.
+  Transformationen macht der Verbraucher. Die zwei Ausnahmen oben *definieren*
+  Vertragssemantik, die Erzeuger und Verbraucher teilen müssen.
 - Keine Komponente importiert Feldindizes aus einer anderen Komponente, nur aus
-  `contracts.py`.
+  `contracts.py`. Das Modul ist frei von ROS, cv2 und numpy und wird für sich
+  getestet (`test_contracts.py`).
 
 ---
 
@@ -408,6 +555,6 @@ Regeln:
 | Punkt | Abhängig von |
 |---|---|
 | ~~Typ von `target_pose`~~ | **erledigt 14.09.2026: `cartesian_pose`** (A2) |
-| Zustandscodes in `follower_status` Feld 1 | Thema 6 |
-| Verfallsfrist in `world_state` | Thema 6 |
+| ~~Zustandscodes in `follower_status` Feld 1~~ | **erledigt 21.09.2026** — S8, Nachtrag 8 / F5 |
+| ~~Verfallsfrist in `world_state`~~ | **erledigt 21.09.2026** — S10, `expiry_after_done_s` 10 s, Nachtrag 7 / T1 |
 | Ob `gripper_change` genutzt wird | Ausbaustufe |

@@ -2,7 +2,9 @@
 
 **Datum:** 2026-09-13
 **Paket:** `roboter_tetris` (AICA Package, UR10e)
-**Status:** Entwurf zur Umsetzung
+**Status:** ✅ **umgesetzt** — §1 (`base_cam`, dazu der Tracker-Eingriff 2.4), §2
+(`robot_cam`/`_2`), §3 (Greifer); lokal getestet, in AICA noch nicht gelaufen.
+Wird nach dem ersten Lauf am Aufbau gelöscht, gemeinsam mit der `vectoring`-Spec.
 
 > **Vorrang.** Normativ sind `docs/architektur/entscheidungen.md` und
 > `docs/architektur/datenvertraege.md`. Diese Spec ist daraus **abgeleitet** und
@@ -18,8 +20,13 @@ Drei bereits funktionierende Komponenten müssen auf die Datenverträge gebracht
 werden. Alle Änderungen sind klein, einzeln testbar und **berühren die
 Bildverarbeitung nicht**.
 
-> Grundsatz: Die Algorithmik in `roboter_tetris/vision/` bleibt unangetastet.
-> Geändert wird ausschließlich, **wie** Ergebnisse ausgegeben werden.
+> ~~Grundsatz: Die Algorithmik in `roboter_tetris/vision/` bleibt unangetastet.~~
+> ⚠️ **Überholt (21.09.2026):** Die Komponenten rund um Kameras und Greifer
+> dürfen geändert werden; tabu ist nur die Kalibrierung (`Calibration/*`, und
+> `vision/board.py`, das sie nutzt). Zwei gezielte Eingriffe in `vision/` sind
+> beschlossen: die gemeinsame Blob-Auswahl der Roboterkamera (§2) und die
+> Längsposition im Tracker (§1). **Weiterhin unangetastet** bleiben die beiden
+> Detektionskerne der Roboterkamera und die Rückprojektion (N1).
 
 ---
 
@@ -81,10 +88,13 @@ Gilt für `base_cam`, `robot_cam` und `robot_cam_2` gleichermaßen
 ### ⚠️ Messregion des Trackers ist ab jetzt regelungsrelevant
 
 `track_velocity_region_y_min` / `_max` waren bisher reine Tracker-Feinheit. Sie
-entscheiden aber darüber, ob die Längsposition **gemessen oder gekoppelt** wird und
-ob Tracks bei ausbleibender Detektion gelöscht werden. Sie werden deshalb in
-**B19 gemeinsam mit der Greifzone** festgelegt — Region = Greifzone plus Rand.
-Begründung: `entscheidungen.md`, Nachtrag 3 / N2.
+entscheiden aber darüber, ob Tracks bei ausbleibender Detektion gelöscht werden.
+Sie werden deshalb in **B19 gemeinsam mit der Greifzone** festgelegt — Region =
+Greifzone plus Rand. Begründung: `entscheidungen.md`, Nachtrag 3 / N2.
+
+> Bis zum Tracker-Eingriff unten entschieden sie zusätzlich, ob die Längsposition
+> **gemessen oder gerechnet** wird. Das entfällt mit §1 „Tracker misst die
+> Längsposition" (Nachtrag 6 / Z4).
 
 ### Zeitstempel
 
@@ -118,8 +128,34 @@ Frame-Gating jedes Bild nach dem ersten und die Objektliste ist still leer. Am
 14.09.2026 gemessen und nach dem Setzen behoben (`entscheidungen.md`, Nachtrag 4).
 Der AICA-Block exponiert den Parameter nicht, deshalb der Weg über die Komponente.
 
+### Zusätzlich: Tracker misst die Längsposition, statt sie zu rechnen (Nachtrag 6 / Z4)
+
+**Eingriff in `vision/tracker.py`**, freigegeben am 21.09.2026 — die Komponenten
+rund um Kameras und Greifer dürfen geändert werden, nur die Kalibrierung nicht.
+
+Außerhalb der Messregion (`track_velocity_region_y_min…max`) ersetzt der Tracker
+heute die gemessene Längsposition durch eine gerechnete — `y = prev_y + vy·dt` —,
+**auch wenn eine frische Detektion vorliegt** (Z. 168–173). Das macht die
+Geschwindigkeitsschätzung in `vectoring` zirkulär und das Umkippen beim Aufsetzen
+unsichtbar, denn aufgelegt wird vorn, außerhalb der Region.
+
+| | vorher | nachher |
+|---|---|---|
+| Detektion vorhanden, außerhalb der Region | `y` gerechnet | **`y` gemessen** |
+| Detektion fehlt in diesem Bild | `y` fortgeschrieben | unverändert fortgeschrieben |
+| Löschregel (Z. 233–238) | streng innen, locker außen | **unverändert** |
+
+**Die Löschregel bleibt ausdrücklich unangetastet.** Das Aufweiten der Region auf
+das ganze Band ist in N2 verworfen: Tracks am Bildrand bekämen dann ständig neue
+IDs, und der Ziel-Lock ginge verloren. Die beiden Mechanismen hängen an denselben
+Parametern, werden aber einzeln behandelt.
+
+⚠️ **Am Aufbau zu prüfen (B21):** Der alte Code-Kommentar hält `y` außerhalb der
+Region für *„unreliable"*. Das stammt vom Aufbau der Vorgängergruppe und ist für
+unseren nicht gemessen.
+
 ### Dateien
-`roboter_tetris/base_cam.py` · `component_descriptions/roboter_tetris_base_cam.json` · `package.xml` (`rcl_interfaces`)
+`roboter_tetris/base_cam.py` · `component_descriptions/roboter_tetris_base_cam.json` · `package.xml` (`rcl_interfaces`) · `vision/tracker.py`
 
 ### Abnahme
 Bestehende Tests laufen unverändert (sie prüfen nur `vision/*`). Neuer Test prüft

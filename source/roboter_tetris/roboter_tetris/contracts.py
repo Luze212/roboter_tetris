@@ -19,9 +19,13 @@ Two conventions inherited from the contract document:
 
 Units are SI throughout (m, m/s, rad, s). Image processing works in mm
 internally and converts when packing -- this module never converts, and never
-interprets: extrapolation and frame transforms belong to the consumer.
+interprets: extrapolation and frame transforms belong to the consumer. Two
+exceptions define contract semantics that every side must share:
+:func:`along_belt` (the coordinate of S4 fields 12 and 15) and
+:class:`AttemptWatcher` (the S7 rule "react once per seq, never to 0").
 """
 
+import math
 from typing import List, NamedTuple, Optional, Sequence
 
 __all__ = [
@@ -36,12 +40,13 @@ __all__ = [
     "TRACKS_HEADER", "TRACKS_STRIDE", "TrackEntry", "TracksMsg",
     "pack_tracks", "unpack_tracks",
     # S4
-    "TARGET_LENGTH", "Target", "pack_target", "unpack_target",
+    "TARGET_LENGTH", "Target", "pack_target", "unpack_target", "along_belt",
     # S5
     "NOT_PICKABLE_HEADER", "NOT_PICKABLE_STRIDE", "NotPickableMsg",
     "pack_not_pickable", "unpack_not_pickable",
     # S7
     "PICKED_ID_LENGTH", "PickedId", "pack_picked_id", "unpack_picked_id",
+    "AttemptWatcher",
     # S8
     "FOLLOWER_STATUS_LENGTH", "FollowerStatus",
     "pack_follower_status", "unpack_follower_status",
@@ -51,8 +56,12 @@ __all__ = [
     # Shared vocabularies
     "COLOR_RED", "COLOR_YELLOW", "COLOR_GREEN", "COLOR_BLUE", "COLOR_WHITE",
     "COLOR_BLACK", "COLOR_UNKNOWN",
-    "TRACK_OK", "TRACK_TOO_SLOW", "TRACK_JUMPED", "TRACK_SETTLING",
-    "OUTCOME_PLACED", "OUTCOME_MISSED_GRIP", "OUTCOME_LOST",
+    "TRACK_FINAL", "TRACK_SETTLING",
+    "OUTCOME_PLACED", "OUTCOME_MISSED_GRIP", "OUTCOME_LOST", "OUTCOME_TOO_LATE",
+    "OUTCOME_ABORTED",
+    "FOLLOWER_STATES",
+    "STATE_WAIT", "STATE_APPROACH", "STATE_FOLLOW", "STATE_DESCEND",
+    "STATE_GRASP", "STATE_LIFT", "STATE_PLACE", "STATE_RELEASE", "STATE_ABORT",
     "S6_REFERENCE_FRAME",
 ]
 
@@ -73,16 +82,37 @@ class ContractError(ValueError):
 COLOR_RED, COLOR_YELLOW, COLOR_GREEN = 0, 1, 2
 COLOR_BLUE, COLOR_WHITE, COLOR_BLACK, COLOR_UNKNOWN = 3, 4, 5, 6
 
-#: Plausibility codes carried in S3/S10 field 9.
-TRACK_OK = 0          #: plausible, being followed -- candidate for priority_handler
-TRACK_TOO_SLOW = 1    #: stalled or stuck -- excluded
-TRACK_JUMPED = 2      #: jump / too fast -- misdetection or knocked -- excluded
-TRACK_SETTLING = 3    #: too few measurements yet; normal right after placement
+#: Status codes carried in S3/S10 field 9.
+#:
+#: Codes 1 and 2 ("stuck" / "knocked") are RETIRED and must never be reused:
+#: blocks move freely with the belt, so neither case exists. Leaving the numbers
+#: unassigned means an old note about "status 1" can never mean something else.
+TRACK_FINAL = 0       #: velocity measured as constant; selectable, feeds the pool
+TRACK_SETTLING = 3    #: just placed, may still be toppling; not yet selectable
 
 #: Outcome codes carried in S7 field 2.
-OUTCOME_PLACED = 0
-OUTCOME_MISSED_GRIP = 1
-OUTCOME_LOST = 2
+OUTCOME_PLACED = 0       #: block is in the bin (also after an abort while holding it)
+OUTCOME_MISSED_GRIP = 1  #: gripper closed without an object
+OUTCOME_LOST = 2         #: object vanished, or dropped from the gripper
+OUTCOME_TOO_LATE = 3     #: block crossed the grasp plane before descending began
+OUTCOME_ABORTED = 4      #: attempt aborted before gripping; the reason is logged
+
+# S8 field 1: follower state codes, in the order of the state machine.
+STATE_WAIT = 0       #: WARTEN   -- observation pose
+STATE_APPROACH = 1   #: ANFAHREN
+STATE_FOLLOW = 2     #: FOLGEN
+STATE_DESCEND = 3    #: ABSENKEN
+STATE_GRASP = 4      #: GREIFEN
+STATE_LIFT = 5       #: HEBEN
+STATE_PLACE = 6      #: ABLEGEN
+STATE_RELEASE = 7    #: LOESEN
+STATE_ABORT = 8      #: ABBRUCH  -- also the start state
+#: Code -> the German state name used throughout the documentation.
+FOLLOWER_STATES = {
+    STATE_WAIT: "WARTEN", STATE_APPROACH: "ANFAHREN", STATE_FOLLOW: "FOLGEN",
+    STATE_DESCEND: "ABSENKEN", STATE_GRASP: "GREIFEN", STATE_LIFT: "HEBEN",
+    STATE_PLACE: "ABLEGEN", STATE_RELEASE: "LOESEN", STATE_ABORT: "ABBRUCH",
+}
 
 #: S6 ``target_pose`` is a ``cartesian_pose``, not an array, so it has no
 #: pack/unpack here. Its one binding detail is the frame, set explicitly.
@@ -236,21 +266,28 @@ def unpack_object_position(
 
 # -- S3 `tracks` : vectoring -> priority_handler, data_tracker --------------
 
-TRACKS_HEADER = 2
-TRACKS_STRIDE = 10
+TRACKS_HEADER = 5
+TRACKS_STRIDE = 14
 
-TRACKS_T, TRACKS_N = range(TRACKS_HEADER)
+#: Header indices of S3. The belt velocity is the pooled estimate over every
+#: block that settled in the current run; ``n_pool = 0`` means "no estimate yet"
+#: and the velocity must not be used -- it is a state, not a value.
+(TRACKS_T, TRACKS_N, TRACKS_V_BELT_X, TRACKS_V_BELT_Y,
+ TRACKS_N_POOL) = range(TRACKS_HEADER)
 
 (TRK_ID, TRK_COLOR, TRK_X, TRK_Y, TRK_Z, TRK_ORI,
- TRK_LEN, TRK_WID, TRK_HGT, TRK_STATUS) = range(TRACKS_STRIDE)
+ TRK_LEN, TRK_WID, TRK_HGT, TRK_STATUS,
+ TRK_VX, TRK_VY, TRK_V_CHANGE, TRK_ORI_QUALITY) = range(TRACKS_STRIDE)
 
 
 class TrackEntry(NamedTuple):
-    """A smoothed object state plus its plausibility code.
+    """A smoothed object state, its settling status and its own velocity.
 
-    Aspect-ratio checks belong on these smoothed values, never on a single
-    frame: per frame the ratio of an exactly square block scatters from 0.727
-    to 0.999.
+    Position, geometry and orientation are averaged only once the block is
+    final (status 0) -- a block that toppled on placement must not mix its
+    standing and lying shape. Aspect-ratio checks belong on these smoothed
+    values, never on a single frame: per frame the ratio of an exactly square
+    block scatters from 0.727 to 0.999.
     """
 
     id: float
@@ -263,15 +300,29 @@ class TrackEntry(NamedTuple):
     width: float
     height: float
     status: float
+    #: This block's OWN velocity estimate -- diagnostics and display. Control
+    #: uses the pooled belt velocity from the header instead.
+    vx: float
+    vy: float
+    #: |v_new - v_old| between the two half windows; decides status 3 -> 0.
+    v_change: float
+    #: Orientation quality 0..1; judged by the consumer, not here.
+    ori_quality: float
 
 
 class TracksMsg(NamedTuple):
     t: float
+    v_belt_x: float
+    v_belt_y: float
+    #: Number of settled blocks behind the belt estimate; 0 = no estimate yet.
+    n_pool: float
     tracks: List[TrackEntry]
 
 
-def pack_tracks(t: float, tracks: Sequence[TrackEntry]) -> List[float]:
-    out = [float(t), float(len(tracks))]
+def pack_tracks(t: float, v_belt: Sequence[float], n_pool: int,
+                tracks: Sequence[TrackEntry]) -> List[float]:
+    out = [float(t), float(len(tracks)),
+           float(v_belt[0]), float(v_belt[1]), float(n_pool)]
     for track in tracks:
         out.extend(float(v) for v in track)
     return out
@@ -286,23 +337,26 @@ def unpack_tracks(arr: Optional[Sequence[float]]) -> Optional[TracksMsg]:
         TrackEntry(*values[i:i + TRACKS_STRIDE])
         for i in range(TRACKS_HEADER, len(values), TRACKS_STRIDE)
     ]
-    return TracksMsg(values[TRACKS_T], entries)
+    return TracksMsg(values[TRACKS_T], values[TRACKS_V_BELT_X],
+                     values[TRACKS_V_BELT_Y], values[TRACKS_N_POOL], entries)
 
 
 # -- S4 `target` : priority_handler -> object_follower ----------------------
 
-TARGET_LENGTH = 13
+TARGET_LENGTH = 17
 
 (TGT_T, TGT_HAS_TARGET, TGT_ID, TGT_COLOR, TGT_X, TGT_Y, TGT_Z, TGT_ORI,
- TGT_LEN, TGT_WID, TGT_HGT, TGT_T_REST, TGT_ZONE_UPSTREAM) = range(TARGET_LENGTH)
+ TGT_LEN, TGT_WID, TGT_HGT, TGT_T_REST, TGT_ZONE_UPSTREAM,
+ TGT_VX, TGT_VY, TGT_GRASP_PLANE, TGT_ORI_QUALITY) = range(TARGET_LENGTH)
 
 
 class Target(NamedTuple):
     """The selected object, or none.
 
-    With ``has_target = 0`` fields 2-11 are meaningless but ``zone_upstream``
-    stays valid. Withdrawing the target IS the abort rule: the follower stops
-    when ``priority_handler`` sets ``has_target = 0``.
+    With ``has_target = 0`` the object fields are meaningless, but
+    ``zone_upstream`` and ``grasp_plane`` stay valid. Withdrawing the target is
+    the abort rule -- until the gripper holds the block; from ``has_object`` on
+    the follower owns it and a withdrawn target no longer aborts anything.
     """
 
     t: float
@@ -316,26 +370,46 @@ class Target(NamedTuple):
     length: float
     width: float
     height: float
+    #: Time until the block reaches the grasp plane -- the deadline by which
+    #: descending must have started.
     t_rest: float
     #: Upstream longitudinal bound of the grasp zone. The follower clamps its
     #: target pose to this in ANFAHREN -- and to nothing else.
     zone_upstream: float
+    #: POOLED belt velocity, not the track's own estimate.
+    vx: float
+    vy: float
+    #: Last longitudinal position from which the whole grasp still finishes
+    #: before the zone end. A gate for starting ABSENKEN, not a pose clamp.
+    grasp_plane: float
+    #: Orientation quality of the target; the follower judges it.
+    ori_quality: float
 
 
 def pack_target(t: float, has_target: bool, zone_upstream: float,
+                grasp_plane: float, v_belt: Sequence[float],
                 track: Optional[TrackEntry] = None,
                 t_rest: float = 0.0) -> List[float]:
-    """Build S4 from a chosen :class:`TrackEntry`, or an empty selection."""
+    """Build S4 from a chosen :class:`TrackEntry`, or an empty selection.
+
+    ``v_belt`` is passed separately on purpose: S4 carries the POOLED belt
+    velocity from the S3 header, not the track's own estimate. Copying it from
+    the track would silently put the wrong value into the contract.
+    """
     if has_target and track is None:
         raise ContractError("target: has_target = 1 requires a track")
     if track is None:
         body = [0.0] * 9
+        quality = 0.0
     else:
         body = [track.id, track.color, track.x, track.y, track.z,
                 track.orientation, track.length, track.width, track.height]
+        quality = track.ori_quality
     return ([float(t), 1.0 if has_target else 0.0]
             + [float(v) for v in body]
-            + [float(t_rest), float(zone_upstream)])
+            + [float(t_rest), float(zone_upstream),
+               float(v_belt[0]), float(v_belt[1]),
+               float(grasp_plane), float(quality)])
 
 
 def unpack_target(arr: Optional[Sequence[float]]) -> Optional[Target]:
@@ -343,6 +417,22 @@ def unpack_target(arr: Optional[Sequence[float]]) -> Optional[Target]:
     if values is None:
         return None
     return Target(*_fixed(values, TARGET_LENGTH, "target"))
+
+
+def along_belt(x: float, y: float, v_belt: Sequence[float]) -> float:
+    """Longitudinal coordinate ``s`` of the point (x, y) in ``world``.
+
+    The coordinate of S4 fields 12 and 15: the projection onto the belt
+    direction taken from ``v_belt`` (S4 fields 13/14 of the same message),
+    origin at the world origin, increasing downstream. ``zone_upstream`` and
+    ``grasp_plane`` mean nothing without it -- which is why both sides call
+    this one function instead of each writing the dot product.
+    """
+    vx, vy = float(v_belt[0]), float(v_belt[1])
+    speed = math.hypot(vx, vy)
+    if speed == 0.0:
+        raise ContractError("along_belt: v_belt = 0 gives no belt direction")
+    return (float(x) * vx + float(y) * vy) / speed
 
 
 # -- S5 `not_pickable` : priority_handler -> data_tracker -------------------
@@ -401,6 +491,28 @@ def unpack_picked_id(arr: Optional[Sequence[float]]) -> Optional[PickedId]:
     return PickedId(*_fixed(values, PICKED_ID_LENGTH, "picked_id"))
 
 
+class AttemptWatcher:
+    """The S7 consumer rule: report each completed attempt exactly once.
+
+    ``seq = 0`` means the follower was (re)activated and has no attempt yet --
+    it is remembered but never reported. Remembering it matters: after a
+    reactivation the follower counts from 1 again, and those numbers must count
+    as new even if they were seen before.
+    """
+
+    def __init__(self) -> None:
+        self._last_seq: Optional[float] = None
+
+    def reset(self) -> None:
+        self._last_seq = None
+
+    def is_new(self, picked: PickedId) -> bool:
+        if picked.seq == self._last_seq:
+            return False
+        self._last_seq = picked.seq
+        return picked.seq != 0.0
+
+
 # -- S8 `follower_status` : object_follower -> interface_streamer -----------
 
 FOLLOWER_STATUS_LENGTH = 7
@@ -441,21 +553,25 @@ def unpack_follower_status(
 
 # -- S10 `world_state` : data_tracker -> interface_streamer -----------------
 
-WORLD_STATE_HEADER = 2
-WORLD_STATE_STRIDE = 12
+WORLD_STATE_HEADER = 5
+WORLD_STATE_STRIDE = 17
 
-WORLD_STATE_T, WORLD_STATE_N = range(WORLD_STATE_HEADER)
+#: Header as in S3 -- passed through so the display can show the belt estimate.
+(WORLD_STATE_T, WORLD_STATE_N, WORLD_STATE_V_BELT_X, WORLD_STATE_V_BELT_Y,
+ WORLD_STATE_N_POOL) = range(WORLD_STATE_HEADER)
 
 (WS_ID, WS_COLOR, WS_X, WS_Y, WS_Z, WS_ORI, WS_LEN, WS_WID, WS_HGT,
- WS_STATUS, WS_PICKED, WS_OUT_OF_BOUNDS) = range(WORLD_STATE_STRIDE)
+ WS_STATUS, WS_VX, WS_VY, WS_V_CHANGE, WS_ORI_QUALITY,
+ WS_PICKED, WS_OUT_OF_BOUNDS, WS_PRESENT) = range(WORLD_STATE_STRIDE)
 
 
 class WorldEntry(NamedTuple):
-    """Fields 0-9 as in :class:`TrackEntry`, plus the two bookkeeping flags.
+    """Fields 0-13 as in :class:`TrackEntry`, plus three bookkeeping fields.
 
-    Entries flagged ``picked`` or ``out_of_bounds`` drop out of the array
-    after a configurable grace period -- without that rule the signal grows
-    monotonically over a run. History belongs in the log, not in the signal.
+    An entry is done once it is ``picked``, ``out_of_bounds`` or no longer
+    ``present``; it drops out of the array a configurable time after the last
+    of these changes -- without that rule the signal grows monotonically over
+    a run. History belongs in the log, not in the signal.
     """
 
     id: float
@@ -468,17 +584,30 @@ class WorldEntry(NamedTuple):
     width: float
     height: float
     status: float
+    vx: float
+    vy: float
+    v_change: float
+    ori_quality: float
     picked: float
+    #: The block crossed the grasp plane without being gripped.
     out_of_bounds: float
+    #: 1 = in the current tracks; 0 = gone, fields 0-13 are the last known
+    #: values (the block is in the gripper, or lost).
+    present: float
 
 
 class WorldStateMsg(NamedTuple):
     t: float
+    v_belt_x: float
+    v_belt_y: float
+    n_pool: float
     entries: List[WorldEntry]
 
 
-def pack_world_state(t: float, entries: Sequence[WorldEntry]) -> List[float]:
-    out = [float(t), float(len(entries))]
+def pack_world_state(t: float, v_belt: Sequence[float], n_pool: int,
+                     entries: Sequence[WorldEntry]) -> List[float]:
+    out = [float(t), float(len(entries)),
+           float(v_belt[0]), float(v_belt[1]), float(n_pool)]
     for entry in entries:
         out.extend(float(v) for v in entry)
     return out
@@ -494,4 +623,6 @@ def unpack_world_state(
         WorldEntry(*values[i:i + WORLD_STATE_STRIDE])
         for i in range(WORLD_STATE_HEADER, len(values), WORLD_STATE_STRIDE)
     ]
-    return WorldStateMsg(values[WORLD_STATE_T], entries)
+    return WorldStateMsg(values[WORLD_STATE_T], values[WORLD_STATE_V_BELT_X],
+                         values[WORLD_STATE_V_BELT_Y], values[WORLD_STATE_N_POOL],
+                         entries)

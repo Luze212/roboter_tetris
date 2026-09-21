@@ -211,6 +211,32 @@ def test_tracker_predicts_invisible_tracks():
     assert objs[0].y > -690.0
 
 
+def test_tracker_takes_measured_y_outside_the_region():
+    """Umsetzungsplan 2.4 / Nachtrag 6 Z4. Outside the velocity region the C++
+    original coasted y with the belt velocity even when a detection existed.
+    That made every velocity estimate circular, and it hid a block toppling on
+    placement -- blocks are placed upstream, outside the region."""
+    tr = VisionTracker()
+    tr.set_prediction_velocity(-100.0)      # belt runs along -y at 100 mm/s
+    tr.update([_det(y=100.0)], 0.0)         # upstream, outside the region
+    tr.update([_det(y=90.0)], 0.1)          # promote
+    tr.update([_det(y=55.0)], 0.2)          # the block topples: centre jumps
+    obj = tr.get_active_objects()[0]
+    assert obj.y == 55.0                    # measured, not coasted 90 - 10 = 80
+
+
+def test_tracker_still_coasts_missed_frames_outside_the_region():
+    """Only the matched-detection branch changed; a missing detection is still
+    bridged with the prediction velocity."""
+    tr = VisionTracker()
+    tr.set_prediction_velocity(-100.0)
+    tr.update([_det(y=100.0)], 0.0)
+    tr.update([_det(y=90.0)], 0.1)          # promote
+    tr.update([], 0.2)                      # missed frame
+    obj = tr.get_active_objects()[0]
+    assert abs(obj.y - 80.0) < 1e-9
+
+
 def test_tracker_deletes_after_max_missed_in_region():
     tr = VisionTracker()
     tr.set_prediction_velocity(0.0)        # stays inside the region

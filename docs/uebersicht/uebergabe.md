@@ -1,4 +1,4 @@
-# Übergabe — Stand 15.09.2026
+# Übergabe — Stand 21.09.2026
 
 Dieses Dokument ist der Einstieg, wenn die Arbeit **auf einem anderen Rechner**
 fortgesetzt wird. Es fasst zusammen, was gilt, was gemessen ist und was als
@@ -23,46 +23,78 @@ Nächstes ansteht. Es ersetzt keines der Fachdokumente, sondern verweist auf sie
 | **Nicht selbstständig weiterarbeiten** | Jeder Umsetzungsschritt wird ausdrücklich vorgegeben. |
 
 **Nicht anfassen:** `roboter_tetris/Calibration/*` (fremdes Projekt eines
-Kommilitonen), `roboter_tetris/vision/*` (Bildverarbeitung steht; geändert wird
-nur, *wie* Ergebnisse ausgegeben werden), `.init_wizard/`, `CMakeLists.txt`.
+Kommilitonen) und `vision/board.py`, das die Kalibrierung nutzt; `.init_wizard/`,
+`CMakeLists.txt`.
+
+**Geändert werden dürfen** die Komponenten rund um Kameras und Greifer (Vorgabe
+vom 21.09.2026). In `vision/` bleiben trotzdem zwei Dinge unangetastet: die beiden
+Detektionskerne der Roboterkamera (sie vergleicht der A/B-Test aus B6) und die
+Rückprojektion (N1 — der Follower korrigiert sie, sonst doppelt).
 
 ---
 
 ## 2. Wo das Projekt steht
 
-**Phase 0 des Umsetzungsplans ist abgeschlossen.** Alle vier Punkte, die Phase 4
-blockierten, sind geklärt: `target_pose` ist `cartesian_pose` (A2), der Greifer
-steht nicht im URDF und geregelt wird `ur_tool0` (A7/A8), der Werkzeugversatz
-der Steuerung ist ausgelesen (C8), und der Uhrendrift der Basiskamera ist durch
-die Komponente selbst dauerhaft behoben (B12/B13/B14).
+**Alle Komponenten sind gebaut** und lokal getestet — in AICA ist von den neuen
+noch keine gelaufen. Offen ist **Phase 6, die Inbetriebnahme am Aufbau** (§6).
+Wie die Teile zusammenhängen: `uebersicht/systemgraph.md`.
 
-**Läuft am Aufbau:** `robotiq_gripper`, `base_cam`, die AICA-Kette
-Attractor → IK-Velocity-Controller.
-**Implementiert, ungetestet:** `robot_cam` (farbbasiert), `robot_cam_2`
-(kantenbasiert) — der A/B-Test B6 ist offen.
-**Noch nicht angelegt:** `contracts.py`, `vectoring.py`, `data_tracker.py`,
-`priority_handler.py`, `object_follower.py`, `interface_streamer.py`.
+| | Komponente | Stand |
+|---|---|---|
+| ✅ läuft am Aufbau | `robotiq_gripper`, `base_cam`, Attractor → IK-Velocity-Controller | beide Komponenten seit 2.1–2.4 geändert, Änderungen am Aufbau nicht erprobt |
+| ✅ gebaut 20./21.09. | `contracts.py`, `vectoring`, `priority_handler`, `data_tracker`, `object_follower` (4a–4d), `interface_streamer`, `fake_objects.py` | lokal getestet: 259 Tests, 8 davon nur in der AICA-Testumgebung |
+| 🟡 gebaut, am Aufbau durchgefallen | `robot_cam` / `robot_cam_2` | Auswahlkorrektur seit 2.2, B6 offen |
 
-### Noch rot
+### ⚠️ Zuerst lesen: was sich am 21.09. verschoben hat
 
-| Punkt | Warum blockiert |
+Die Grundlage hat sich an einem Tag mehrfach bewegt. Das Wichtigste, jeweils mit
+Fundstelle in `architektur/entscheidungen.md`:
+
+- **Die Bandgeschwindigkeit wird geschätzt, nicht kalibriert** (Nachtrag 6 / Z2).
+  `vectoring` schätzt je Klotz einen Geschwindigkeitsvektor; ein Klotz ist
+  *einschwingend* (Status 3), bis zwei aufeinanderfolgende Halbsekunden dieselbe
+  Geschwindigkeit messen, dann *final* (Status 0). Die finalen Klötze eines
+  Durchlaufs ergeben gemeinsam die Bandgeschwindigkeit. Festhängende Klötze gibt
+  es nicht — Status 1 und 2 sind stillgelegt.
+- **Flansch → Griffpunkt ist 0,235 m** (`flange_to_grip_point_m`), nicht 0,215
+  (Z7). Die 215 mm sind der TCP der UR-Steuerung.
+- **Greifen geht auch ohne Roboterkamera** (Z10) — sie ist eine Korrektur, keine
+  Voraussetzung. Gewichte stehen auf 0.
+- **Die Greifebene** (Z11): Bis dorthin muss das Absenken begonnen haben, sonst
+  bricht der Follower mit `outcome = 3` ab. Ziele dürfen stromaufwärts der Zone
+  gewählt werden.
+- **Mit Klotz im Greifer wird nichts fallen gelassen** (Z12), auch nicht bei einem
+  Abbruch.
+- **Basiskamera und Roboter sehen das Band an verschiedenen Stellen** (Nachtrag 8 /
+  F1, **B23**). Testdaten und Platzhalter liegen im Robotersystem; die
+  Basiskamera darf erst an den Follower, wenn das geklärt ist.
+- **Arbeitsraum und Beobachtungspose haben keine Defaults** (F3) — ohne sie lässt
+  sich der Follower nicht konfigurieren. Vorschläge für den virtuellen Roboter:
+  Einrichtung §9.
+- **Freihöhe 0,49 m** statt 0,445 (Nachtrag 10 / J1) und **`t_descend_s` 2,0 s**,
+  gekoppelt an die Sinkgeschwindigkeit 0,15 m/s (J2).
+- **Neu in den Verträgen:** S3/S4/S10 erweitert, S4 mit Greifebene und Güte,
+  S7 `outcome = 4` (vorher abgebrochen), S8 Zustandscodes, S10 `present`.
+
+### Kritisch am Aufbau
+
+| Punkt | Warum |
 |---|---|
-| **B1** — Bandgeschwindigkeit | Das Band konnte nicht laufen (Zettel eines parallelen Kalibrierprojekts liegen darauf). Die **Richtung** ist geklärt: praktisch die y-Achse. |
-| **C3** — Extrinsik der Basiskamera | Läuft als Projekt eines Kommilitonen. Die Basiskamera steht auf einem **beweglichen** Gestell, deshalb wird die Bestimmung automatisiert. |
+| 🟡 **B21** — misst der Tracker außerhalb der alten Region sauber? | Voraussetzung für 2.4 und damit für eine nicht zirkuläre Geschwindigkeitsschätzung (Nachtrag 6 / Z4). |
+| 🔴 **C3** — Extrinsik der Basiskamera | Läuft als Projekt eines Kommilitonen. Die Basiskamera steht auf einem **beweglichen** Gestell, deshalb wird die Bestimmung automatisiert. |
+| 🔴 **B23** — Basiskamera und Roboter sehen das Band an verschiedenen Stellen | Roboter tastet das Band bei x ≈ −0,8 an, die Basiskamera meldet mit den alten Werten x ≈ +0,8. Verdacht: 180° zwischen UR-`base` (RTDE) und `base_link` (AICA). **Bis das geklärt ist, darf die Basiskamera nicht an den Follower.** Nachtrag 8 / F1. |
 
-### Der offene Kernpunkt: `robot_cam`
+> **B1 ist nicht mehr rot.** Die Bandgeschwindigkeit wird geschätzt; B1 ist nur
+> noch die Gegenprobe mit der Stoppuhr.
 
-Beide Varianten scheitern **nicht an der Erkennung, sondern an der Auswahl**.
-Der Code nimmt die flächengrößte qualifizierte Kontur; die Doku ging von der
-bildzentrumsnächsten aus. Die Farbvariante wählt dadurch einen bildfüllenden
-Blob aus Glanz plus Klotz, die Kantenvariante die Maschinenstruktur am Bildrand.
-Beides erzeugt **plausibel aussehende Fehlwerte**, die `max_korrektur_m` nicht
-abfängt.
+### `robot_cam` — Auswahlkorrektur umgesetzt, am Aufbau offen
 
-Drei Gegenmaßnahmen für Phase 2.2, alle in `localize_largest_blob` und der
-Parameterliste, ohne die Detektionskerne zu berühren: Auswahl nach Nähe zum
-**Erwartungspunkt** (rechenbar, weil die Roboterkamera-Halterung seit der
-Vorgängergruppe unverändert ist), eine **ROI**, und eine **`max_contour_area`**.
+Beide Varianten scheiterten am 15.09. **nicht an der Erkennung, sondern an der
+Auswahl**: Die Farbvariante wählte einen bildfüllenden Blob aus Glanz plus Klotz,
+die Kantenvariante die Maschinenstruktur am Bildrand. Die drei Gegenmaßnahmen sind
+seit Phase 2.2 im gemeinsamen Kern umgesetzt: **Flächenobergrenze** (aktiv,
+Default 50 000 px), **ROI** und **Auswahl nach Erwartungspunkt** (beide per
+Default aus, weil ihre Werte an B8 hängen — am Debug-Bild in B6 Stufe 1 ablesen).
 Einzelheiten: `architektur/robot-cam-befunde.md` §9.
 
 ---
@@ -85,7 +117,9 @@ Nachträge 4 und 5.
 | Ablagepose Flansch | x −316,49 · y +476,21 · z +419,71 mm |
 | Greiferöffnung | 127 mm |
 | Backenauflage | 20 mm hoch, 15 mm breit |
-| Bandrichtung | praktisch die y-Achse |
+| Bandrichtung | praktisch die y-Achse; Vorzeichen offen (B1) |
+| Band im Robotersystem (angetastet) | x −0,70 … −0,93 m, y −0,20 … +0,07 m |
+| Freihöhe Flansch (Transfer, Abbruch) | 0,49 m (J1) |
 
 Genauigkeit der Basiskamera bei ruhendem Klotz, 299 Messungen: Position
 σ = 0,2…0,6 mm, Höhe σ = 0,6 mm. Die Grundfläche streut dagegen über 26 mm —
@@ -161,24 +195,77 @@ Pendant gestoppt) — die Werte sind dann ein eingefrorener Altstand.
 
 ## 6. Was als Nächstes ansteht
 
-**Am Schreibtisch, ohne Hardware:**
+### Am Schreibtisch — erledigt
 
-1. **`contracts.py`** (Umsetzungsplan Phase 1.1). Hängt an keinem offenen Punkt.
-   S4 hat 13 Felder, `target_pose` ist `cartesian_pose`.
-2. **Überarbeitung von `robot_cam`** (Phase 2.2) — die drei Gegenmaßnahmen aus
-   Abschnitt 2.
-3. **`Komponentenplan.docx`** nachziehen. Sechs Passagen sind überholt, unter
-   anderem der Signaltyp von `target_pose` und die Beschreibung der Greifhöhe.
+| Schritt | Was | Entscheidungen |
+|---|---|---|
+| 1.1 | `contracts.py` — alle Signale S1–S10 | Nachtrag 6 |
+| 2.1–2.4 | `base_cam` (S1, Tracker misst die Längsposition), `robot_cam` (Auswahl), Greifer (`motion_done`, `has_object`) | Nachtrag 6 / Z4 |
+| 3.0–3.3 | `fake_objects.py`, `vectoring`, `priority_handler`, `data_tracker` | Nachtrag 7 |
+| 4a–4d | `object_follower`: Start, Folgen, Roboterkamera, Greifzyklus | Nachträge 8–10 |
+| 5 | `interface_streamer` | Nachtrag 11 |
 
-**Am Aufbau, sobald das Band verfügbar ist:**
+Offen am Schreibtisch nur noch: **`Komponentenplan.docx`** nachziehen, wenn das
+System steht.
 
-4. **B1** — Bandgeschwindigkeit. Ein normaler Testlauf mit mehreren Klötzen
-   reicht; das `objects`-Signal mitschneiden und am Schreibtisch auswerten.
-   ⚠️ Der Tracker verwirft Geschwindigkeiten unter 30 mm/s.
-5. **B19 + B11** — Greifzone und Singularitäten. Den Arm die Bandstrecke
-   abfahren lassen und dabei die Gelenkgeschwindigkeiten mitlesen.
-6. **B6 Stufe 3** — A/B-Test der Roboterkamera; Voraussetzung für B8 und D18.
-7. **Gegenprobe der Ablagepose** bei laufendem Programm (Abschnitt 3).
+### Am Aufbau — in dieser Reihenfolge
+
+Jede Stufe setzt die vorige voraus. Was gemessen wird, ersetzt einen
+dokumentierten Startwert; die Punkte stehen in `offene-punkte.md`.
+
+**1. Laden und Registrierung** — Branch bauen, Systemabbild im Launcher neu
+erzeugen (Einrichtung §1), Anwendung laden: macht der Nutzer. Dann prüfen, ob
+`vectoring`, `priority_handler`, `data_tracker`, `object_follower` und
+`interface_streamer` in der Bibliothek erscheinen und die geänderten
+Bestandskomponenten ihre neuen Parameter und Ausgänge zeigen (`base_cam`:
+`camera_node`; `robot_cam`: Auswahlparameter; Greifer: `motion_done`,
+`has_object`).
+
+**2. Datenpfad bei stehendem Roboter** — `base_cam` → `vectoring` →
+`priority_handler` → `data_tracker` → `interface_streamer` verdrahten,
+`robot_state` an den `priority_handler`. Klötze auflegen und mitlesen: `tracks`,
+`target`, `world_state`, Wahl und Rückzug im Log, das Übersichtsbild.
+- **B23:** einen ruhenden Klotz mit der Basiskamera messen und mit dem Flansch
+  antasten — liegen beide Positionen beieinander? Wenn nicht: 180°-Verdacht prüfen,
+  C3 abwarten. **Solange B23 offen ist, bekommt der Follower keine
+  Basiskamera-Ziele.**
+- **B21:** ruhender Klotz an mehreren y-Positionen über den ganzen Sichtbereich —
+  trägt der Tracker-Eingriff 2.4?
+- **B1** nebenbei: Stoppuhr gegen die geschätzte Bandgeschwindigkeit.
+- Danach dürfen die Specs von `vectoring`, `priority_handler`, `data_tracker`,
+  `interface_streamer` und den Bestandskomponenten gelöscht werden.
+
+**3. Follower am virtuellen Roboter** — Quelle `fake_objects.py` → `vectoring` →
+`priority_handler`, Greifer-Rückmeldung über `toggle_signal`, Pflichtparameter aus
+Einrichtung §9.
+- **4a:** aus mehreren Startlagen aktivieren — erst senkrecht hoch, dann
+  Beobachtungspose? Das Log nennt den Bezugsrahmen von `robot_state`; er muss
+  `world` sein.
+- **4b:** `timeout_track_s` auf 10 s, `err_laengs` mitlesen — mit `lead_time_s` =
+  1/K im Mittel null? Folgt der Roboter über die Zone hinaus, bricht er an der
+  Arbeitsraumgrenze ab.
+- **4d:** voller Zyklus mit `toggle_signal`; ein künstlicher Abbruch mit Klotz im
+  Greifer endet in der Kiste.
+
+**4. Roboterkamera** — **B6 Stufe 1** (neue Auswahl, Erwartungspunkt und ROI am
+Debug-Bild ablesen), dann **B8** (Beobachtungshöhe, trägt `observe_z`) und D18.
+**B24:** stempelt die D435i in der Rechneruhr?
+
+**5. Greifzone** — **B19 + B11** (nach B23): Arm die Bandstrecke abfahren,
+Gelenkgeschwindigkeiten mitlesen; die Werte ersetzen die Platzhalter `zone_*` im
+`priority_handler`, die Messregion von `base_cam` muss die Zone umschließen.
+`is_zone_feasible` zeigt, ob die Zone lang genug ist. **B10:** Arbeitsraum nach
+`Safety/README.md` festlegen.
+
+**6. Follower am echten Roboter** — erst 4a, dann 4b mit **B4**
+(`lead_time_s` einmessen), **D23** (Montagewinkel der Backen). Dann 4d mit dem
+Referenzklotz: **erster Testgriff** bestätigt die 245 mm (B15), **D22** messen
+(Absenken, Greifen, Heben) und `t_descend_s` nachziehen, **B22** beobachten (bleibt
+die Ziel-ID beim Greifen?), **B18** Toleranzen, **B9** Ablagepose bei laufendem
+Programm gegenlesen.
+
+**7. 4c aufschalten** — erst nach B6 und B24: `weight_across`, dann
+`weight_along` schrittweise auf 1, `w_wirksam` im Übersichtsbild mitlesen.
 
 ---
 
@@ -188,4 +275,5 @@ Aufteilung und Vorrangregeln stehen in `docs/README.md`. Kurz: `uebersicht/`
 für Betrieb und Überblick, `architektur/` für die technische Grundlage,
 `archiv/` wird nicht mehr gepflegt. **Normativ sind `entscheidungen.md` und
 `datenvertraege.md`**; die Specs sind daraus abgeleitet und werden gelöscht,
-sobald die jeweilige Komponente gebaut ist.
+sobald die jeweilige Komponente am Aufbau gelaufen ist. Den Systemaufbau zeigt
+`uebersicht/systemgraph.md`.

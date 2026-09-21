@@ -87,17 +87,19 @@ Werte ist auf unseren Aufbau übertragbar, weil die Kette (ZeroMQ + Python +
 
 | Unser Parameter | Anhaltspunkt | Herkunft |
 |---|---|---|
-| `latency_compensation_s` (D7) / `lead_offset_m` (D1) | **≈ 0,7 s** Gesamtvorhalt — die `+ 0.7` in der Timing-Formel, im Code kommentiert als „dein Stellrad für früher/später greifen". Fasst Kamera-, Verarbeitungs- und Bewegungslatenz in einer empirisch eingedrehten Zahl zusammen. | `object_waiting_handler_strat2.py:136` |
-| `min_samples` in `vectoring` (Default 5) | Die Vorgängergruppe verwarf die **ersten 7 Messungen** einer Spur und mittelte erst über die Messungen 7…12. Das legt nahe, dass 5 Messungen **knapp** sind und eher 7–12 gebraucht werden, bis die Geschwindigkeit trägt. | `idle_handler_strat2.py:64–68` |
-| Plausibilitätsschwelle in `vectoring` | Objekte unter **0,05 m/s** wurden als „läuft nicht" verworfen. Passt zur Statuslogik (Code 1 = steht/verklemmt) und heißt zugleich: die Bandgeschwindigkeit liegt deutlich über 0,05 m/s. | `idle_handler_strat2.py:64` |
+| `latency_compensation_s` (D7) / `lead_time_s` (D1, vorher `lead_offset_m`) | **≈ 0,7 s** Gesamtvorhalt — seit Nachtrag 6 / Z6 ist auch unser Vorhalt eine **Zeit**, die Zahl ist also unmittelbar vergleichbar — die `+ 0.7` in der Timing-Formel, im Code kommentiert als „dein Stellrad für früher/später greifen". Fasst Kamera-, Verarbeitungs- und Bewegungslatenz in einer empirisch eingedrehten Zahl zusammen. | `object_waiting_handler_strat2.py:136` |
+| `settle_half_window` in `vectoring` (Default 15, also frühestens nach 30 Messungen final) | Die Vorgängergruppe verwarf die **ersten 7 Messungen** einer Spur und mittelte erst über die Messungen 7…12. Das ist im Kern dieselbe **Einschwingphase**, die Nachtrag 6 / Z3 einführt — direkt nach dem Auflegen ist die Geschwindigkeit noch nicht verlässlich. Unser Kriterium wartet länger (zwei übereinstimmende Halbsekunden statt einer festen Zahl), weil es das Umkippen sicher abfangen muss (Z9). | `idle_handler_strat2.py:64–68` |
+| ~~Plausibilitätsschwelle in `vectoring`~~ | Objekte unter **0,05 m/s** wurden als „läuft nicht" verworfen. Die Plausibilitätsprüfung ist entfallen (Nachtrag 6 / Z3), der Befund bleibt als **Untergrenze**: Die Bandgeschwindigkeit liegt deutlich über 0,05 m/s — und damit auch über der 30-mm/s-Totzone des Trackers. | `idle_handler_strat2.py:64` |
 | `gripper_margin_m` (Default 0,01) | Vorpositionierung war **Blockbreite + 30 mm**. Andere Bedeutung als unsere Marge (Vorpositionierung vs. Greifbarkeitsprüfung), aber die Größenordnung der nötigen Luft. | `idle_handler_strat2.py:76` |
 | `timeout_grasp_s` | Nach `close()` wurde **0,3 s** gewartet, bevor angehoben wurde — mit dem Kommentar „evt. anpassen!". | `grip_handler_strat2.py` |
 | `has_object` (S9) | Erfolgskontrolle war **`gripper.getPositionmm() < 10` ⇒ Fehlgriff** (Greifer ganz zu = nichts drin). Ein brauchbarer Gegencheck zum Robotiq-Predicate `is_object_grasped`. | `grip_handler_strat2.py:62` |
 | Greifzone (B19) | Der Tracker löschte Objekte außerhalb **y = +375 … −1080 mm** (Bandlänge im Roboter-Frame) und maß Geschwindigkeit nur im Fenster **y = −1000 … −500 mm**. Gleiches Frame wie bei uns, also direkt als Orientierung brauchbar. | `cameras/tracker.hpp` |
 
 **`v_band` selbst (B1/C5) steht nirgends als Zahl im Archiv.** Sie wurde zur
-Laufzeit aus dem Tracker bezogen (`vy`, mm/s) und nie festgeschrieben. B1 bleibt
-damit vollständig offen.
+Laufzeit aus dem Tracker bezogen (`vy`, mm/s) und nie festgeschrieben. Genau das
+entspricht dem Ansatz von Nachtrag 6: Die Geschwindigkeit wird zur Laufzeit
+geschätzt, nicht festgeschrieben. B1 ist damit keine Lücke mehr, sondern nur noch
+die Gegenprobe.
 
 ---
 
@@ -182,6 +184,15 @@ liegen also um den Werkzeugversatz (C8) versetzt — vor allem in z
 (`Z_min = 0,095` ist eine Greifpunkt-, keine Flanschhöhe). Übernahme nur mit
 Umrechnung und dokumentierter Begründung (Änderungsregel in `Safety/README.md`).
 
+**Falle 5b — und womöglich in einem gedrehten Rahmen (Nachtrag 8 / F1, B23).** Die
+Vorgängergruppe las ihre Posen über RTDE (`getActualTCPPose`,
+`getActualToolFlangePose`). RTDE meldet im UR-Rahmen **`base`**; ROS und damit AICA
+arbeiten in **`base_link`**, und im UR-URDF sind beide um **180° um z** gegeneinander
+gedreht. Das würde erklären, warum ihr Arbeitsraum-Rechteck und die alten
+Kamerawerte (x ≈ +0,8) nur gedreht zu unseren Antastpunkten (x ≈ −0,8) passen. Die
+alte Extrinsik der Basiskamera ist aus solchen Posen entstanden. **Am Aufbau
+prüfen, bevor irgendein Vorgängerwert übernommen wird.**
+
 ---
 
 ## 7. Ein Befund am eigenen Bestand: das Quadrat-Problem
@@ -257,5 +268,9 @@ Statt des Vertragsumbaus eine Zeile im `priority_handler`: Liegt das
 Seitenverhältnis über 0,92, wird `max(length, width)` gegen die Greiferöffnung
 geprüft statt der zugeordneten Abmessung. Konservativ, lokal, kostenlos.
 
-→ Festgehalten in `datenvertraege.md` unter S1 und S3, umgesetzt in der
-`priority-handler`-Spec.
+→ Festgehalten in `datenvertraege.md` unter S1 und S3.
+
+> **Überholt beim Bau (Nachtrag 7 / H2):** Der `priority_handler` prüft die
+> **Diagonale** gegen die Greiferöffnung. Die gilt für jeden Gierwinkel und ändert
+> sich durch vertauschte Achsen nicht — die Zeile mit der 0,92-Schwelle ist damit
+> entbehrlich. Die Begründung gegen ein Feld `square` bleibt.

@@ -44,28 +44,11 @@ def test_block_travels_at_the_configured_velocity():
 def test_block_leaves_the_tracker_window():
     belt = _belt(v_belt_mps=-0.100)
     block = belt.blocks[0]
-    # Spawn +0.300, despawn -1.080 -> 1.38 m -> 13.8 s at 0.1 m/s.
+    # Spawn +0.600, despawn -0.800 -> 1.40 m -> 14.0 s at 0.1 m/s.
     assert belt.y_of(block, 13.0) is not None
     assert belt.y_of(block, 15.0) is None
 
 
-def test_stalled_block_holds_its_position():
-    """The scene that must yield plausibility status 1 in vectoring."""
-    blocks = fake_objects.default_blocks()
-    blocks[0].stall_at_y_m = -0.700
-    belt = FakeBelt(blocks, v_belt_mps=-0.100)
-    assert abs(belt.y_of(blocks[0], 10.0) - (-0.700)) < 1e-9
-    assert abs(belt.y_of(blocks[0], 30.0) - (-0.700)) < 1e-9
-    # and it must not be despawned while it sits there
-    assert belt.y_of(blocks[0], 60.0) == -0.700
-
-
-def test_stall_also_works_for_a_belt_running_the_other_way():
-    blocks = [FakeBlock(id=1, color=0, length=0.05, width=0.05, height=0.1,
-                        stall_at_y_m=0.100)]
-    belt = FakeBelt(blocks, v_belt_mps=+0.100, y_spawn_m=-0.300,
-                    y_despawn_m=1.080)
-    assert abs(belt.y_of(blocks[0], 10.0) - 0.100) < 1e-9
 
 
 def test_signal_is_a_valid_s1_array():
@@ -97,9 +80,76 @@ def test_header_is_sent_even_before_any_block_appears():
 
 
 def test_sizes_cover_the_graspability_limits():
-    # B15: below ~24 mm height a block cannot be gripped centrally.
-    # B16: the gripper opens 127 mm.
+    # B15 with 5 mm air (Nachtrag 6 / Z7): below ~30 mm a block is not graspable.
+    # B16: the gripper opens 127 mm. The scene must contain both a graspable
+    # block and one that is deliberately NOT graspable, as a negative case.
     belt = _belt()
     heights = [b.height for b in belt.blocks]
     widths = [max(b.length, b.width) for b in belt.blocks]
-    assert min(heights) > 0.024 and max(widths) < 0.127
+    assert max(widths) < 0.127
+    assert any(h >= 0.030 for h in heights)
+    assert any(h < 0.030 for h in heights)      # the 25 mm cube
+
+
+# -- Toppling on placement ------------------------------------------------------
+
+def test_topple_forward_gets_the_geometry_right():
+    """The 50 x 50 x 100 reference block pivots about its front edge: its centre
+    jumps by (100 - 50) / 2 = 25 mm and it ends up 100 long, 50 high."""
+    block = fake_objects.default_blocks()[0]
+    t = fake_objects.topple_forward(block, after_s=0.3)
+    assert abs(t.shift_along_m - 0.025) < 1e-12
+    assert (t.length, t.width, t.height) == (0.100, 0.050, 0.050)
+
+
+def test_a_block_that_is_not_standing_cannot_topple_forward():
+    lying = fake_objects.default_blocks()[1]          # 76 x 50 x 50
+    try:
+        fake_objects.topple_forward(lying)
+    except ValueError:
+        return
+    raise AssertionError("ein liegender Klotz darf nicht nach vorn umkippen")
+
+
+def test_toppled_block_jumps_and_changes_shape_at_the_right_time():
+    blocks = fake_objects.default_blocks()[:1]
+    blocks[0].topple = fake_objects.topple_forward(blocks[0], after_s=0.3)
+    belt = FakeBelt(blocks, v_belt_mps=-0.100)
+    before = belt.objects_at(0.29)[0]
+    after = belt.objects_at(0.31)[0]
+    # Along -y the belt travels 2 mm in 0.02 s; the topple adds 25 mm forward.
+    assert abs((before.y - after.y) - (0.002 + 0.025)) < 1e-9
+    assert before.height == 0.100 and after.height == 0.050
+    assert after.length == 0.100
+    assert abs(after.z - (BELT_SURFACE_Z_M + 0.025)) < 1e-9
+
+
+def test_topple_jumps_forward_on_a_belt_running_along_plus_y():
+    blocks = fake_objects.default_blocks()[:1]
+    blocks[0].topple = fake_objects.topple_forward(blocks[0], after_s=0.3)
+    belt = FakeBelt(blocks, v_belt_mps=+0.100, y_spawn_m=-0.300, y_despawn_m=1.080)
+    assert belt.objects_at(0.31)[0].y > belt.objects_at(0.29)[0].y + 0.025
+
+
+# -- Measurement noise ------------------------------------------------------------
+
+def test_noise_is_reproducible_with_a_seed():
+    a = FakeBelt(fake_objects.default_blocks(), noise_sigma_m=0.0005, seed=7)
+    b = FakeBelt(fake_objects.default_blocks(), noise_sigma_m=0.0005, seed=7)
+    assert [a.signal_at(k / 30.0) for k in range(10)] == \
+           [b.signal_at(k / 30.0) for k in range(10)]
+
+
+def test_noise_has_the_requested_spread_and_no_bias():
+    belt = FakeBelt(fake_objects.default_blocks()[:1], noise_sigma_m=0.0005, seed=3)
+    errs = [belt.objects_at(0.0)[0].x - fake_objects.BELT_CENTER_X_M
+            for _ in range(4000)]
+    mean = sum(errs) / len(errs)
+    sd = (sum((e - mean) ** 2 for e in errs) / len(errs)) ** 0.5
+    assert abs(mean) < 0.00005
+    assert abs(sd - 0.0005) < 0.00005
+
+
+def test_without_noise_the_scene_is_exact():
+    belt = FakeBelt(fake_objects.default_blocks()[:1])
+    assert belt.objects_at(1.0)[0].x == fake_objects.BELT_CENTER_X_M

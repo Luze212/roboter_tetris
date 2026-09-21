@@ -2,7 +2,28 @@
 
 Laufendes Protokoll der Architekturentscheidungen. Entsteht Thema für Thema und
 ist die Grundlage für die Aktualisierung des Word-Dokuments und den
-Umsetzungsplan. Rein lokal, nichts committet.
+Umsetzungsplan.
+
+**Lesereihenfolge:** Die Themen legen die Architektur fest, die Nachträge
+korrigieren und ergänzen sie. **Ein neuerer Nachtrag geht vor**, wo er eine
+frühere Festlegung berührt; an der alten Stelle steht dann ein Verweis.
+
+| Abschnitt | Inhalt |
+|---|---|
+| Themen 1–7 | Bewegung, Zeit, Frames, Komponentenschnitt, Verträge, Zustandsautomat, Sicherheit |
+| Nachtrag (1) | Restbefunde P1, P2, P4, R3, I2 |
+| Nachtrag 2 | Kritische Durchsicht (13.09.): F1–F3 Freigabe, Einfrieren, Rücksprung; K1, K2, L1, L2 |
+| Nachtrag 3 | Durchsicht gegen den Code (14.09.): N1–N5 |
+| Nachträge 4, 5 | Messungen am Aufbau und am Roboter (14./15.09.): M1–M12 |
+| **Nachtrag 6** | **Projektvorgaben (21.09.):** Z1 Ziele, Z2–Z9 Geschwindigkeitsschätzung, Z10 Greifen ohne Roboterkamera, Z11 Greifebene, Z12 kein Fallenlassen, Z13 Orientierungsgüte |
+| Nachtrag 7 | Bau `priority_handler` (H1–H5) und `data_tracker` (T1–T2) |
+| Nachtrag 8 | Bau `object_follower` 4a: F1 Bandlage (B23), F2–F6 |
+| Nachtrag 9 | Bau `object_follower` 4b: G1–G9 |
+| Nachtrag 10 | Bau `object_follower` 4c/4d: J1 Freihöhe, J2 Absenkzeit, J3–J8 |
+| Nachtrag 11 | Bau `interface_streamer`: V1–V3 |
+
+⚠️ Namensgleichheit: **F1–F3 in Nachtrag 2** und **F1–F6 in Nachtrag 8** sind
+verschiedene Punkte — im Text immer mit Nachtragsnummer zitiert.
 
 Bezug: `docs/archiv/2026-09-05-konzeptreview-komponentenplan.md` (Befundnummern
 in eckigen Klammern verweisen dorthin).
@@ -66,7 +87,7 @@ Damit sind zwei Varianten ohne Codeänderung austauschbar:
 
 | Variante | `lead_offset_m` | `base_frame` verdrahtet | Status |
 |---|---|---|---|
-| **A — Vorhalt** | `v_band / K` | nein | **Primärweg**, funktioniert sicher |
+| **A — Vorhalt** | `v_band / K` ⚠️ jetzt als Zeit `lead_time_s` (Nachtrag 6 / Z6) | nein | **Primärweg**, funktioniert sicher |
 | **C — bewegter Bezugsrahmen** | `0.0` | ja | Ausbaustufe, zu verifizieren |
 
 Variante B (Twist direkt aus der Komponente) wurde verworfen: zu viel
@@ -178,7 +199,7 @@ wegkalibriert (B4).
 
 | Parameter | Kompensiert | Bei Option C |
 |---|---|---|
-| `lead_offset_m` | Nachlauf des Attractors (`v/K`) | **0** |
+| `lead_offset_m` → **`lead_time_s`** | Nachlauf des Attractors (`v/K` → Zeit `1/K`, Nachtrag 6 / Z6) | **0** |
 | `latency_compensation_s` | Kamera- und Kommandolatenz | **bleibt** |
 
 Getrennt, weil beim Umschalten auf Option C nur der Attractor-Anteil
@@ -295,10 +316,9 @@ ohnehin denkt.
 
 ### Werkzeugversatz: Flansch bleibt geregeltes Frame
 
-**Indiz:** In AICA Studio ist nur der Flansch sichtbar. Die 3D-Szene wird aus dem
-URDF gerendert — der Greifer steht also vermutlich **nicht** darin. Damit regelt
-der IK-Velocity-Controller den Flansch und der `robot_state_broadcaster` meldet
-den Flansch.
+**Bestätigt (A7/A8):** Der Greifer steht **nicht** im URDF. Damit regelt der
+IK-Velocity-Controller den Flansch und der `robot_state_broadcaster` meldet den
+Flansch.
 
 **Entscheidung:** URDF nicht anfassen. Das nachträgliche Einpflegen des Greifers
 würde die laufende Hardware-Konfiguration und das geregelte Frame verschieben,
@@ -306,7 +326,7 @@ also genau das bereits getestete Verhalten. Stattdessen rechnet der
 `object_follower`:
 
 ```
-ziel_flansch = ziel_greifpunkt + [0, 0, tool_offset_z_m]
+ziel_flansch = ziel_greifpunkt + [0, 0, flange_to_grip_point_m]
 ```
 
 Das ist **eine einzige Zahl**, weil der Greifer immer senkrecht nach unten zeigt
@@ -314,7 +334,10 @@ und der Greifpunkt auf der Flanschachse liegt. Eine Drehung des Handgelenks um
 die Hochachse ändert den Versatz nicht. Erst bei gekipptem Greifer würde daraus
 eine echte Posenverkettung.
 
-Wert: aus dem Vorgängerprojekt auslesen (C8) — gleicher Greifer, gleicher Aufbau.
+Wert: **0,235 m**, Flansch → Griffpunkt (Auflagenmitte), gemessen. ⚠️ Hier stand
+„aus dem Vorgängerprojekt auslesen (C8)" und der Parameter hieß `tool_offset_z_m`.
+Beides war falsch und hätte bei flachen Klötzen einen Crash ins Band erzeugt —
+Herleitung und Umbenennung in Nachtrag 6 / Z7.
 
 ### Band-Frame: kein eigener Kalibriervorgang
 
@@ -345,9 +368,13 @@ dort ist selbst ein grober Richtungsfehler bedeutungslos. Relevant wird die
 Richtung nur bei der langen Vorhersage fürs Abfangen, und dort korrigiert die
 Roboterkamera anschließend nach.
 
-→ Richtung und Geschwindigkeit fallen aus einem normalen Testlauf ab
-(`objects`-Signal mitschneiden, am Schreibtisch auswerten). Kollidiert nicht mit
-der laufenden Automatisierung der Kamerakalibrierung.
+→ ~~Richtung und Geschwindigkeit fallen aus einem normalen Testlauf ab.~~
+⚠️ **Überholt durch Nachtrag 6 / Z2:** Ziel 3 verlangt ein Verfahren zur
+Geschwindigkeitsschätzung. Richtung und Geschwindigkeit werden deshalb **zur
+Laufzeit aus den Bilddaten geschätzt** — je Objekt und gepoolt über die finalen
+Klötze eines Durchlaufs. Die Genauigkeitsrechnung oben bleibt gültig und stützt
+gerade den Pool: Ungenau wird es nur über ein kurzes Bahnstück, und das fällt
+beim Poolen über viele Klötze weg.
 
 **Nebeneffekt:** Die Bandrichtung wird aus denselben Koordinaten bestimmt, in
 denen später vorhergesagt wird. Ein kleiner Drehfehler der Basiskamera-Extrinsik
@@ -365,8 +392,8 @@ Kalibrierketten) — genau dafür ist die X/Y-Gewichtung als Testinstrument da.
 | Extrinsik Basiskamera → Roboterbasis | `base_cam`-Parameter `cal_x`…`cal_yaw` — existiert | Kommilitone (C3) |
 | Intrinsik Roboterkamera | `color_camera_info`-Signal — schon da | Treiber |
 | Hand-Auge Roboterkamera → Flansch | **`object_follower`** (neu) | Vorgängergruppe (C1) |
-| Bandrichtung + Bandgeschwindigkeit | `vectoring` + `object_follower` (neu) | eigene Auswertung (B1) |
-| Werkzeugversatz Flansch → Greifpunkt | **`object_follower`** (neu) | Vorgängergruppe (C8) |
+| Bandrichtung + Bandgeschwindigkeit | **wird zur Laufzeit geschätzt**, nicht kalibriert (`vectoring`) | Nachtrag 6 / Z2; B1 nur Gegenprobe |
+| Flansch → Griffpunkt, `flange_to_grip_point_m` | **`object_follower`** (neu) | **0,235 m, gemessen** (Nachtrag 6 / Z7) |
 | Arbeitsraumgrenzen | `object_follower` | eigene Festlegung (B10) |
 
 **Hand-Auge gehört in den `object_follower`, nicht in `robot_cam`** — folgt aus
@@ -417,8 +444,9 @@ Zwei Details:
 1. **`data_tracker` verlässt den Regelpfad** und wird reiner Buchhalter für
    Diagnose und Anzeige. Der Zyklus ist damit aufgelöst, **ohne Komponenten
    zusammenzulegen** — die Aufteilung aus dem Plan bleibt erhalten.
-2. **`vectoring` schrumpft drastisch**, weil Bandrichtung und -geschwindigkeit
-   seit Thema 3 Konstanten sind.
+2. ~~**`vectoring` schrumpft drastisch**, weil Bandrichtung und -geschwindigkeit
+   seit Thema 3 Konstanten sind.~~ ⚠️ **Überholt durch Nachtrag 6 / Z2:**
+   `vectoring` ist die Komponente, die die Geschwindigkeit **schätzt**.
 
 Es bleiben **acht Komponenten**, genau wie im Plan. Geändert haben sich nur
 Leitungen und Zuständigkeiten.
@@ -433,7 +461,7 @@ wird aus Fitten ein Mitteln:
 | Querposition glätten | laufender Mittelwert je ID (konstant, da kein Querversatz auf dem Band) |
 | Orientierung glätten | dito |
 | Längsposition + Zeitpunkt | Messungen auf die Bandgerade projizieren, Phase mitteln |
-| Plausibilität | bewegt sich das Objekt mit der kalibrierten Geschwindigkeit? |
+| ~~Plausibilität~~ | ⚠️ ersetzt durch Geschwindigkeitsschätzung und Einschwingen (Nachtrag 6 / Z2, Z3) |
 | Verfall | ausbleibende IDs nach kurzer Frist vergessen |
 
 Genauigkeitsgewinn: bei ~3 mm Rauschen je Bild und 30 Bildern bleiben quer
@@ -443,10 +471,12 @@ Genauigkeitsgewinn: bei ~3 mm Rauschen je Bild und 30 Bildern bleiben quer
 "Richtung halten" / "Geschwindigkeit halten". Übrig bleibt im Wesentlichen die
 Fensterlänge der Mittelung.
 
-**Neu hinzugekommen:** der Plausibilitätstest. Er ist das Signal für "Block ist
-heruntergefallen oder hängengeblieben", das der alte Entwurf nicht hatte.
-Entscheidung: solche Objekte werden **ausgeschlossen**, der Grund bleibt über
-den Statuscode **sichtbar** (siehe `datenvertraege.md` S3).
+~~**Neu hinzugekommen:** der Plausibilitätstest — das Signal für „Block ist
+heruntergefallen oder hängengeblieben".~~ ⚠️ **Entfallen (Nachtrag 6 / Z3):**
+Die Annahme war falsch. Klötze bewegen sich frei mit dem Band, festhängende gibt
+es nicht; sie können nur beim Aufsetzen umkippen. An die Stelle des Tests tritt
+das **Einschwingen**: Status 3, bis die Geschwindigkeit konstant gemessen ist,
+dann Status 0 mit eingefrorener Geschwindigkeit.
 
 ### Datenfluss
 
@@ -475,7 +505,7 @@ Das war die Kante, die den Zyklus schloss. Tatsächlich kann er alles selbst:
 
 - "schon gepickt" — hört direkt auf `picked_id` (bei 2–3 Objekten eine Handvoll IDs)
 - "out of bounds" — besitzt die Greifzonengrenzen, **erzeugt** diese Information
-- "erreichbar" — aus Position, Bandgeschwindigkeit, Zeitbudget
+- "erreichbar" — aus Position, **geschätzter** Geschwindigkeit, Zeitbudget
 
 Die Information floss von Anfang an in die andere Richtung; der Zyklus im Plan
 war eine Verdrahtung entgegen der natürlichen Flussrichtung.
@@ -488,7 +518,7 @@ von ihm, niemand rechnet parallel nach.
 | Komponente | besitzt | besitzt nicht |
 |---|---|---|
 | `base_cam` | rohe Detektionen, IDs, Zeitstempel | keine Bahnlogik |
-| `vectoring` | geglättete Objektzustände, Plausibilität | keine Auswahl, keine Flags |
+| `vectoring` | **Geschwindigkeitsschätzung** (je Objekt + Pool), geglättete Objektzustände, Einschwingstatus | keine Auswahl, keine Flags |
 | `priority_handler` | Greifzone, Erreichbarkeit, **Ziel-Lock** | keine Objektverwaltung |
 | `object_follower` | Zustandsautomat, Regelung, Sicherheitsgate, TCP-Historie | keine Zielauswahl |
 | `data_tracker` | Gesamtliste mit Flags (Diagnose) | nichts Regelrelevantes |
@@ -552,11 +582,10 @@ Vollständige Spezifikation: **`docs/architektur/datenvertraege.md`**
 ### Zwei Festlegungen aus der Analyse
 
 **`v_band` gehört in den Kopf, nicht zum Objekt.** Im Code weist der Tracker die
-Geschwindigkeit global allen Tracks zu (`set_global_velocity`) — ein
-festhängender Block bekäme trotzdem die volle Bandgeschwindigkeit eingetragen.
-Als Objektfeld ist der Wert irreführend, als Kopffeld nützlich (Kalibrierquelle
-B1 und Laufkontrolle des Bandes). Die Plausibilitätsprüfung je Objekt rechnet
-`vectoring` deshalb aus der eigenen Messhistorie.
+Geschwindigkeit global allen Tracks zu (`set_global_velocity`) — als Objektfeld
+wäre der Wert irreführend, weil er gar nicht je Objekt gemessen ist. Als Kopffeld
+dient er der groben Laufkontrolle des Bandes. Die maßgebliche Geschwindigkeit
+schätzt `vectoring` selbst (Nachtrag 6 / Z2).
 
 **`picked_id` mit laufender Nummer** `[seq, id, outcome]` ersetzt das
 "1 Sekunde lang True"-Muster. Verbraucher merken sich die letzte `seq` und
@@ -590,12 +619,19 @@ bleiben für die UI.
 | `HEBEN` | Mitfahren bis Transferhöhe | Transferhöhe erreicht → `ABLEGEN` | berechnet → `ABBRUCH` |
 | `ABLEGEN` | statisches Ziel, **kein Vorhalt** | `is_in_range` → `LOESEN` | ~5 s → `ABBRUCH` |
 | `LOESEN` | Greifer auf, `picked_id` senden | fertig → `WARTEN` | ~2 s → `ABBRUCH` |
-| `ABBRUCH` | TCP-Pose halten, Greifer öffnen, senkrecht hoch, zur Beobachtungspose | → `WARTEN` | – |
+| `ABBRUCH` | **ohne Klotz:** TCP-Pose halten, Greifer öffnen, senkrecht hoch, zur Beobachtungspose · **mit Klotz im Greifer:** Greifer bleibt zu, senkrecht hoch, zur Ablagepose, dort öffnen (Nachtrag 6 / Z12) | → `WARTEN` | – |
 
-**Abbruchgründe aus jedem Zustand:**
+**Abbruchgründe bis der Klotz gehalten wird** (`ANFAHREN` bis `GREIFEN`):
 - `has_target = 0` — `priority_handler` hat das Ziel zurückgezogen
 - Ziel-ID aus `tracks` verschwunden (Thema 2: bei `base_cam` das richtige Kriterium, nicht das Messungsalter)
 - unplausibler Sprung der Regelabweichung (Fehldetektion, ID-Verwechslung)
+
+> ⚠️ **Korrigiert (Nachtrag 6 / Z12).** Hier stand „aus jedem Zustand" und für
+> `ABBRUCH` pauschal „Greifer öffnen". Nach einem gelungenen Griff hebt der Roboter
+> den Klotz vom Band; die Basiskamera verliert ihn dort zwangsläufig, die ID
+> verschwindet, das Ziel wird zurückgezogen — und der Follower hätte **jeden
+> gelungenen Griff wieder fallen lassen**, über dem Band oder auf dem Weg zur
+> Kiste. Ab `has_object` sind die drei Gründe oben keine Abbruchgründe mehr.
 
 Beim Abbruch wird `picked_id` mit passendem `outcome` gesendet, damit der
 `priority_handler` weiß, dass das Objekt erledigt ist, und das nächste wählt.
@@ -663,9 +699,9 @@ greif_z = bandoberflaeche + max( blockhoehe / 2,  min_greifhoehe )
 ```
 
 Mittig auf der Seitenfläche → nach oben und unten Reserve bei Höhenfehlern.
-Die untere Grenze schützt das Band: Die Greifbacken haben selbst Höhe (z. B.
-35 mm); bei einem 20 mm flachen Block läge die Backenunterkante rechnerisch
-7 mm unter dem Band.
+Die untere Grenze schützt das Band: Die Greifauflagen sind **20 mm** hoch (B15);
+bei einem 20 mm flachen Block läge ihre Unterkante ohne Grenze rechnerisch genau
+auf dem Band. `min_greifhoehe` = halbe Auflagenhöhe + Luft = **15 mm** (Nachtrag 6 / Z7).
 
 Bezug ist die **Bandoberfläche** (fester, einmal vermessener Wert), nicht die
 gemessene Blockoberkante — die hängt an der Extrinsik der Basiskamera.
@@ -682,6 +718,9 @@ Im Plan nicht vorhanden. Alle Daten liegen vor, bevor angefahren wird:
 Welche Abmessung quer zur Backenrichtung liegt, folgt aus Blockorientierung und
 kommandiertem Gierwinkel — gilt damit in beiden Orientierungsmodi. Verhindert
 die frustrierendste Fehlerart: sauber anfahren, greifen, passt nicht.
+
+> ⚠️ **Geändert beim Bau (Nachtrag 7 / H2):** Geprüft wird die **Diagonale**. Den
+> Gierwinkel entscheidet der Follower; der `priority_handler` kennt ihn nicht.
 
 ### Beobachtungspose: senkrecht
 
@@ -754,10 +793,14 @@ gefährlich.
 
 ### Statische Ziele: Vorhalt auf null
 
-`WARTEN` und `ABLEGEN` fahren stehende Ziele an. Dort muss `lead_offset_m` auf 0
-gesetzt werden — er kompensiert den Nachlauf bei **bewegtem** Ziel. Bleibt er
-stehen, parkt der Roboter dauerhaft einige Zentimeter neben Beobachtungs- und
-Ablageposition.
+`WARTEN` und `ABLEGEN` fahren stehende Ziele an. Dort muss der Vorhalt null sein
+— er kompensiert den Nachlauf bei **bewegtem** Ziel. Bliebe er stehen, parkte der
+Roboter dauerhaft einige Zentimeter neben Beobachtungs- und Ablageposition.
+
+> ✅ **Seit Nachtrag 6 / Z6 automatisch erfüllt.** Der Vorhalt ist jetzt
+> `v · lead_time_s`; ein stehendes Ziel hat `v = 0`, der Vorhalt wird von selbst
+> null. Der Sonderfall im Code — und damit die Stelle, an der ein Fehler still
+> bliebe — entfällt.
 
 Umgekehrt ist bei stehenden Zielen das Attractor-Prädikat `is_in_range`
 brauchbar und darf als Übergangsbedingung dienen — anders als beim Folgen
@@ -805,7 +848,7 @@ Veröffentlichen**, nicht in einen Watchdog auf Kommandoebene.
 ### Hauptrisiko: veraltete Extrapolation
 
 ```
-ziel = p₀ + bandrichtung · v_band · (t_jetzt − t₀)     ← wächst unbegrenzt
+ziel = p₀ + v_geschätzt · (t_jetzt − t₀)     ← wächst unbegrenzt
 ```
 
 Stürzt `base_cam` ab oder hängt `vectoring`, veralten `p₀`/`t₀`, die
@@ -931,7 +974,8 @@ auch das Zielobjekt ist.
 > wählt — in beiden Fällen nicht den Klotz. `max_korrektur_m` fängt das nicht ab,
 > weil der gemeldete Versatz klein aussehen kann. Gegenmaßnahmen (Auswahl nach
 > Nähe zum Erwartungspunkt, ROI, Flächenobergrenze):
-> `robot-cam-befunde.md` §9.7/§9.8. Bei 2–3 Blöcken kann ein zweiter ins Bild geraten.
+> `robot-cam-befunde.md` §9.7/§9.8 — **seit Phase 2.2 umgesetzt**, gemeinsam für
+> beide Varianten. Bei 2–3 Blöcken kann ein zweiter ins Bild geraten.
 
 Lösung fällt aus der Formulierung in Thema 6 ab: Die Korrektur
 (`roboterkamera_position − basiskamera_prädiktion`) ist im Normalfall **klein** —
@@ -960,7 +1004,7 @@ benannte Feld `z_band`). Die folgenden fünf waren tatsächlich offen.
 ### P1 — Erreichbarkeitskriterium im `priority_handler`
 
 ```
-t_verfügbar = (zonenende − blockposition) / v_band
+t_verfügbar = (zonenende − blockposition) / v_geschätzt     (Nachtrag 6 / Z2)
 
 t_benötigt  = anfahrt + absenken + greifen
   anfahrt  ≈ abstand / v_max + 3/K      ← Fahrt plus Einschwingen des Attractors
@@ -988,12 +1032,19 @@ Zurückgezogen (`has_target = 0`) nur bei:
 |---|---|
 | gepickt | `picked_id` trifft ein |
 | verloren | ID verschwindet aus `tracks` |
-| unplausibel | `status ≠ 0` |
+| neu einschwingend | Status fällt auf 3 zurück — anhaltende Abweichung, Schätzung neu gestartet (Nachtrag 6 / Z3) |
+| ~~unplausibel~~ | *entfallen mit den Statuscodes 1/2 (Nachtrag 6 / Z3)* |
 
 **Erreichbarkeit gehört bewusst NICHT dazu** — sie ist Auswahl-, kein
 Abbruchkriterium. Sonst würde ein fast erfolgreicher Griff abgebrochen, sobald der
 Block beim Greifen die Zonengrenze überschreitet. Die Greifzone ist enger als der
 Sicherheitsraum; der Roboter darf dem Block ein Stück darüber hinaus folgen.
+
+> ⚠️ **Ergänzt durch Nachtrag 6 / Z11 (Greifebene).** Das bleibt für einen
+> **laufenden** Griff gültig. Hinzu kommt eine Grenze für den **Beginn**: Hat der
+> Block die Greifebene überschritten, bevor abgesenkt wurde, bricht der Follower
+> ab (`outcome = 3`). Der `priority_handler` zieht das Ziel dann über `picked_id`
+> zurück — weiterhin ohne Rückmeldung des Follower-Zustands.
 
 Nebeneffekt: Es braucht keine Rückmeldung des Follower-Zustands an den
 `priority_handler` — die Entkopplung aus Thema 4 bleibt erhalten.
@@ -1245,7 +1296,7 @@ Drei Folgen:
 
 | Betroffen | Folge |
 |---|---|
-| Plausibilität in `vectoring` | Status 1 („steht/verklemmt") vergleicht die Längsgeschwindigkeit gegen `belt_speed_mps`. Außerhalb der Region *ist* die Längsbewegung per Konstruktion die Bandgeschwindigkeit — die Prüfung ist tautologisch und kann dort nie auslösen. |
+| Plausibilität in `vectoring` *(entfallen, Nachtrag 6 / Z3)* | Status 1 („steht/verklemmt") vergleicht die Längsgeschwindigkeit gegen `belt_speed_mps`. Außerhalb der Region *ist* die Längsbewegung per Konstruktion die Bandgeschwindigkeit — die Prüfung ist tautologisch und kann dort nie auslösen. |
 | Abbruchregel des Follower | Thema 2 legt fest: „Objekt verloren" erkennt man am Verschwinden der ID. Außerhalb der Region verschwindet sie nicht mehr. Ein heruntergefallener oder weggenommener Klotz gleitet als **Phantom** mit Bandgeschwindigkeit weiter, mit Status 0, und wird vom `priority_handler` gewählt. |
 | Längsgenauigkeit | Ein Fehler in `v_band` wächst außerhalb der Region linear mit der zurückgelegten Strecke. Mitteln hilft nicht — das ist keine zufällige Streuung. |
 
@@ -1261,10 +1312,14 @@ Das ist **reine Konfiguration**: beides sind vorhandene AICA-Parameter von
 `base_cam`, nichts unter `vision/` wird angefasst. **B19 bekommt damit ein viertes
 Kriterium.**
 
-> Der ursprüngliche Zweck der Messregion ist für uns ohnehin entfallen: Sie sollte
-> einen verlässlichen Ausschnitt für die *Geschwindigkeitsschätzung* liefern. Seit
-> Thema 3 ist `belt_speed_mps` eine kalibrierte Konstante; `v_band_gemessen` ist
-> nur noch Kalibrierquelle (B1) und Laufkontrolle.
+> ~~Der ursprüngliche Zweck der Messregion ist für uns ohnehin entfallen.~~
+> ⚠️ **Überholt durch Nachtrag 6 / Z4:** Mit Ziel 3 ist die
+> Geschwindigkeitsschätzung zurück — und damit der Grund, warum das Koppeln
+> schadet. Entschieden ist deshalb: **Der Tracker verwendet überall die gemessene
+> Längsposition**, gekoppelt wird nur noch bei verpassten Bildern (Zweig 1 der
+> Region). Die Löschregel (Zweig 2) bleibt, und damit auch die Kopplung der
+> Region an die Greifzone. Die Phantom-Folge oben ist gegenstandslos: Klötze
+> fallen nur am Bandende und werden nie von Hand entnommen (Z5).
 
 Verworfen: Ausweitung auf das ganze Band (am Rand des Sichtfelds reißen Tracks
 dann nach drei Frames ab → neue IDs, `vectoring` beginnt mit Status 3, der
@@ -1530,6 +1585,9 @@ Was es löst: `priority_handler` liest `length`/`width` aus **S3**, und die sind
 liegt das Verhältnis bei 0,95 und damit stabil über 0,92. **Die ursprüngliche
 Schwelle 0,92 bleibt also, sie gilt nur ausdrücklich für die geglätteten Werte.**
 
+> **Nachtrag 7 / H2:** Der `priority_handler` prüft inzwischen die Diagonale und
+> braucht die Schwelle nicht mehr.
+
 Für das interne `square`-Flag in `detection.py` ändert das nichts — es arbeitet
 bildweise und ist derselben Streuung ausgesetzt. Die Entscheidung, es nicht in S1
 aufzunehmen, bleibt damit richtig: Es zu übertragen hätte die Streuung nur
@@ -1544,8 +1602,14 @@ Port 30011, rein lesend — `rtde_control` wurde bewusst nicht verwendet):
 konfigurierter Werkzeugversatz Flansch → TCP
   x =   0,00 mm     y =   0,00 mm     z = 215,00 mm
   Rotationsvektor = 0 / 0 / 0
-→ tool_offset_z_m = 0,215
+→ tool_offset_z_m = 0,215      ⚠️ FALSCH für den Follower, siehe unten
 ```
+
+> ⚠️ **Korrektur (Nachtrag 6 / Z7).** Die 215 mm sind der **konfigurierte TCP der
+> UR-Steuerung** und dienen nur der Umrechnung fremder TCP-Werte (M8). Die
+> Zielpose des Followers braucht den Abstand **Flansch → Griffpunkt = 0,235 m**; der
+> Parameter heißt dafür jetzt `flange_to_grip_point_m`. Mit 0,215 wäre die
+> Backenspitze bei einem 25-mm-Klotz 17,5 mm ins Band gefahren.
 
 Gegenprobe über die Vorwärtskinematik (UR10e-DH aus den Gelenkwinkeln gegen
 `getActualTCPPose`): −0,49 / −0,43 / **214,22** mm. Abweichung unter 0,8 mm, das
@@ -1559,7 +1623,8 @@ Die Warnung aus Thema 3 und Phase 0.1 war der Größenordnung nach genau richtig
 Und die Vereinfachung hält: **x = y = 0 und keine Verdrehung.** Der Greifpunkt
 liegt exakt auf der Flanschachse, der Versatz ist damit tatsächlich *eine einzige
 Zahl*, wie Thema 3 angenommen hatte. `ziel_flansch = ziel_greifpunkt + [0, 0,
-tool_offset_z_m]` ist keine Näherung, sondern exakt.
+flange_to_grip_point_m]` ist keine Näherung, sondern exakt — mit dem richtigen
+Wert 0,235 m, nicht 0,215 (Nachtrag 6 / Z7).
 
 > **Damit ist Phase 0 des Umsetzungsplans vollständig.** A2, A7, A8 und C8 — die
 > vier Punkte, die Phase 4 blockierten — sind geklärt.
@@ -1706,5 +1771,859 @@ Pose dennoch **einmal bei laufendem Programm gegengelesen** werden.
 `D13` (Ablagepose) ist mit M11 bestimmt. `D12` (Transferhöhe über dem Band)
 ergibt sich als Bandhöhe + höchster erwarteter Klotz + Luft, also
 53,6 + 100 + Reserve — mit dem Referenzklotz rund **200 mm** Unterkante, in
-Flanschmaß **200 + 245 = 445 mm**. Der Wert ist erst verbindlich, wenn die
+Flanschmaß **200 + 245 = 445 mm** (⚠️ vergaß den gehaltenen Klotz, korrigiert auf
+0,49 m in Nachtrag 10 / J1). Der Wert ist erst verbindlich, wenn die
 größte auftretende Klotzhöhe festgelegt ist.
+
+---
+
+## Nachtrag 6 — Projektvorgaben und Geschwindigkeitsschätzung (21.09.2026)
+
+**Status:** entschieden
+**Anlass:** Die exakten Projektvorgaben lagen vor. Ziel 3 verlangt ein
+**entwickeltes Verfahren zur Geschwindigkeitsschätzung** — genau das hatten
+Thema 3 und Thema 4 gestrichen. Bei der Prüfung der Doku gegen die Vorgaben
+kamen außerdem ein sicherheitsrelevanter Wertefehler (Z7) und ein
+Missverständnis über die Klotzphysik (Z3) zutage.
+
+> **Vorrang.** Dieser Nachtrag geht allen früheren Festlegungen vor, die er
+> berührt. An den betroffenen Stellen der Themen 3, 4, 6 und 7 sowie in N2 und M6
+> steht ein Verweis hierher.
+
+### Z1 — Die Projektziele
+
+| Nr. | Ziel | Umsetzung |
+|---|---|---|
+| 1 | Ansteuerung des UR10e mit AICA | ✅ läuft am Aufbau |
+| 2 | Entwicklung eines schnellen Kalibrierungsverfahrens | Kommilitone, eigenes Projekt (`Calibration/*`). **Wir sind Abnehmer**; offen ist nur die Übergabeform (C6). |
+| 3 | Verfahren zur **Geschwindigkeitsschätzung** und Positionsberechnung der Gegenstände | `base_cam` (Position), `vectoring` (Geschwindigkeit) — Z2 bis Z5 |
+| 4 | Algorithmus zur **Priorisierung** und zur **Bahnplanung** für das kontrollierte Greifen | `priority_handler`; Bahnplanung über die AICA-Bausteine (Z8) |
+
+Zusätzlich, als eigenes Ziel außerhalb dieser Liste: **den Prozess nachvollziehbar
+darstellen** — `data_tracker` und `interface_streamer`. Die Reihenfolge bleibt die
+des Umsetzungsplans: `data_tracker` (3.2) ist ein Blatt ohne Rückwirkung auf den
+Regelpfad und kann jederzeit nach 3.1 kommen; `interface_streamer` wird zuletzt
+gebaut (Nachtrag P1–I2, Abschnitt I2).
+
+### Z2 — Die Geschwindigkeit wird geschätzt, nicht kalibriert
+
+**Hebt auf:** Thema 3 („Richtung und Geschwindigkeit fallen aus einem normalen
+Testlauf ab") und Thema 4 („`vectoring` schrumpft drastisch, weil Bandrichtung und
+-geschwindigkeit seit Thema 3 Konstanten sind"), dazu die YAGNI-Zeile der
+`vectoring`-Spec „Keine Regression für Richtung oder Geschwindigkeit".
+
+`vectoring` schätzt die Geschwindigkeit **zur Laufzeit aus den Bilddaten**, und
+zwar in zwei Stufen:
+
+1. **Je Objekt ein Geschwindigkeitsvektor** `(vx, vy)` aus der eigenen
+   Positionshistorie — Richtung und Betrag zugleich, ohne Bandmodell.
+2. **Ein Pool** über alle Objekte, die im laufenden Durchlauf final geworden sind
+   (Z3): eine **gemeinsame Ausgleichsrechnung über alle ihre Messungen seit dem
+   Einschwingen** — eine gemeinsame Geschwindigkeit, je Klotz ein eigener
+   Achsenabschnitt (Z9). Das ist die Bandgeschwindigkeit, mit der Prädiktion und
+   Priorisierung rechnen. Sie wird mit jeder Messung genauer.
+
+**Warum der Pool richtig ist:** Das Band läuft mit konstanter, nicht einstellbarer
+Geschwindigkeit, und die Klötze bewegen sich frei mit ihm. Alle finalen Klötze
+messen also dieselbe Größe. Thema 3 hatte selbst das stärkste Argument dafür
+geliefert — *„Ungenau wird eine Richtungsschätzung nur aus einem kurzen
+Bahnstück"*. Über viele Klötze gepoolt entfällt genau das. Zugleich bekommt ein
+frisch aufgelegter Klotz vom ersten Bild an eine gute Geschwindigkeit für die
+Vorhersage, statt erst sein eigenes Fenster zu füllen.
+
+**Gilt weiter aus Thema 3:** Die Richtung wird in denselben Koordinaten geschätzt,
+in denen vorhergesagt wird. Ein kleiner Drehfehler der Basiskamera-Extrinsik hebt
+sich für die Vorhersage deshalb weitgehend auf.
+
+**Folge für B1:** Keine Voraussetzung mehr, sondern **Gegenprobe** (Stoppuhr,
+Markierung auf dem Band). Sie prüft dabei die **ganze Kette**, nicht nur den
+Schätzer: Ein Maßstabsfehler in Tiefe oder Extrinsik skaliert die geschätzte
+Geschwindigkeit mit, und das sieht nur eine unabhängige Messung.
+
+**Phase 3.1 lässt sich ohne Messung bauen** und gegen die Ground Truth aus
+`fake_objects.py` prüfen. Ob die Schätzung am realen Band trägt, hängt über den
+Tracker-Eingriff (Z4) an **B21**.
+
+**Durchlauf** = eine Aktivierung der Komponente. Beim Aktivieren wird der Pool
+geleert. Solange er leer ist, gibt es **keinen** Schätzwert — das wird im Vertrag
+ausdrücklich gemeldet (S3-Kopf, `n_pool = 0`) und nicht als stilles `0,0`
+geliefert. Genau diese Falle hat `v_band` von `base_cam`: Es startet bei 0, und
+bis dahin *„koppeln alle Tracks mit Geschwindigkeit null und stehen scheinbar
+still"*.
+
+### Z3 — Einschwingen statt Plausibilitätsprüfung
+
+**Hebt auf:** den Plausibilitätstest aus Thema 4 (*„das Signal für ‚Block ist
+heruntergefallen oder hängengeblieben'"*) und die S3-Statuscodes 1 und 2.
+
+**Die Annahme dahinter war falsch.** Die Klötze werden frei und ungehindert auf
+das Band gelegt und bewegen sich mit Bandgeschwindigkeit — festhängende oder
+angestoßene Klötze gibt es nicht. Was es gibt: Ein Klotz **kann beim Aufsetzen
+umkippen**. Danach läuft er mit dem Band.
+
+Jeder Klotz durchläuft deshalb genau zwei Phasen:
+
+| Phase | S3-Status | Geschwindigkeit | Geometrie |
+|---|---|---|---|
+| **Einschwingen** | 3 | wird geschätzt, ist noch nicht konstant | nur Anzeige |
+| **Final** | 0 | konstant gemessen; alle Messungen ab hier fließen in den Pool | wird ab hier gemittelt |
+
+Der Übergang erfolgt, sobald die Geschwindigkeit **konstant gemessen** ist: **Zwei
+aufeinanderfolgende Halbsekundenfenster messen dieselbe Geschwindigkeit** (Z9).
+Ein kippender Klotz springt im Schwerpunkt; solange der Sprung in einem der beiden
+Fenster liegt, weichen sie voneinander ab, und der Klotz bleibt in Phase 3.
+
+**„Final" ist ein Status, kein eingefrorener Wert.** Der Klotz wird ab dann nicht
+mehr in Frage gestellt — er ist wählbar und bleibt es. Seine Geschwindigkeit *ist*
+physikalisch die Bandgeschwindigkeit; deren **Schätzung** sammelt aus allen
+weiteren Messungen weiter (Z9).
+
+**Position, Geometrie und Orientierung erst ab „Final".** Ein umgekippter Klotz hat
+andere Abmessungen — ein stehender 100-mm-Klotz liegt danach mit 50 mm Höhe —, und
+sein Schwerpunkt springt um rund die halbe Kantenlänge. Würde vom ersten Bild an
+gemittelt, entstünde ein Mischwert aus stehend und liegend, in der Höhe wie in der
+Lage. Die Höhe bestimmt direkt die Greifhöhe.
+
+**Fehldetektionen** — ein einzelnes Bild, in dem die Position springt — sind ein
+Sensoreffekt, keine Klotzphysik. Sie bekommen keinen Status: Die einzelne Messung
+wird verworfen, der Track bleibt. Hält eine Abweichung dagegen über mehrere
+Bilder an, ist sie eine echte Lageänderung (etwa das Umkippen), und die Schätzung
+beginnt neu.
+
+**Die Codes 1 und 2 entfallen und werden nicht wiederverwendet.** So kann eine
+ältere Notiz, die von „Status 1" spricht, nie etwas anderes bedeuten als früher.
+
+### Z4 — Der Tracker muss messen, nicht rechnen
+
+`vision/tracker.py` behandelt die Messregion (`track_velocity_region_y_min…max`)
+auf zwei Arten anders als den Rest — und beide Mechanismen hängen an denselben
+zwei Parametern:
+
+| Zweig | außerhalb der Region | Folge |
+|---|---|---|
+| **1 — Koppeln** (Z. 168–173) | Längsposition wird **gerechnet** (`y = prev_y + vy·dt`), **auch bei frischer Detektion** | Geschwindigkeitsschätzung zirkulär; Umkippen unsichtbar |
+| **2 — Löschen** (Z. 233–238) | Löschen nur an den Bandgrenzen statt nach drei verpassten Bildern | schützt Tracks am Bildrand vor dem Abreißen |
+
+Zweig 1 macht Z2 und Z3 unmöglich. Wer aus gerechneten Positionen eine
+Geschwindigkeit schätzt, bekommt die hineingesteckte zurück. Und die Klötze werden
+**vorn aufgelegt**, also im gekoppelten Bereich: Ein kippender Klotz zeigt dort in
+der Längsposition eine vollkommen glatte Bewegung, die Einschwing-Erkennung sähe
+ihn sofort als final.
+
+**Entscheidung: Nur Zweig 1 wird geändert.** Bei vorhandener Detektion gilt
+überall die gemessene Position; fortgeschrieben wird nur noch, wenn ein Klotz in
+einem Bild fehlt. **Zweig 2 bleibt unverändert** — das Aufweiten der Region auf
+das ganze Band hat N2 zu Recht verworfen, weil dann Tracks am Bildrand ständig
+neue IDs bekommen und der Ziel-Lock verloren geht.
+
+⚠️ **Am Aufbau zu prüfen (B21):** Der Kommentar im übernommenen Code begründet das
+Koppeln mit *„outside the trusted region the measured y is unreliable"*. Das
+stammt aus dem Aufbau der Vorgängergruppe und ist für unseren nicht gemessen — M5
+hat die Streuung nur bei y = −874 mm bestimmt, also innerhalb der Region. Prüfung
+wie M5: ein ruhender Klotz an mehreren y-Positionen über den ganzen Sichtbereich.
+
+### Z5 — Abwurf nur am Bandende, und berechenbar
+
+Klötze fallen **nur am Bandende** herunter, und nur, wenn sie nicht rechtzeitig
+gegriffen wurden. Mitten auf dem Band gehen keine verloren, von Hand entnommen
+wird keiner.
+
+Damit ist der Abwurf **kein Störfall, sondern vorhersagbar**: Aus Position und
+geschätzter Geschwindigkeit folgt, wann ein Klotz die Greifzone verlässt — das
+ist `t_verfügbar` im `priority_handler` und `out_of_bounds` im `data_tracker`.
+
+Die Phantom-Sorge aus N2 (ein weggenommener Klotz gleitet gerechnet weiter) ist
+damit gegenstandslos: Weggenommen wird ein Klotz nur vom eigenen Greifer, und den
+meldet `picked_id`.
+
+### Z6 — Vorhalt als Zeit statt als Strecke
+
+`lead_offset_m` war eine kalibrierte Strecke, gedacht als `v_band / K`. Mit
+geschätzter Geschwindigkeit wird der Vorhalt als **Zeit** geführt:
+
+```
+vorhalt = v_geschätzt · lead_time_s
+```
+
+Er bleibt damit richtig, auch wenn die Bandgeschwindigkeit zwischen Durchläufen
+leicht abweicht. B4 misst eine Zeit ein statt einer Strecke. Theoretisch ist
+`lead_time_s ≈ 1/K`, bei K = 5 also 0,2 s.
+
+Nebenbei wird die Zahl der Vorgängergruppe unmittelbar vergleichbar: Deren
+*„eine empirische Konstante von 0,7 s"* (D1) war bereits eine Zeit.
+
+`latency_compensation_s` bleibt getrennt (Thema 2), beide werden mit derselben
+Geschwindigkeit multipliziert.
+
+### Z7 — Werkzeugversatz: 0,235 m, und ein neuer Name
+
+**Korrigiert:** M6 und alle Stellen, die `tool_offset_z_m = 0,215` angeben.
+
+Unter dem Flansch liegen **drei** verschiedene Punkte:
+
+| Abstand | Wert | Verwendung |
+|---|---|---|
+| konfigurierter TCP der UR-Steuerung | 215 mm | **nur** Umrechnung fremder TCP-Werte (M8) |
+| Flansch → Griffpunkt (Auflagenmitte) | **235 mm** | **Zielpose des Followers** |
+| Flansch → Backenspitze | 245 mm, ±5 mm | Höhen am Aufbau (M8/M9) |
+
+Die Follower-Spec definiert den Parameter als *„Flansch → Greifpunkt"* — das sind
+**235 mm**. Eingetragen waren aber 215 mm. Die Ursache ist eine Reihenfolge: M6
+las 215 mm aus der Steuerung und erklärte Phase 0 für abgeschlossen; M8 erkannte
+am selben Tag, dass die Kette den Flansch regelt und 215 mm der falsche Bezug
+ist, ging aber nicht zurück zu M6 und den Parameterangaben.
+
+**Die Folge wäre ein Crash gewesen.** Bei einem 25-mm-Klotz liegt der Griffpunkt
+bei 53,6 + 12,5 = 66,1 mm. Mit 0,215 wird der Flansch auf 281,1 mm kommandiert,
+die Backenspitze läge bei 281,1 − 245 = **36,1 mm — 17,5 mm unter der
+Bandoberfläche.** Beim 100-mm-Referenzklotz fiele der Fehler nicht auf; der
+Greifer fasst dort nur 20 mm tiefer an. Er hätte sich erst beim ersten flachen
+Klotz gezeigt.
+
+**Entscheidungen:**
+
+- Wert **0,235 m**.
+- Der Parameter heißt ab jetzt **`flange_to_grip_point_m`**. Die Namensgleichheit
+  mit dem „tool offset" der UR-Steuerung hat die Verwechslung erst möglich
+  gemacht.
+- **Luft in `min_greifhoehe` von 2 auf 5 mm** → `min_grip_height_m = 0,015`
+  (halbe Auflagenhöhe 10 mm + 5 mm), `min_graspable_height_m ≈ 0,030`. Grund: Die
+  bisherigen 2 mm Luft waren kleiner als die ±5 mm Unsicherheit der 245-mm-Messung.
+  ⚠️ **Folge:** Klötze unter rund 30 mm Höhe gelten als nicht greifbar, bis die
+  245 mm beim ersten Testgriff bestätigt sind. Danach kann die Luft wieder sinken.
+
+### Z8 — Bahnplanung über die AICA-Bausteine
+
+Die Bahnplanung für das kontrollierte Greifen (Ziel 4) wird durch die
+AICA-Bausteine geleistet: Der `object_follower` gibt die Zielpose vor, der
+`SignalPointAttractor` und der `IKVelocityController` erzeugen daraus die Bewegung.
+Die Nutzung der von AICA bereitgestellten Werkzeuge gilt als Lösung der Vorgabe.
+Thema 1 bleibt damit unverändert gültig.
+
+### Z9 — Nachgerechnet: Einschwingkriterium und Pool korrigiert (21.09.2026)
+
+Die erste Fassung von Z2/Z3 hatte zwei Schwächen. Beide sind durch Simulation
+belegt (30 Hz, 0,1 m/s, Rauschen 0,5 mm wie in M5 und pessimistisch 3 mm, je
+300–400 Durchläufe).
+
+**1. Das Kriterium „Streuung der Schätzung unter einer Schwelle" versagte genau
+beim Umkippen.** Eine Ausgleichsgerade durch einen Sprung schluckt den Sprung als
+zusätzliche Steigung; die Residuen bleiben mäßig, der Standardfehler klein. Es
+misst die *Präzision* der Steigung, nicht ob die Bewegung *konstant* ist.
+
+| Kriterium | Umkippen | fälschlich final | Geschwindigkeitsfehler |
+|---|---|---|---|
+| Standardfehler < 5 mm/s (erste Fassung) | 13 mm | **100 %** | 16 mm/s |
+| | 25 mm | **100 %** | **31 mm/s** |
+| **zwei Halbsekundenfenster stimmen überein** | 13 mm | **0 %** | 1,7 mm/s |
+| | 25 mm | **0 %** | 0,3 mm/s |
+
+(Rauschen 0,5 mm. Bei 3 mm muss die Toleranz wachsen; dann werden 20–30 % der
+gekippten Klötze final, aber mit 3–4 mm/s statt 24–31 mm/s Fehler. Welches
+Rauschen am **bewegten** Klotz auftritt, ist nicht gemessen — M5 galt einem
+ruhenden.) Preis des neuen Kriteriums: rund 0,3 s späteres Einschwingen.
+
+**2. Das Einfrieren verschenkte fast die gesamte Genauigkeit.** Der Pool mittelte
+je Klotz einen Schnappschuss — den kürzesten, frühesten und am stärksten
+gestörten Teil der Bahn. Über die volle Bahn (~13 s im Bild) gemessen ist die
+Schätzung **160- bis 280-mal genauer** (4 Klötze: 0,84 → 0,003 mm/s bei 0,5 mm
+Rauschen).
+
+Für die *Regelung* hätten auch die Schnappschüsse gereicht — die Prädiktion
+überbrückt höchstens 0,2 s. Aber Ziel 3 verlangt das Verfahren selbst, und ein
+Verfahren, das 99 % der verfügbaren Messungen verwirft, ist nicht zu verteidigen.
+
+**Neu gilt:**
+
+- **Einschwingen:** Die Geschwindigkeit der jüngeren Halbsekunde stimmt mit der
+  der älteren überein (`settle_v_tolerance`). Das ist wörtlich „konstant
+  gemessen".
+- **Pool:** gemeinsame Ausgleichsrechnung über alle Messungen seit dem
+  Einschwingen, aller Klötze des Durchlaufs — gemeinsame Steigung, je Klotz ein
+  eigener Achsenabschnitt. Das entspricht einem nach Messumfang gewichteten
+  Mittel der Einzelsteigungen.
+- **Geschwindigkeit je Klotz** (S3-Felder 10/11): fortlaufend aus seinen eigenen
+  Messungen seit dem Einschwingen, nicht eingefroren — Anzeige und Diagnose.
+
+Kaltstart geprüft und unkritisch: Der erste Klotz eines Durchlaufs ist nach rund
+1,3 s final, bei 0,1 m/s nach 13 cm von rund 1,45 m Bahn im Bild.
+
+### Z10 — Greifen ohne Roboterkamera vorerst erlaubt (21.09.2026)
+
+Im Umsetzungsplan hing der erste vollständige Greifzyklus (4d) an 4c, und 4c an
+**B6** — der Punkt, an dem die Roboterkamera am 15.09.2026 durchgefallen ist.
+Solange sie nicht funktioniert, wäre damit **kein einziger Griff** testbar gewesen,
+obwohl Ziel 3 und 4 auch mit der Basiskamera allein nachweisbar sind.
+
+**Entscheidung:** 4d darf direkt nach 4b mit `w = 0` gebaut und getestet werden; 4c
+wird zur Verbesserung, parallel dazu. `require_robot_cam_for_grasp` bleibt
+**`false`** — sieht die Roboterkamera nichts, greift der Roboter auf Grundlage der
+Basiskamera-Vorhersage.
+
+**Vorerst:** Ob im Endbetrieb eine Bestätigung durch die Roboterkamera Pflicht wird
+(D9/D10), wird entschieden, sobald sie am Aufbau funktioniert.
+
+**Risiko:** Die Genauigkeit hängt dann an der Basiskamera-Extrinsik C3 — vom
+Kommilitonen, derzeit ungeprüfte Altwerte. Liegt sie quer um mehr als rund 17 mm
+daneben, geht ein Griff am 50-mm-Klotz vorbei. Das ergibt einen Fehlgriff
+(`has_object` bleibt aus → `outcome = 1`), keinen Crash: Die Greifhöhe schützt das
+Band unabhängig davon.
+
+### Z11 — Die Greifebene (E10, 21.09.2026)
+
+**E10 entschieden:** Ein Ziel darf **stromaufwärts** der Greifzone gewählt werden —
+sonst griffe die Begrenzung auf `zone_upstream` nie.
+
+**Dazu neu: die Greifebene.** Die letzte Position entlang des Bandes, von der aus
+der gesamte Greifprozess noch vor dem Zonenende durchgeführt werden kann. Sie liegt
+vor dem Zonenende:
+
+```
+s_greifebene   = s_zonenende − |v_belt| · t_greifprozess · grasp_time_margin
+t_greifprozess = t_descend_s + t_grasp_s + t_lift_s
+```
+
+`s` ist die Koordinate entlang der geschätzten Bandrichtung, `v_belt` die
+Pool-Geschwindigkeit (Z2). `t_lift_s` reicht bis `lift_clearance_m` — so lange
+fährt der Roboter beim Heben noch mit dem Band mit.
+
+**Warum berechnet und nicht fest eingetragen:** Wo der Greifprozess noch hinpasst,
+hängt an der Bandgeschwindigkeit, und die wird geschätzt. Eine feste Position wäre
+bei anderer Geschwindigkeit falsch; messbar sind dagegen die Zeiten des
+Greifprozesses (Stufe 4d). Mit den Startwerten 1,0 + 1,0 + 0,5 s und Faktor 1,2
+liegt die Ebene bei 0,1 m/s **0,30 m** vor dem Zonenende. (⚠️ `t_descend_s` jetzt
+2,0 s, gekoppelt an Beobachtungshöhe und Sinkgeschwindigkeit — damit 0,42 m;
+Nachtrag 10 / J2.)
+
+**Die Ebene trennt die beiden Teile, die die Erreichbarkeitsrechnung bisher
+vermischte:**
+
+| Abschnitt | Was dort passiert | Wer prüft |
+|---|---|---|
+| bis zur Greifebene | **Anfahren**: Roboter muss synchron über dem Block stehen | `priority_handler` bei der Auswahl |
+| Greifebene → Zonenende | **Greifprozess**: Absenken, Greifen, Heben | durch die Lage der Ebene gesichert |
+
+```
+t_verfügbar = (s_greifebene − s_block) / |v_belt|     ← Frist für den Beginn des Absenkens
+t_benötigt  = abstand / v_max + 3/K                   ← nur noch das Anfahren
+kandidat  ⟺  t_verfügbar > reach_safety_factor · t_benötigt
+```
+
+Absenk- und Greifzeit stecken jetzt in der Lage der Ebene statt in `t_benötigt`.
+Der Sicherheitsfaktor wirkt damit nur noch auf das, was wirklich schwankt: den
+Anfahrweg.
+
+**Im Follower ist die Ebene ein Tor für den Beginn, kein Abbruch mitten im Griff:**
+
+- `FOLGEN` → `ABSENKEN` nur, solange der Block **vor** der Ebene liegt.
+- Überschreitet der Block die Ebene in `ANFAHREN` oder `FOLGEN` — auch nach einem
+  Rücksprung aus `ABSENKEN` (F3) —, ist der Griff nicht mehr zu schaffen:
+  `ABBRUCH` mit **`outcome = 3`, „verpasst"**.
+- **Hat das Absenken begonnen, gilt die Ebene nicht mehr.** P4 bleibt: Ein
+  laufender Griff wird zu Ende geführt, notfalls über das Zonenende hinaus, begrenzt
+  nur durch den Arbeitsraum.
+
+**Eigentum wie bei `zone_upstream` (N3):** Der `priority_handler` besitzt die
+Greifzone, die Pool-Geschwindigkeit und die Prozesszeiten; er rechnet die Ebene und
+gibt sie als **S4 Feld 15** mit. Der Follower wendet sie nur an.
+
+**Zwei Folgen:**
+
+- `not_pickable` meldet einen Klotz, sobald er die **Greifebene** ungegriffen
+  überschritten hat, nicht erst am Zonenende. Das ist früher und genau: Ab dort
+  ist er nicht mehr zu holen. Das aktuelle Ziel ist davon ausgenommen, solange der
+  Griff läuft.
+- **B19 bekommt eine Untergrenze.** Liegt die Ebene stromaufwärts von
+  `zone_upstream`, ist die Zone für diese Bandgeschwindigkeit zu kurz und es wäre
+  nie etwas greifbar. Der `priority_handler` warnt dann. Die Zone muss länger sein
+  als `|v_belt| · t_greifprozess · grasp_time_margin` plus das Fenster, in dem der
+  Roboter aufsynchronisiert.
+
+### Z12 — Mit Klotz im Greifer wird nichts fallen gelassen (21.09.2026)
+
+**Gefunden bei der Konsistenzprüfung, unabhängig von der Geschwindigkeitsfrage.**
+Thema 6 und die Follower-Spec nannten `has_target = 0` und eine verschwundene
+Ziel-ID als Abbruchgrund **aus jedem Zustand**, und `ABBRUCH` öffnete den Greifer
+immer. Die Kette war damit sicher, nicht nur möglich:
+
+1. Der Roboter greift erfolgreich und hebt den Klotz (`HEBEN`).
+2. Die Basiskamera sieht ihn nicht mehr als Klotz auf dem Band, die ID verschwindet.
+3. Der `priority_handler` zieht das Ziel zurück („verloren"), `has_target = 0`.
+4. Der Follower bricht ab und **öffnet den Greifer** — über dem Band oder auf dem
+   Weg zur Kiste.
+
+Jeder gelungene Griff wäre so verloren gegangen.
+
+**Entscheidungen:**
+
+- **Ab `has_object` sind Zielrückzug, verschwundene ID und Sprünge der
+  Regelabweichung keine Abbruchgründe mehr.** Der Klotz *soll* vom Band
+  verschwinden; der Follower besitzt ihn jetzt und führt `HEBEN` → `ABLEGEN` →
+  `LOESEN` zu Ende. Neue Ziele nimmt er erst in `WARTEN` an.
+- **Abbruchgründe mit Klotz im Greifer** bleiben nur: Zeitüberschreitung,
+  Sicherheitsgate, stehender Roboterzustand — und `has_object` fällt unerwartet
+  weg (Klotz verloren, `outcome = 2`).
+- **Bricht der Follower mit Klotz im Greifer ab, bleibt der Greifer zu.** Er fährt
+  senkrecht hoch, dann zur Ablagepose und öffnet erst dort. Die Ablagepose ist eine
+  feste, geprüfte Pose, das Sicherheitsgate hält auch diesen Weg im Arbeitsraum.
+  Landet der Klotz so in der Kiste, meldet `picked_id` `outcome = 0` — er ist
+  abgelegt; der Abbruchgrund geht ins Log.
+- **Das Mitfahren in `HEBEN` braucht keine Blockvorhersage mehr.** Der Klotz ist im
+  Greifer; der Roboter fährt mit der letzten Bandgeschwindigkeit weiter, bis
+  `lift_clearance_m` erreicht ist. Der Deckel `max_extrapolation_s` gilt für die
+  Vorhersage eines gemessenen Blocks auf dem Band, nicht für diese Bewegung.
+
+**Nicht am Schreibtisch zu klären (B22):** Verdeckt der Greifer den Klotz schon
+beim Absenken oder Greifen für die Basiskamera, verschwindet die ID **vor**
+`has_object` — dann bricht der Griff ab, und die Vorhersage kann das wegen des
+Deckels von 0,2 s nicht überbrücken. Ob das eintritt, hängt an der Lage der
+Basiskamera zur Greifzone und zeigt sich in Stufe 4d.
+
+### Z13 — Die Orientierungsgüte reist im Vertrag mit (21.09.2026)
+
+**Gefunden beim Planen der Umsetzung.** Die `vectoring`-Spec ließ den Follower bei
+schlechter Orientierungsgüte auf den festen Winkel zurückfallen — aber **kein
+Vertragsfeld trug die Güte**, und die Follower-Spec erwähnte sie nicht. Der
+Follower hätte es nie erfahren und im Modus 2 auch einen verrauschten Winkel
+angefahren.
+
+**Entscheidung:** Die Güte wird als Feld mitgegeben — S3 Feld 13 und S4 Feld 16,
+`ori_quality` (0…1). Bewertet wird sie beim Verbraucher: Der Follower verwendet den
+Klotzwinkel nur oberhalb von `orientation_quality_min`, sonst die Bandrichtung. Die
+Schwelle (D11) wandert damit von `vectoring` zum Follower.
+
+Begründung: Grundregel 6 des Vertrags — *„Statusfelder statt stiller Annahmen"*.
+Die Alternative, dass `vectoring` den Winkel stillschweigend durch die Bandrichtung
+ersetzt, hätte keine Vertragsänderung gebraucht; aber niemand stromabwärts hätte
+gesehen, dass der Winkel nicht gemessen ist. Der Zeitpunkt ist günstig — noch
+existiert kein Verbraucher von S3 und S4.
+
+### Was sich **nicht** ändert
+
+- Die **Mittelung von Querposition und Orientierung** (Thema 4) bleibt richtig —
+  sie beginnt nur mit dem Übergang auf „Final".
+- Die **Winkelmittelung über den doppelten Winkel** (`vectoring`-Spec) bleibt.
+- Der **Ziel-Lock** und das Erreichbarkeitskriterium des `priority_handler` bleiben;
+  sie rechnen nur mit der geschätzten statt mit einer kalibrierten Geschwindigkeit.
+- `base_cam` liefert weiter `v_band_gemessen` im S1-Kopf — als grobe Laufkontrolle,
+  nicht mehr als Kalibrierquelle.
+
+---
+
+## Nachtrag 7 — Beim Bau von `priority_handler` und `data_tracker` (21.09.2026)
+
+Beim Bau der Phasen 3.3 und 3.2 ergaben sich Punkte, die die Specs offenließen oder
+die Nachtrag 6 überholt hatte. H1, H2 und T1 hat der Nutzer entschieden, die übrigen
+folgen aus bestehenden Entscheidungen. **H** betrifft den `priority_handler`, **T**
+den `data_tracker`.
+
+### H1 — Der Anfahrweg ist waagerecht, bis zum Anfahrpunkt
+
+**Frage:** Welcher Abstand steht in `t_benötigt = abstand / v_max + 3/K`? Die Spec
+sagte „TCP → Klotz". `robot_state` liefert aber den Flansch, und der fährt in
+`ANFAHREN` und `FOLGEN` auf Beobachtungshöhe, rund 0,3 m über dem Klotz.
+
+**Entscheidung:** **waagerechter** Abstand Flansch → **Anfahrpunkt**. Anfahrpunkt
+ist der Klotz selbst, oder — solange er noch stromaufwärts von `zone_upstream`
+liegt — der Punkt auf seiner Spur an `zone_upstream`, wo der Follower tatsächlich
+wartet.
+
+**Warum:** Der dreidimensionale Abstand rechnet den Höhenversatz als Fahrweg mit:
+rund 0,3 m, also 1,2 s bei 0,25 m/s, mal Sicherheitsfaktor 1,5. Knappe Klötze
+würden verworfen, obwohl sie erreichbar sind. Die Höhe ändert sich erst in
+`ABSENKEN`, und dessen Zeit steckt schon in der Lage der Greifebene (Z11).
+
+### H2 — Die Greiferbreite wird gegen die Diagonale geprüft
+
+**Frage:** Welche Seite des Klotzes kommt zwischen die Backen? Das entscheidet der
+Follower über seinen Gierwinkel (Modus, `orientation_quality_min`,
+`gripper_yaw_offset_deg`), und die kennt der `priority_handler` nicht.
+
+**Entscheidung:** `√(length² + width²) ≤ max_gripper_opening_m − gripper_margin_m`.
+
+**Warum:** Die Diagonale ist die größte Ausdehnung in jeder Richtung und gilt damit
+für jeden Gierwinkel. Den Gierwinkel nachzubilden hieße, drei Follower-Parameter
+doppelt zu pflegen — genau das, was Befund P3 abgeschafft hat. Die Sonderregel für
+fast quadratische Klötze (Verhältnis über 0,92 → `max(length, width)`, Nachtrag 4 /
+M5) entfällt mit: Vertauschte Achsen ändern die Diagonale nicht. **Preis:** Bei
+117 mm fallen erst Klötze wie 70 × 100 mm heraus; der Referenzklotz 50 × 100 hat
+112 mm, der breite Testklotz 76 × 50 hat 91 mm.
+
+### H3 — Geprüft wird die Spur, nicht die Lage in der Zone
+
+Die Spec verlangte für Kandidaten „in der Greifzone" und für den Start „Ziel
+außerhalb der Greifzone → nicht wählen". Beides widerspricht E10 / Z11: Ein Ziel
+darf stromaufwärts gewählt werden. **Umgesetzt:** Die Stelle, an der der Klotz die
+Greifebene erreicht, muss in der Zone liegen. Ein Klotz auf einer Spur neben der
+Zone wird so nie gewählt, einer davor schon.
+
+### H4 — Die Längskoordinate ist eine Funktion im Vertrag
+
+S4 nannte `zone_upstream` und `grasp_plane` „Koordinate entlang der Bandrichtung",
+ohne Ursprung und ohne zu sagen, aus welcher Richtung. Wenn Follower und
+`priority_handler` das verschieden auslegen, wartet der Roboter woanders, als die
+Erreichbarkeitsrechnung annimmt — der Fehler aus N3.
+
+**Festgelegt:** `s = (x·vx + y·vy) / |v|` mit (vx, vy) aus S4 Feld 13/14 derselben
+Nachricht, Ursprung `world`, wächst stromabwärts — als Funktion
+`contracts.along_belt`, die beide Seiten aufrufen. Dazu zwei Folgen im Vertrag:
+
+- **S4 Felder 12–15 gelten ohne Ziel nur mit Bandschätzung.** Bisher hieß es, 12
+  und 15 blieben bei `has_target = 0` gültig, 13/14 dagegen seien dann
+  bedeutungslos. Ohne 13/14 sind 12 und 15 aber nicht lesbar. Jetzt: 12–15 sind
+  gültig, solange eine Bandschätzung vorliegt; ohne sie sind alle vier null.
+- **Die Zone bei schräger Bandrichtung.** Die Zone ist ein achsparalleles
+  Rechteck in `world`. Als Grenzen entlang des Bandes gelten die beiden mittleren
+  der vier Eckprojektionen: bei achsparallelem Band genau die Kanten, bei schrägem
+  die inneren Werte.
+
+Ohne Richtung (`n_pool = 0`) gibt es keine Koordinate. Unter **0,01 m/s** gilt das
+Band als stehend — die Richtung wäre dann Rauschen.
+
+### H5 — Drei kleine Festlegungen
+
+- **`seq = 0` in S7 heißt „kein Versuch".** Der Follower setzt `seq` beim Aktivieren
+  auf 0; ab 0 zu zählen hätte den ersten Versuch ununterscheidbar vom Startwert
+  gemacht. Der erste Versuch trägt 1, Verbraucher reagieren auf jede Änderung außer
+  auf 0.
+- **`not_pickable` ist eine aktuelle Liste**, keine Historie: alle Tracks hinter
+  der Greifebene außer dem Ziel, jeder Status. Das Festhalten übernimmt der
+  `data_tracker`.
+- **`zone_empty` ist räumlich:** kein Klotz im Rechteck der Zone, gleich welcher
+  Status. Die Lesart „keine Kandidaten" wäre nach der Auswahl dasselbe wie
+  `not has_target` gewesen.
+
+### T1 — S10 bekommt das Feld `present` (Nachlauf)
+
+**Befund:** Bei jedem Griff verschwindet der Klotz beim Heben aus dem Bild,
+`picked_id` mit `outcome = 0` kommt erst nach dem Ablegen, Sekunden später. Ließe
+der `data_tracker` den Eintrag mit dem Track verschwinden, käme `picked` nie an —
+das Flag wäre wertlos. Der Eintrag muss den Track also überdauern. Dann zeigt er
+aber für einige Sekunden eine eingefrorene Position, als läge der Klotz noch auf
+dem Band.
+
+**Entscheidung:** S10 Feld 16 **`present`** (Stride 16 → 17): 1 = in den aktuellen
+`tracks`, 0 = Nachlauf mit den letzten bekannten Werten. Grundregel 6 —
+*„Statusfelder statt stiller Annahmen"*. Der Zeitpunkt ist günstig: Der einzige
+Verbraucher, `interface_streamer`, existiert noch nicht.
+
+**Verfall dazu:** Ein Eintrag ist erledigt, sobald `picked`, `out_of_bounds` oder
+`present = 0` gilt, und fällt `expiry_after_done_s` nach der **letzten** dieser
+Änderungen heraus. So bleibt ein gerade abgelegter Klotz die volle Frist sichtbar,
+obwohl er schon Sekunden vorher aus dem Bild verschwand. Gezählt wird in
+**S3-Zeit**: Steht der Eingang, friert die Anzeige ein, statt sich zu leeren. Ein
+Eintrag, der noch in `tracks` steht, wenn er abläuft, kommt nicht wieder, bis seine
+ID `tracks` verlassen hat.
+
+### T2 — Die `seq`-Regel ist eine Klasse im Vertrag
+
+`priority_handler` und `data_tracker` werten `picked_id` beide nach H5 aus. Die
+Regel hat eine Falle: Der Merker muss auch die 0 übernehmen, sonst gilt nach einem
+Neustart des Followers eine schon einmal gesehene Nummer als alt. Damit sie nicht
+zweimal verschieden gebaut wird, steht sie als `contracts.AttemptWatcher` im
+Vertragsmodul — wie `along_belt` (H4) eine gemeinsame Semantik, keine Auslegung.
+
+
+---
+
+## Nachtrag 8 — Beim Bau des `object_follower`, Stufe 4a (21.09.2026)
+
+F1–F3 hat der Nutzer entschieden, F4–F6 folgen aus bestehenden Entscheidungen
+oder aus einem Test.
+
+### F1 — Basiskamera und Roboter sehen das Band an verschiedenen Stellen
+
+**Befund.** Der Roboter hat die Bandoberfläche bei **x = −0,70 … −0,93 m**,
+y = −0,20 … +0,07 m angetastet (M9, aus `robot_state_broadcaster` — dasselbe System,
+in dem der IK-Controller regelt). Die Basiskamera meldete mit den alten
+Kalibrierwerten (C3 offen) einen Klotz bei **x = +0,814**, y = −0,874 (M4). Das
+Vorzeichen von x widerspricht sich. Die Beträge passen auffällig gut zusammen: Die
+Mitte der Antastpunkte liegt bei x = −0,816. Das spricht für eine Drehung um 180° um
+die Hochachse zwischen beiden Systemen, wie zwischen den UR-Rahmen `base` und
+`base_link`. Dazu passt ein zweiter Befund: Das Arbeitsraum-Rechteck der
+Vorgängergruppe (x −0,05…1,05, y −0,8…0,3, B10) schließt in unserem System das Band
+aus, um 180° gedreht enthält es Band und Ablagepose. **Das ist eine Vermutung,
+keine Messung.** Eine Erklärung läge nahe: Die Vorgängergruppe las ihre Posen über
+RTDE, also im UR-Rahmen `base`; AICA arbeitet in `base_link`, und beide sind im
+UR-URDF um 180° um z gedreht (`vorgaengerprojekt-abgleich.md`, Falle 5b).
+
+**Folge.** Bisher lagen die Zonen-Platzhalter im `priority_handler` und die
+Geometrie von `fake_objects` im System der Basiskamera. Am virtuellen Roboter wäre
+der Follower damit auf die andere Seite der Basis gefahren, und Wege, Reichweite
+und Singularitäten dort hätten nichts über den Aufbau gesagt. Die Ablagepose (B9)
+stammt dagegen aus dem Robotersystem.
+
+**Entscheidung:** Testdaten und Platzhalter liegen im **Robotersystem**:
+`fake_objects` mit Bandmitte x = −0,816 und Klötzen von y = +0,60 nach −0,80, die
+Zonen-Platzhalter bei x −0,95…−0,68, y −0,45…+0,05. Die Mitte ist gemessen, die
+Längsausdehnung geschätzt. Neu als offener Punkt **B23**: Die Basiskamera darf erst
+an den Follower, wenn ihre Positionen die Antastpunkte treffen.
+
+### F2 — Die Ablagepose kommt erst mit Stufe 4d
+
+Die Abnahme von 4a verlangte die Fahrt zur Ablagepose, ohne Greifzyklus gibt es
+aber keinen regulären Weg dorthin. **Entschieden:** Sie wird erst in 4d angefahren.
+4a prüft Start, Abbruchpfad und Beobachtungspose. Verworfen wurden ein eigener
+Inbetriebnahme-Schalter und `has_object` in `WARTEN` als Auslöser (flackert beim
+Öffnen, Nachtrag 6 / Z12).
+
+### F3 — Arbeitsraum und Beobachtungspose haben keine Defaults
+
+`ws_x_min` … `ws_z_max` (B10) und `observe_x/y/z/yaw_deg` (B8) sind
+**Pflichtparameter** (`default_value: null`). Fehlt einer, schlägt `on_configure`
+mit einer Meldung fehl, die alle fehlenden nennt. Grund für den Arbeitsraum ist die
+Regel in `Safety/README.md`: Werte erst mit dokumentierter Festlegung übernehmen.
+Die Beobachtungspose ist offen (B8). Für den virtuellen Roboter stehen Vorschläge in
+der Einrichtung (§9); sie gelten nur dort.
+
+Dazu wird jede Parameteränderung zur Laufzeit als ganzer Satz geprüft: Beobachtungs-
+pose im Arbeitsraum, Freihöhe im Arbeitsraum, Grenzen nicht leer. Ist der Satz
+unbrauchbar, gibt der Follower keine neue Zielpose aus und warnt gedrosselt.
+
+### F4 — Der Abbruchpfad in 4a
+
+- **Senkrecht hoch aus der Einstiegspose**, Orientierung beibehalten, auf
+  `max(z, transfer_height_m)` — die Freihöhe aus D12, seit J1 0,49 m. Danach `WARTEN`,
+  dessen Ziel die Beobachtungspose ist. Liegt der Flansch schon höher, geht es sofort
+  weiter; nach unten fährt der Abbruchpfad nie.
+- **Das Warten auf das Öffnen des Greifers kommt mit 4d.** Nötig ist es nur, wenn der
+  Follower selbst geschlossen hat. Der Greifer meldet `motion_done` nur nach einem
+  echten Kommando — ein Öffnen-Befehl an einen offenen Greifer änderte nichts, ein
+  Warten darauf hinge bis zum Timeout.
+- **„Angekommen" prüft der Follower selbst**, gegen `pose_tolerance_m` (0,01 m, wie
+  `linear_precision` des Attractors). Das Predicate `is_in_range` des Attractors
+  steht einer Komponente nicht als Signal zur Verfügung.
+- **Ohne frischen `robot_state` keine neue Zielpose.** Der Follower stempelt jede
+  Nachricht beim Eintreffen; ist die letzte älter als `robot_state_max_age_s`
+  (0,2 s), gilt die Flanschpose als unbekannt. Der Attractor hält dann die letzte
+  Zielpose — das ist nach Thema 7 der sichere Fall. Beim ersten `robot_state` wird
+  sein Bezugsrahmen ins Log geschrieben, damit sich am Aufbau prüfen lässt, ob er
+  `world` ist.
+
+### F5 — Zustandscodes in S8
+
+S8 nannte „Zustandscode (Thema 6)", ohne Zahlen. Festgelegt in der Reihenfolge des
+Automaten: 0 `WARTEN` … 8 `ABBRUCH` (`datenvertraege.md` S8,
+`contracts.STATE_*`). In Zuständen ohne Block sind die Regelabweichungen und
+`target_id` 0.
+
+### F6 — Das Sicherheitsgate verglich Sprünge gegen die gedeckelte Pose
+
+**Gefunden durch einen Test.** Das Gate merkte sich die *gedeckelte* Pose und prüfte
+den nächsten Takt dagegen. Stand der Arm beim Start außerhalb des Arbeitsraums,
+galt schon der zweite Takt als Sprung: Abbruch, neu ansetzen, wieder Sprung. Der
+Sprungtest vergleicht jetzt **Rohziel mit Rohziel**; das Deckeln kommt danach.
+
+**Absichtlich so:** Wird die Beobachtungspose zur Laufzeit um mehr als
+`max_target_jump_m` verstellt, nimmt der Follower den Abbruchpfad — erst hoch,
+dann zur neuen Pose. Das ist der sichere Weg für eine große Verschiebung.
+
+---
+
+## Nachtrag 9 — Beim Bau des `object_follower`, Stufe 4b (21.09.2026)
+
+Keine dieser Festlegungen brauchte eine Rückfrage; sie folgen aus bestehenden
+Entscheidungen oder aus einer Lücke der Spec. Offene Werte haben dokumentierte
+Startwerte und werden am Aufbau erhoben.
+
+### G1 — Gefolgt wird auf Beobachtungshöhe; der Werkzeugversatz wirkt erst beim Absenken
+
+In `ANFAHREN` und `FOLGEN` fährt der Flansch auf `observe_z` — dieselbe Höhe, auf
+die `ABSENKEN` bei wachsender Abweichung zurücksteigt (Thema 6). Weil der Greifpunkt
+auf der Flanschachse liegt (M6), wirkt `flange_to_grip_point_m` nur in z, also erst
+mit `ABSENKEN` (4d). In 4b ist die Zielpose in x und y die vorhergesagte
+Klotzposition plus Vorhalt.
+
+### G2 — Jeder Versuch endet mit `picked_id`, neuer `outcome = 4`
+
+Die Spec verlangt nach jedem Abbruch ein `picked_id`, damit der `priority_handler`
+den Klotz als erledigt behandelt. Für einen Abbruch vor dem Griff aus anderem Grund
+als der Greifebene passte kein Code: „verloren" (2) stimmt für einen zurückgezogenen
+oder gewechselten Zielsatz nicht, für eine Zeitüberschreitung auch nicht. Neu in S7:
+**`outcome = 4`, abgebrochen, bevor gegriffen wurde**; der Grund steht im Log.
+Beide Verbraucher behandeln jeden Code außer 0 gleich, die Ergänzung ist folgenlos
+für sie. In 4b endet jeder Versuch so, denn gegriffen wird erst in 4d.
+
+**Dazu eine Sperre:** Nach einem Abbruch zeigt S4 noch einige Takte dasselbe Ziel,
+bis der `priority_handler` die `picked_id` gelesen hat. Der Follower merkt sich die
+IDs abgeschlossener Versuche und nimmt sie nicht wieder an — sonst finge er
+denselben Klotz sofort ein zweites Mal an.
+
+### G3 — `ANFAHREN` endet am Klotz, nicht am Roboter
+
+`ANFAHREN` → `FOLGEN`, sobald der **vorhergesagte Klotz** `zone_upstream` erreicht
+(„Block in der Zone", Thema 6). Weil ein Ziel stromaufwärts gewählt werden darf
+(Z11), kann das dauern: Der Roboter wartet am Zonenrand. Eine feste Zeitgrenze
+bräche genau dieses Warten ab. Die Grenze ist deshalb **relativ**: erwartete
+Ankunft des Klotzes an der Zone plus `timeout_approach_s` (2 s).
+
+### G4 — `FOLGEN` hat in 4b keinen regulären Ausgang
+
+Den Übergang nach `ABSENKEN` und das Tor an der Greifebene bringt erst 4d. In 4b
+endet `FOLGEN` nur durch einen Abbruch — meist, weil der `priority_handler` das Ziel
+zurückzieht, wenn der Klotz aus dem Bild fährt. `timeout_track_s` steht auf 3 s
+(Thema 6: 2–3 s, gemeint als Zeit bis zum Absenken). **Zum Einmessen des Vorhalts
+(B4) in 4b auf 10 s oder mehr setzen**, damit der Roboter der ganzen Zone folgt.
+
+### G5 — In `ANFAHREN` und `FOLGEN` ist ein gedeckeltes Ziel ein Abbruch
+
+Thema 7, Prüfung 5: „deckeln **und** Abbruch melden". In den verfolgenden Zuständen
+heißt das: gedeckelte Pose ausgeben und den Versuch abbrechen. Das ist die Grenze
+aus P4, bis zu der der Roboter einem Klotz über die Zone hinaus folgen darf. In
+`WARTEN` und `ABBRUCH` wird nur gedeckelt und einmal gemeldet (4a).
+
+### G6 — Der Gierwinkel bleibt stetig
+
+Von den zwei gleichwertigen Stellungen (Greifer 180°-symmetrisch) wird die gewählt,
+die dem **zuletzt kommandierten** Winkel am nächsten liegt; zu Beginn eines
+Versuchs dem gemessenen. Das verhindert die halbe Umdrehung des Handgelenks, und es
+hält das Kommando auch dann stetig, wenn der Klotzwinkel an der Grenze von [0, π)
+umspringt. Das Einfrieren beim Übergang nach `ABSENKEN` kommt mit 4d.
+
+### G7 — Die Selbstüberwachung des Vorhalts ist das Einmesswerkzeug für B4
+
+Im eingeschwungenen `FOLGEN` steht der Flansch mit richtigem Vorhalt genau über dem
+vorhergesagten Klotz; ohne Vorhalt liegt er `v/K` dahinter (bei 0,1 m/s und K = 5:
+20 mm — so auch in der Simulation). `err_laengs` in S8 ist diese Abweichung,
+**positiv = Flansch voraus**. Nach 2 s in `FOLGEN` prüft der Follower ihr
+gleitendes Mittel (τ = 0,5 s) und warnt einmal je Versuch, wenn es 10 mm übersteigt.
+Einmessen heißt also: `lead_time_s` ändern, bis `err_laengs` im Mittel null ist.
+`err_quer` ist positiv links der Laufrichtung.
+
+### G8 — Der Vorhersagehorizont wird in beide Richtungen begrenzt
+
+`t_jetzt − t_ziel` wird auf `[0, max_extrapolation_s]` begrenzt. Negativ hieße: der
+Zielsatz stammt aus der Zukunft — die Uhren von Kamera und Rechner laufen dann nicht
+in derselben Domäne (B13). Beide Fälle werden einmal je Versuch ins Log geschrieben.
+
+### G9 — Der Montagewinkel der Backen ist nicht gemessen
+
+`gripper_yaw_offset_deg` steht auf 0. Welcher Winkel die Backen quer zum Klotz
+schließen lässt, hängt an der Montage und ist nirgends notiert — neu als **D23**.
+In 4b wirkt er nur auf die Handgelenkstellung, gegriffen wird erst in 4d.
+
+---
+
+## Nachtrag 10 — Beim Bau des `object_follower`, Stufen 4c und 4d (21.09.2026)
+
+Keine Rückfrage nötig: Die Punkte folgen aus Thema 6/7, den Nachträgen 2, 3 und 6
+oder aus Lücken der Spec. Offene Werte haben dokumentierte Startwerte und werden
+am Aufbau erhoben.
+
+### J1 — Die Freihöhe vergaß den gehaltenen Klotz
+
+D12 rechnete die Freihöhe als Band + höchster Klotz + Luft **unter den Backen**:
+0,445 m im Flanschmaß. Ein gehaltener Klotz hängt aber unter die Backen — bei
+100 mm, auf halber Höhe gegriffen, 40 mm unter die Backenspitze. Über einem
+stehenden 100-mm-Klotz blieben bei 0,445 m **6 mm**. **Neu: 0,49 m** = Band 53,6
++ stehender Klotz 100 + untere Hälfte des gehaltenen 50 + Griffpunkt 235 + Luft
+50 mm. Gilt für Transfer und Abbruchpfad.
+
+### J2 — Sinkgeschwindigkeit und Greifebene hängen zusammen
+
+Die Spec nannte 0,05 m/s zum Absenken, der `priority_handler` rechnet die
+Greifebene mit `t_descend_s` = 1,0 s. Von der vorgeschlagenen Beobachtungshöhe
+0,60 m auf die Greifhöhe 0,34 m (100-mm-Klotz) sind das 0,26 m — bei 0,05 m/s
+**5,2 s**; jeder Griff hätte viel zu spät begonnen. **Neue Startwerte:**
+`descend_speed_mps` = **0,15** (1,7 s), `t_descend_s` = **2,0**. Die Kopplung gilt
+allgemein: `t_descend_s ≈ (observe_z − Greifhöhe) / descend_speed_mps` plus
+Einschwingen. Wer B8 (Beobachtungshöhe) festlegt, zieht `t_descend_s` nach.
+
+### J3 — Die Roboterkamera als Korrektur (4c)
+
+- **Verglichen wird zur Bildzeit:** Messung der Roboterkamera (über Ringpuffer und
+  Hand-Auge nach `world`) gegen die Vorhersage der Basiskamera für **dieselbe**
+  Zeit. Die Differenz ist die Korrektur; gemittelt über
+  `correction_filter_window` angenommene Messungen.
+- **Höhenkorrektur zuerst** (N1), an der rohen Messung.
+- **Hand-Auge:** Richtung Flansch → Kamera, Konvention **R = Rz·Ry·Rx** — damit
+  reproduzieren die rpy aus `Calibration_results_final.yaml` deren Quaternion auf
+  fünf Stellen. Ein Test prüft gegen einen von Hand gerechneten Punkt.
+- **Ausgeblendet** (`w` → 0 über `w_ramp_s`) bei `valid = 0`, Messung älter als
+  `robot_cam_max_age_s`, Korrektur über `max_correction_m` (R4) — und wenn die
+  Bildzeit **nicht im Ringpuffer** liegt. Dann laufen die Uhren von Roboterkamera
+  und Rechner nicht in derselben Domäne; das steht einmal im Log (neu: **B24**).
+- `w_wirksam` in S8 ist der **Anteil der eingestellten Gewichte**, der gerade wirkt
+  (die Rampe, 0…1) — ein Wert für beide Achsen.
+- Die Korrektur wird je Versuch neu gelernt. Beim Übergang nach `ABSENKEN`
+  eingefroren (F2), bei einem Rücksprung nach `FOLGEN` wieder freigegeben (F3).
+
+### J4 — Greif-Freigabe in Bandkoordinaten
+
+Die vier Toleranzen wirken auf dieselben Größen wie `err_laengs`/`err_quer` in S8,
+also **entlang und quer zum Band** — nicht in Backenrichtung wie in B18. Startwerte
+**5 / 5 / 10 mm und 0,05 rad**, gehalten über 10 Takte. Die Gierabweichung zählt
+modulo 180° (Greifer symmetrisch). B18 liefert die geometrischen Obergrenzen, D3
+die endgültigen Werte.
+
+### J5 — `ABSENKEN` und `GREIFEN`
+
+- `ABSENKEN`: Zielhöhe sinkt von `observe_z` mit `descend_speed_mps` bis zur
+  Greifhöhe; seitlich wird mit Vorhalt weiter gefolgt. Wächst die Abweichung über
+  das **Doppelte** der Toleranz, zurück nach `FOLGEN` auf Beobachtungshöhe (F3).
+  Zeitgrenze: Absenkdauer + `timeout_grasp_s`, danach `outcome = 4`.
+- `GREIFEN`: mitfahren auf Greifhöhe, Greifer zu. `has_object` → `HEBEN` — und
+  zwar **vor** den Abbruchgründen geprüft: Meldet der Greifer den Klotz im selben
+  Takt, in dem die ID verschwindet (B22), gilt der Griff.
+- **Fehlgriff** (`outcome = 1`): Die Bewegung hat begonnen (`motion_done` einmal
+  0) und ist fertig, ohne `has_object` — oder `timeout_grasp_s` läuft ab.
+
+### J6 — `HEBEN`, `ABLEGEN`, `LOESEN`
+
+- `HEBEN`: erst mit der **letzten** Bandgeschwindigkeit weiter, auf Greifhöhe +
+  `lift_clearance_m`; dann senkrecht auf die Freihöhe; dann `ABLEGEN`.
+- **`has_object` fällt weg** → erst nach 0,1 s ohne Klotz gilt er als verloren
+  (`outcome = 2`); kürzeres Flackern wird überbrückt.
+- `ABLEGEN`: „angekommen" mit `pose_tolerance_m`. **Zeitüberschreitung:** Abbruch
+  mit Klotz — hoch, erneut zur Ablage. Scheitert auch das, **hält der Follower den
+  Klotz** und meldet „Eingriff nötig", statt ihn irgendwo fallen zu lassen.
+  `timeout_place_s` = 8 s: Die Fahrt vom Band zur Kiste ist rund 0,8 m, bei
+  0,25 m/s über 3 s plus Einschwingen.
+- `LOESEN`: fertig, wenn die Öffnungsbewegung gemeldet ist — oder nach
+  `timeout_release_s` mit einer Warnung. **Abweichung von der Spec-Tabelle**
+  (dort Zeitüberschreitung → `ABBRUCH`): Ein Abbruch mit flackerndem `has_object`
+  würde den Ablagepfad von vorn beginnen. Der Öffnen-Befehl ist über der Kiste
+  gegeben; `outcome = 0`.
+
+### J7 — Abbruch ohne Klotz nach eigenem Schließen
+
+Das in 4a zurückgestellte Warten: Hat der Follower den Greifer geschlossen
+(Fehlgriff, Abbruch in `GREIFEN`), hält er zuerst die Pose, öffnet und wartet auf
+die Öffnungsbewegung (oder `timeout_release_s`), **dann** steigt er. Sonst zöge er
+halb geschlossene Backen am Klotz nach oben.
+
+### J8 — Ablagepose und Roboterkamera als Pflicht
+
+- Ablagepose als Default aus **B9** (x −0,316, y +0,476, z 0,420 m, Gier 94,2°),
+  Gegenprobe bei laufendem Programm offen. `configure` prüft, dass sie im
+  Arbeitsraum liegt.
+- `require_robot_cam_for_grasp` (D9/D10): wenn gesetzt, beginnt `ABSENKEN` nur
+  bei voll eingeblendeter, frischer Roboterkamera. Vorerst **aus** (Z10).
+
+---
+
+## Nachtrag 11 — Beim Bau des `interface_streamer` (21.09.2026)
+
+Drei kleine Festlegungen, keine Rückfrage nötig.
+
+### V1 — Der Text im Bild ist ASCII
+
+OpenCVs eingebaute Hershey-Schriften kennen keine Umlaute, kein Gradzeichen und
+keine griechischen Buchstaben — „längs" erschiene als „l??ngs". Im Bild steht
+deshalb „laengs", „Grad", „dv", „Kloetze". Ein Test prüft, dass jede Zeile ASCII
+ist. Eine andere Schrift hieße eine zusätzliche Abhängigkeit (FreeType) für eine
+Komponente, die das System nicht braucht.
+
+### V2 — Ob ein Debug-Bild noch kommt, zeigt die Ankunftszeit
+
+Die Debug-Bilder von `base_cam` und `robot_cam` tragen keinen Zeitstempel im
+Header. Der Streamer merkt sich deshalb, wann ein Bild **ankam**; nach 2 s ohne
+neues wird der Bereich grau mit Hinweis. Die Debug-Ausgabe muss dafür in den
+Kamerakomponenten eingeschaltet sein (`debug_enable`).
+
+### V3 — Veraltete Daten werden markiert, nicht versteckt
+
+`follower_status` und `world_state`, deren Zeitstempel mehr als 1 s hinter der
+Uhr des Rechners liegt, bekommen den Zusatz „(veraltet)". Beim `world_state` ist
+das auch eine Diagnose: Er trägt die Bildzeit der Basiskamera — zeigt er dauerhaft
+„veraltet", obwohl Bilder kommen, laufen Kamera- und Rechneruhr auseinander (B13).

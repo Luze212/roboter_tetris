@@ -1,0 +1,174 @@
+{
+  "name": "Priority Handler",
+  "description": {
+    "brief": "Wählt den nächsten zu greifenden Klotz und hält die Wahl, bis sie erledigt ist.",
+    "details": "Setzt die Priorisierung aus Projektziel 4 um. Kandidat ist ein eingeschwungener Klotz (Status 0), dessen Spur die Greifzone kreuzt, der greifbar ist (Höhe, Diagonale gegen die Greiferöffnung) und der vor der Greifebene erreichbar ist: Zeit bis zur Greifebene > Sicherheitsfaktor × (waagerechter Anfahrweg / v_max + 3/K). Unter den Kandidaten wird der dringendste gewählt. Ein Ziel darf stromaufwärts der Zone liegen; der Follower wartet dann an zone_upstream. Die Greifebene ist die letzte Längsposition, von der aus Absenken, Greifen und Heben vor dem Zonenende fertig werden; sie wandert mit der geschätzten Bandgeschwindigkeit. Einmal gewählt bleibt gewählt: Zurückgezogen wird nur, wenn picked_id die ID meldet (jedes outcome), die ID aus tracks verschwindet, der Klotz wieder einschwingt oder der Eingang steht. Erreichbarkeit ist kein Rückzugsgrund. Ohne Bandschätzung (n_pool = 0) und ohne robot_state wird nichts gewählt. Wahl und Rückzug stehen im Log."
+  },
+  "registration": "roboter_tetris::PriorityHandler",
+  "inherits": "modulo_components::LifecycleComponent",
+  "inputs": [
+    {
+      "display_name": "Tracks",
+      "description": "S3 aus vectoring: Kopf [t, n, v_belt_x, v_belt_y, n_pool], Stride 14. Die Bandgeschwindigkeit kommt aus dem Kopf.",
+      "signal_name": "tracks",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Gepickt-Meldung",
+      "description": "S7 aus object_follower: [seq, id, outcome]. Jede neue seq (außer 0) gibt die ID frei und schließt sie von der Auswahl aus.",
+      "signal_name": "picked_id",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Roboterzustand",
+      "description": "cartesian_state des Flansches (robot_state_broadcaster) in world. Liefert den Anfahrweg für die Erreichbarkeitsprüfung.",
+      "signal_name": "robot_state",
+      "signal_type": "cartesian_state"
+    }
+  ],
+  "outputs": [
+    {
+      "display_name": "Ziel",
+      "description": "S4, feste Länge 17: [t, has_target, id, color, x, y, z, orientation, length, width, height, t_rest, zone_upstream, vx, vy, grasp_plane, ori_quality]. vx/vy = gepoolte Bandgeschwindigkeit. zone_upstream und grasp_plane sind Längskoordinaten entlang (vx, vy) (contracts.along_belt) und bleiben auch ohne Ziel gültig, solange eine Bandschätzung vorliegt. t_rest = Zeit bis zur Greifebene, negativ danach.",
+      "signal_name": "target",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Nicht mehr greifbar",
+      "description": "S5: [t, n, id...] - IDs der aktuellen Tracks hinter der Greifebene, ohne das aktuelle Ziel. Nur für data_tracker, nicht im Regelpfad.",
+      "signal_name": "not_pickable",
+      "signal_type": "double_array"
+    }
+  ],
+  "predicates": [
+    {
+      "display_name": "Hat Ziel",
+      "description": "Ein Ziel ist gewählt.",
+      "predicate_name": "has_target"
+    },
+    {
+      "display_name": "Zone leer",
+      "description": "Kein Klotz innerhalb der Greifzone, gleich welcher Status.",
+      "predicate_name": "zone_empty"
+    },
+    {
+      "display_name": "Zone ausreichend lang",
+      "description": "Die Greifebene liegt stromabwärts von zone_upstream. Falsch, solange keine Bandschätzung vorliegt oder die Zone für die geschätzte Bandgeschwindigkeit zu kurz ist - dann wird nichts gewählt (B19).",
+      "predicate_name": "is_zone_feasible"
+    }
+  ],
+  "parameters": [
+    {
+      "display_name": "Greifzone x min (m)",
+      "description": "Untere x-Grenze der Greifzone in world. PLATZHALTER bis B19, im Robotersystem (Band angetastet bei x -0,70...-0,93, M9). Die Greifzone muss innerhalb der Messregion von base_cam liegen (track_velocity_region_y_min/_max).",
+      "parameter_name": "zone_x_min",
+      "parameter_type": "double",
+      "default_value": "-0.95",
+      "dynamic": true
+    },
+    {
+      "display_name": "Greifzone x max (m)",
+      "description": "Obere x-Grenze der Greifzone in world. PLATZHALTER bis B19, im Robotersystem (Band angetastet bei x -0,70...-0,93, M9). Die Greifzone muss innerhalb der Messregion von base_cam liegen (track_velocity_region_y_min/_max).",
+      "parameter_name": "zone_x_max",
+      "parameter_type": "double",
+      "default_value": "-0.68",
+      "dynamic": true
+    },
+    {
+      "display_name": "Greifzone y min (m)",
+      "description": "Untere y-Grenze der Greifzone in world. PLATZHALTER bis B19, im Robotersystem (Band angetastet bei x -0,70...-0,93, M9). Die Greifzone muss innerhalb der Messregion von base_cam liegen (track_velocity_region_y_min/_max).",
+      "parameter_name": "zone_y_min",
+      "parameter_type": "double",
+      "default_value": "-0.45",
+      "dynamic": true
+    },
+    {
+      "display_name": "Greifzone y max (m)",
+      "description": "Obere y-Grenze der Greifzone in world. PLATZHALTER bis B19, im Robotersystem (Band angetastet bei x -0,70...-0,93, M9). Die Greifzone muss innerhalb der Messregion von base_cam liegen (track_velocity_region_y_min/_max).",
+      "parameter_name": "zone_y_max",
+      "parameter_type": "double",
+      "default_value": "0.05",
+      "dynamic": true
+    },
+    {
+      "display_name": "Anfahrgeschwindigkeit max (m/s)",
+      "description": "Der kleinere Wert aus max_linear_velocity von Attractor und IK-Controller. Bindend ist meist der IK-Controller, Default 0,25 (A1).",
+      "parameter_name": "attractor_v_max_mps",
+      "parameter_type": "double",
+      "default_value": "0.25",
+      "dynamic": true
+    },
+    {
+      "display_name": "Attractor-Verstärkung K",
+      "description": "linear_gains des Signal Point Attractors, wie dort eingestellt. Das Einschwingen dauert etwa 3/K; die Einrichtung sieht K ≈ 5 vor.",
+      "parameter_name": "attractor_gain",
+      "parameter_type": "double",
+      "default_value": "5.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Absenkzeit (s)",
+      "description": "Dauer des Absenkens von der Folgehöhe auf die Greifhöhe: (observe_z - Greifhöhe) / descend_speed_mps des object_follower plus Einschwingen - mit 0,60 m, 0,34 m und 0,15 m/s rund 2 s. Geht in die Lage der Greifebene ein. (D22, in Stufe 4d messen)",
+      "parameter_name": "t_descend_s",
+      "parameter_type": "double",
+      "default_value": "2.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Greifzeit (s)",
+      "description": "Dauer des Schließens bis motion_done. (D22)",
+      "parameter_name": "t_grasp_s",
+      "parameter_type": "double",
+      "default_value": "1.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Hebezeit (s)",
+      "description": "Dauer des Hebens bis lift_clearance_m - so lange fährt der Roboter noch mit dem Band. (D22)",
+      "parameter_name": "t_lift_s",
+      "parameter_type": "double",
+      "default_value": "0.5",
+      "dynamic": true
+    },
+    {
+      "display_name": "Aufschlag Greifprozess",
+      "description": "Faktor auf die Dauer des Greifprozesses bei der Lage der Greifebene. Zu knapp: Griffe beginnen, die vor dem Zonenende nicht fertig werden. Zu großzügig: unnötig viele verpasste Klötze. (D22)",
+      "parameter_name": "grasp_time_margin",
+      "parameter_type": "double",
+      "default_value": "1.2",
+      "dynamic": true
+    },
+    {
+      "display_name": "Sicherheitsfaktor Erreichbarkeit",
+      "description": "Erreichbar heißt: Zeit bis zur Greifebene > Faktor × Anfahrzeit. Wirkt nur auf das Anfahren.",
+      "parameter_name": "reach_safety_factor",
+      "parameter_type": "double",
+      "default_value": "1.5",
+      "dynamic": true
+    },
+    {
+      "display_name": "Mindesthöhe (m)",
+      "description": "Flachere Klötze werden nicht gewählt - doppelte min_grip_height_m des Followers. (B15, vorläufig mit 5 mm Luft)",
+      "parameter_name": "min_graspable_height_m",
+      "parameter_type": "double",
+      "default_value": "0.03",
+      "dynamic": true
+    },
+    {
+      "display_name": "Greiferöffnung (m)",
+      "description": "Backenabstand bei offenem Greifer, gemessen 0,127. (B16)",
+      "parameter_name": "max_gripper_opening_m",
+      "parameter_type": "double",
+      "default_value": "0.127",
+      "dynamic": true
+    },
+    {
+      "display_name": "Greifer-Reserve (m)",
+      "description": "Reserve zur Öffnungsweite. Geprüft wird die Diagonale des Klotzes, weil der Gierwinkel des Followers hier unbekannt ist.",
+      "parameter_name": "gripper_margin_m",
+      "parameter_type": "double",
+      "default_value": "0.01",
+      "dynamic": true
+    }
+  ]
+}

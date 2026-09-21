@@ -1,0 +1,72 @@
+{
+  "name": "Interface Streamer",
+  "description": {
+    "brief": "Setzt ein Übersichtsbild für RViz zusammen: beide Debug-Bilder, Follower-Status, Bandgeschwindigkeit und Klotzliste.",
+    "details": "Oben die Debug-Bilder von Basis- und Roboterkamera nebeneinander, seitenrichtig skaliert; ein Bild, das länger als 2 s ausbleibt, wird grau mit Hinweis. Darunter Zustand, Ziel-ID, w_wirksam und die drei Regelabweichungen des object_follower, dann die geschätzte Bandgeschwindigkeit mit Richtung und Zahl der beitragenden Klötze. Darunter je Klotz: final mit eigener Geschwindigkeit, einschwingend mit dv, gepickt, hinter der Greifebene oder nicht mehr im Bild - Letzteres ohne Position. Die einzige Komponente, ohne die das System vollständig funktioniert: 5 Hz, und jeder Fehler wird geloggt und übersprungen. Text in ASCII (OpenCV-Schrift ohne Umlaute)."
+  },
+  "registration": "roboter_tetris::InterfaceStreamer",
+  "inherits": "modulo_components::LifecycleComponent",
+  "inputs": [
+    {
+      "display_name": "Debug-Bild Basiskamera",
+      "description": "debug_image von base_cam.",
+      "signal_name": "base_debug_image",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::Image"
+    },
+    {
+      "display_name": "Debug-Bild Roboterkamera",
+      "description": "debug_image von robot_cam.",
+      "signal_name": "robot_debug_image",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::Image"
+    },
+    {
+      "display_name": "Weltzustand",
+      "description": "S10 aus data_tracker.",
+      "signal_name": "world_state",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Follower-Status",
+      "description": "S8 aus object_follower.",
+      "signal_name": "follower_status",
+      "signal_type": "double_array"
+    }
+  ],
+  "outputs": [
+    {
+      "display_name": "Übersichtsbild",
+      "description": "Das zusammengesetzte Bild für RViz, bgr8. Breite panel_width, Höhe aus image_height und show_object_list.",
+      "signal_name": "interface_image",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::Image"
+    }
+  ],
+  "parameters": [
+    {
+      "display_name": "Bildbreite (px)",
+      "description": "Breite des Gesamtbildes. Die Höhe folgt aus image_height und show_object_list.",
+      "parameter_name": "panel_width",
+      "parameter_type": "int",
+      "default_value": "1280",
+      "dynamic": true
+    },
+    {
+      "display_name": "Kamerabildhöhe (px)",
+      "description": "Höhe des Bereichs je Kamerabild.",
+      "parameter_name": "image_height",
+      "parameter_type": "int",
+      "default_value": "360",
+      "dynamic": true
+    },
+    {
+      "display_name": "Klotzliste zeigen",
+      "description": "Objektliste unter dem Status einblenden.",
+      "parameter_name": "show_object_list",
+      "parameter_type": "bool",
+      "default_value": "true",
+      "dynamic": true
+    }
+  ]
+}

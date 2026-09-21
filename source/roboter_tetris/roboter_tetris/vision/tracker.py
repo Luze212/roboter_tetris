@@ -11,6 +11,13 @@ Behavioural notes carried over from the C++ original:
   is sane (0 < dt < 2 s) and the speed is significant (|vy| >= 30 mm/s).
 - Unmatched tracks coast with the prediction velocity; deletion is strict inside
   the velocity region (missed frames) and lenient outside (conveyor borders).
+
+Deliberate deviation from the C++ original: a matched detection is always taken
+as measured. The original coasted the longitudinal position with the global
+velocity outside the velocity region even when a fresh detection existed. That
+made the velocity estimate in ``vectoring`` circular and hid a block toppling on
+placement (docs: entscheidungen.md, Nachtrag 6 / Z4). The deletion rule is
+unchanged -- it protects tracks at the image border from being torn.
 - For near-square objects the previous orientation is kept (a square's minAreaRect
   angle flaps, so the first stable estimate wins).
 """
@@ -165,14 +172,13 @@ class VisionTracker:
             track.missed = 0
             track.age += 1
 
-            if not det_in_region and det.vy != 0.0:
-                # Outside the trusted region the measured y is unreliable; coast
-                # the previous y with the velocity instead (C++ behaviour).
-                prev_y = track.object.y
-                track.object = replace(det)
-                track.object.y = prev_y + det.vy * dt
-            else:
-                track.object = replace(det)
+            # A matched detection is always taken as measured -- also outside
+            # the velocity region. The C++ original coasted y with the global
+            # velocity there instead, which made every downstream velocity
+            # estimate circular (it got back the velocity that went in) and hid
+            # a block toppling on placement, since blocks are placed upstream,
+            # outside the region. Coasting now happens only for missed frames.
+            track.object = replace(det)
 
         # Match remaining detections against candidates (promote on re-detection).
         candidate_matched = [False] * len(self._candidates)

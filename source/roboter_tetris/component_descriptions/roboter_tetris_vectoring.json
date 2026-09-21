@@ -1,0 +1,92 @@
+{
+  "name": "Vectoring",
+  "description": {
+    "brief": "Schätzt die Geschwindigkeit der Klötze aus den Bilddaten und glättet ihre Zustände.",
+    "details": "Setzt Projektziel 3 um. Je Klotz eine Geschwindigkeitsschätzung aus der Positionshistorie; ein frisch aufgelegter Klotz gilt als eingeschwungen, sobald zwei aufeinanderfolgende Halbsekundenfenster dieselbe Geschwindigkeit messen - ein beim Aufsetzen kippender Klotz bleibt so lange einschwingend (Status 3). Aus allen eingeschwungenen Klötzen eines Durchlaufs entsteht eine gemeinsame Ausgleichsrechnung: die Bandgeschwindigkeit, mit der Priorisierung und Folgeregelung rechnen. Position, Orientierung und Abmessungen werden erst ab dem Einschwingen gemittelt. Ein Durchlauf ist eine Aktivierung; beim Aktivieren beginnt die Schätzung neu."
+  },
+  "registration": "roboter_tetris::Vectoring",
+  "inherits": "modulo_components::LifecycleComponent",
+  "inputs": [
+    {
+      "display_name": "Erkannte Objekte",
+      "description": "S1 aus base_cam: [t, n, v_band] + n Einträge mit Stride 9, SI-Einheiten.",
+      "signal_name": "objects",
+      "signal_type": "double_array"
+    }
+  ],
+  "outputs": [
+    {
+      "display_name": "Tracks",
+      "description": "S3: Kopf [t, n, v_belt_x, v_belt_y, n_pool], dann n Einträge mit Stride 14 [id, color, x, y, z, orientation, length, width, height, status, vx, vy, v_change, ori_quality] in SI-Einheiten. v_belt ist die gepoolte Bandgeschwindigkeit; n_pool = 0 heißt: noch kein Schätzwert, v_belt dann nicht verwenden. Status 0 = eingeschwungen (wählbar), 3 = einschwingend. vx/vy je Eintrag sind die eigene Schätzung des Klotzes - nur Anzeige, gerechnet wird mit v_belt. v_change zeigt, wie weit die beiden Halbfenster noch auseinanderliegen. ori_quality (0..1) bewertet der Verbraucher.",
+      "signal_name": "tracks",
+      "signal_type": "double_array"
+    }
+  ],
+  "predicates": [
+    {
+      "display_name": "Hat wählbare Tracks",
+      "description": "Mindestens ein Klotz ist eingeschwungen (Status 0).",
+      "predicate_name": "has_tracks"
+    },
+    {
+      "display_name": "Hat Bandschätzung",
+      "description": "Mindestens ein Klotz trägt zur Bandgeschwindigkeit bei (n_pool >= 1).",
+      "predicate_name": "has_belt_estimate"
+    },
+    {
+      "display_name": "Empfängt Daten",
+      "description": "Der Zeitstempel von base_cam schreitet fort.",
+      "predicate_name": "is_receiving"
+    }
+  ],
+  "parameters": [
+    {
+      "display_name": "Einschwing-Halbfenster",
+      "description": "Messungen je Halbfenster des Einschwingtests (bei 30 Hz: 15 = 0,5 s). Ein Klotz gilt als eingeschwungen, wenn die Geschwindigkeit beider Halbfenster übereinstimmt. Größer: sicherer gegen Umkippen, aber später wählbar.",
+      "parameter_name": "settle_half_window",
+      "parameter_type": "int",
+      "default_value": "15",
+      "dynamic": true
+    },
+    {
+      "display_name": "Einschwing-Toleranz (m/s)",
+      "description": "So weit dürfen die Geschwindigkeiten der beiden Halbfenster auseinanderliegen, damit sie als konstant gelten. Zu klein: Klötze schwingen bei Rauschen nie ein. Zu groß: ein kippender Klotz wird zu früh final. (D20)",
+      "parameter_name": "settle_v_tolerance",
+      "parameter_type": "double",
+      "default_value": "0.010",
+      "dynamic": true
+    },
+    {
+      "display_name": "Ausreißer-Abstand (m)",
+      "description": "Abstand zur Vorhersage, ab dem eine einzelne Messung als Fehldetektion verworfen wird. (D21)",
+      "parameter_name": "outlier_distance_m",
+      "parameter_type": "double",
+      "default_value": "0.02",
+      "dynamic": true
+    },
+    {
+      "display_name": "Ausreißer in Folge",
+      "description": "So viele Ausreißer hintereinander gelten als echte Lageänderung - etwa ein umgekippter Klotz - und starten den Track neu. (D21)",
+      "parameter_name": "outlier_persist_frames",
+      "parameter_type": "int",
+      "default_value": "3",
+      "dynamic": true
+    },
+    {
+      "display_name": "Glättungsfenster",
+      "description": "Anzahl Messungen, über die Position, Orientierung und Abmessungen gemittelt werden - erst ab dem Einschwingen.",
+      "parameter_name": "smoothing_window",
+      "parameter_type": "int",
+      "default_value": "30",
+      "dynamic": true
+    },
+    {
+      "display_name": "Verfall (s)",
+      "description": "Nach dieser Zeit ohne Messung wird ein Track vergessen. Sein Beitrag zur Bandgeschwindigkeit bleibt erhalten.",
+      "parameter_name": "track_expiry_s",
+      "parameter_type": "double",
+      "default_value": "0.5",
+      "dynamic": true
+    }
+  ]
+}

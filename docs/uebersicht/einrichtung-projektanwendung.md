@@ -1,7 +1,10 @@
 # Einrichtung der Projektanwendung in AICA
 
-**Stand 14.09.2026.** Was beim Anlegen der AICA-Anwendung für den On-the-fly-Pick
-gesetzt werden muss — und warum die Defaults nicht taugen.
+**Stand 21.09.2026** (angelegt 14.09.). Was beim Anlegen der AICA-Anwendung für
+den On-the-fly-Pick gesetzt werden muss — und warum die Defaults nicht taugen.
+Verdrahtung der neuen Komponenten: §6; Werte für den virtuellen Roboter: §9;
+Reihenfolge am Aufbau: `uebergabe.md` §6; Kopplungen zwischen Parametern:
+`systemgraph.md`.
 
 Grundlage: die Messungen am Aufbau vom 14.09.2026 und die Auswertung der
 Komponentenbeschreibungen im AICA-Image (`v2.0.5-jazzy`, core v5.0.0).
@@ -22,7 +25,8 @@ Komponentenbeschreibungen im AICA-Image (`v2.0.5-jazzy`, core v5.0.0).
 |---|---|---|
 | **`rgb_camera.global_time_enabled`** der **Basiskamera** | **`true`** | **Kritisch.** Steht er auf `false`, stempelt die L515 in ihrer Hardwareuhr: fremde Epoche (gemessen: Jahr 2006), Drift von **3,9 ms/s** gegen die ROS-Zeit, und nach wenigen Minuten bleibt der Stempel ganz stehen. Dann verwirft das Frame-Gating in `base_cam` jedes Bild nach dem ersten und die Objektliste bleibt leer. Am 14.09. genau so gemessen. |
 | **`depth_module.global_time_enabled`** der Basiskamera | **`true`** | dito |
-| Beides bei der **Roboterkamera** | `true` | steht dort bereits richtig — beim Neuanlegen nicht verlieren |
+| Beides bei der **Roboterkamera** | `true` | steht dort bereits richtig — beim Neuanlegen nicht verlieren. Der Follower ordnet ihre Bilder über die Bildzeit seinem Ringpuffer zu (B24) |
+| **`object_follower`: `ws_*`, `observe_*`** | ohne Default | Arbeitsraum (B10) und Beobachtungspose (B8) — ohne sie scheitert `configure` mit einer Liste der fehlenden. Vorschläge für den virtuellen Roboter: §9 |
 
 > ⚠️ **Der AICA-RealSense-Block exponiert diese Parameter nicht** (er bietet 25,
 > diese sind nicht dabei). Sie lassen sich nur zur Laufzeit über den
@@ -101,6 +105,12 @@ Komponentenbeschreibungen im AICA-Image (`v2.0.5-jazzy`, core v5.0.0).
 Werte machen den Vorhalt achsabhängig und bei schräger Bandrichtung zur
 Matrixrechnung.
 
+**Im `priority_handler` dieselben Werte eintragen:** `attractor_gain` = der Wert
+aus `linear_gains`, `attractor_v_max_mps` = der **kleinere** der beiden
+`max_linear_velocity`. Er rechnet damit die Anfahrzeit; passen die Werte nicht,
+wählt er Klötze, die nicht zu schaffen sind, oder verwirft erreichbare. Defaults:
+5,0 und 0,25.
+
 ---
 
 ## 3. Kameras — aus den Teststand-Anwendungen übernehmbar
@@ -129,7 +139,7 @@ aber bei der Beurteilung der Geometrie zu wissen.
 
 | Parameter | Wert in den Teststand-Anwendungen | Anmerkung |
 |---|---|---|
-| `urdf` | `Universal Robots 10e` | AICA-Standarddefinition. **Der Robotiq-Greifer ist darin nicht enthalten** — der IK-Controller regelt damit den Flansch, der `RobotStateBroadcaster` meldet denselben. Folge: `tool_offset_z_m` im `object_follower` wird gebraucht und ist ungleich null (**A7/A8 erledigt**). |
+| `urdf` | `Universal Robots 10e` | AICA-Standarddefinition. **Der Robotiq-Greifer ist darin nicht enthalten** — der IK-Controller regelt damit den Flansch, der `RobotStateBroadcaster` meldet denselben. Folge: `flange_to_grip_point_m` (0,235 m, Nachtrag 6 / Z7) im `object_follower` wird gebraucht und ist ungleich null (**A7/A8 erledigt**). |
 | `rate` | 500 | Die Doku sprach von 100 Hz. Bei einer Änderung die Begründung der Follower-Rate mitziehen. |
 | `robot_ip` | 192.168.96.221 | |
 | `tf_publish_frequency` des Broadcasters | 20 (Default) | TF wird publiziert (**A5 erledigt**), ist mit 20 Hz aber zu grob für die zeitrichtige Zuordnung der `robot_cam`-Messung — der eigene TCP-Ringpuffer im Follower bleibt nötig. |
@@ -154,14 +164,24 @@ Komponentenrate statt der Kamerarate verschickt.
 ### Kopplung, die leicht übersehen wird
 
 `track_velocity_region_y_min` / `_max` von `base_cam` sind **regelungsrelevant**
-und werden gemeinsam mit der Greifzone festgelegt (B19, Nachtrag 3 / N2).
-Außerhalb dieser Region koppelt der Tracker die Längsposition statt sie zu messen
-und löscht Tracks nicht bei ausbleibender Detektion. Die Greifzone muss innerhalb
-liegen.
+und werden gemeinsam mit der Greifzone festgelegt (B19). Außerhalb der Region löscht der Tracker Tracks nicht bei ausbleibender Detektion,
+sondern erst an den Bandgrenzen. In der Greifzone soll ein verschwundenes Ziel aber
+innerhalb von drei Bildern auffallen.
+Die Greifzone muss deshalb innerhalb liegen.
+
+> Früher kam ein zweiter Grund hinzu: Außerhalb der Region *rechnete* der Tracker
+> die Längsposition, statt sie zu messen. Das entfällt mit Umsetzungsplan 2.4
+> (Nachtrag 6 / Z4).
 
 Ist-Werte aus dem Teststand: Region `−1000 … −500` mm, Tracker-Grenzen
 `−1080 … +375` mm. Ein Klotz auf dem Band wurde am 14.09. bei
-**x = 814, y = −874 mm** gemessen — die Bandmitte liegt also etwa dort.
+**x = 814, y = −874 mm** gemessen.
+
+> ⚠️ **Diese Werte liegen im System der Basiskamera mit ihren alten
+> Kalibrierwerten, nicht im Robotersystem** (Nachtrag 8 / F1, B23). Der Roboter
+> selbst hat das Band bei x = −0,70 … −0,93 m angetastet. Region, Tracker-Grenzen
+> und Greifzone müssen am Ende im selben System liegen wie die Zielposen des
+> Followers — also erst nach C3 festlegen.
 
 ---
 
@@ -178,6 +198,19 @@ Die Signalliste steht in `systemgraph.md`. Zwei Punkte, die aus der Prüfung am
   Signal kommt aus der Hardware.
 - `frame_to_signal` entfällt im Betrieb; der `object_follower` tritt an seine
   Stelle.
+- **`interface_streamer`:** `base_debug_image` ← `debug_image` von `base_cam`,
+  `robot_debug_image` ← `debug_image` von `robot_cam`, `world_state` ←
+  `data_tracker`, `follower_status` ← `object_follower`; `interface_image` → RViz.
+  Die Debug-Bilder kommen nur mit `debug_enable` in den Kamerakomponenten.
+  Rate 5 Hz — bei Rechenzeitmangel zuerst senken (Spec).
+- **`object_follower`, Stufen 4a/4b:** `robot_state` ← `cartesian_state` des
+  `robot_state_broadcaster`; `target` ← `target` des `priority_handler`;
+  `target_pose` → `attractor` des Signal Point Attractors; `gripper_close` →
+  `robotiq_gripper` (bis 4d immer offen); `picked_id` → `priority_handler` und
+  `data_tracker`. Die
+  **Pflichtparameter** `ws_*` und `observe_*` haben keinen Default — ohne sie lässt
+  sich die Komponente nicht konfigurieren (Nachtrag 8 / F3). Vorschläge für den
+  virtuellen Roboter: Abschnitt 9.
 
 ---
 
@@ -211,17 +244,20 @@ Nachtrag 5.
 |---|---|---|
 | Bandoberfläche in `world` | **53,6 mm** (±1 mm Ebenheit, ±5 mm systematisch) | B17, drei Antastpunkte |
 | Flansch → Backenspitze (geschlossen) | **245 mm** | mit Maßstab gemessen |
-| Flansch → Auflagenmitte (Griffpunkt) | **235 mm** | Backenspitze + halbe Auflagenhöhe (B15) |
-| `tool_offset_z_m` (TCP der UR-Steuerung) | **0,215 m** | C8 — **nur** zur Umrechnung fremder TCP-Werte |
+| Flansch → Auflagenmitte (Griffpunkt) = **`flange_to_grip_point_m`** | **235 mm** | Backenspitze − halbe Auflagenhöhe (B15). **Das ist der Follower-Parameter** (Nachtrag 6 / Z7) |
+| TCP der UR-Steuerung | 215 mm | C8 — **kein Parameter unserer Kette**, nur zur Umrechnung fremder TCP-Werte. ⚠️ Stand hier als `tool_offset_z_m = 0,215` — falsch, hätte flache Klötze ins Band gefahren |
 | Greifhöhe Flansch, 100-mm-Klotz stehend | **≈ 339 mm** | 53,6 + 50 + 235 |
-| Transferhöhe Flansch, Referenzklotz | **≈ 445 mm** | D12 |
+| Transferhöhe Flansch, Referenzklotz | **≈ 490 mm** — `transfer_height_m` | D12; vorher 445, ohne den gehaltenen Klotz (Nachtrag 10 / J1) |
 | Ablagepose Flansch | x = **−316,49** · y = **+476,21** · z = **+419,71** mm | B9 |
 | Ablage-Orientierung (w,x,y,z) | 0,006857 · 0,680692 · 0,732524 · −0,004575 | B9 |
 | Arbeitsraum Z im Flanschmaß (Anhaltspunkt) | **0,310…0,585 m** | Vorgängerprojekt + 0,215 (B10) |
 | Bandrichtung | praktisch die **y-Achse** | M10 |
 | Bandebenheit | quer 0,39°, längs 0,01° | M9 |
 
-Allgemeine Greifhöhe: `flansch_z_greifen = 53,6 + klotzhoehe/2 + 235` [mm].
+Allgemeine Greifhöhe: `flansch_z_greifen = 53,6 + max(klotzhoehe/2, 15) + 235` [mm].
+Die Untergrenze 15 mm (`min_grip_height_m`, 5 mm Luft) schützt das Band bei flachen
+Klötzen; darunter gilt ein Klotz als nicht greifbar (B15). Vorher fehlte das
+`max()` in dieser Formel.
 
 ⚠️ Die Ablagepose wurde aus einer Mitschrift gelesen, deren Rohdaten eingefroren
 wirkten (Programm auf dem Pendant vermutlich gestoppt). **Einmal bei laufendem
@@ -229,17 +265,58 @@ Programm gegenlesen**, bevor sie fest eingetragen wird.
 
 ---
 
+## 9. Vorläufige Werte für den virtuellen Roboter (Stufen 4a–4c)
+
+⚠️ **Nur für den virtuellen Roboter.** Arbeitsraum (B10) und Beobachtungspose (B8)
+sind nicht festgelegt, deshalb haben die Parameter keinen Default. Diese Werte
+reichen, um die Stufen am virtuellen Roboter zu fahren. Am echten Roboter gelten sie
+**nicht**, bis B10 nach `Safety/README.md` dokumentiert ist.
+
+| Parameter | Vorschlag | Herleitung |
+|---|---|---|
+| `ws_x_min` / `ws_x_max` | −1,10 / −0,20 m | Band bei x = −0,70 … −0,93 (M9), Ablagepose x = −0,316 (B9) |
+| `ws_y_min` / `ws_y_max` | −0,60 / +0,60 m | Zonen-Platzhalter −0,45 … +0,05, Ablagepose y = +0,476 |
+| `ws_z_min` / `ws_z_max` | 0,30 / 0,80 m | Greifhöhe eines 30-mm-Klotzes 0,304 m im Flanschmaß; Freihöhe 0,49 |
+| `observe_x` / `observe_y` | −0,80 / −0,10 m | über der Bandmitte, im Zonen-Platzhalter |
+| `observe_z` | 0,60 m | geschätzt; B8 legt sie an der Roboterkamera fest |
+| `observe_yaw_deg` | 90° | nahe der geteachten Ablagepose (94°), damit das Handgelenk wenig dreht |
+
+Die Werte stammen aus denselben Zahlen wie die Tests (`test_follower_logic.py`).
+
+**Für Stufe 4d zusätzlich:** Greifer-Rückmeldung von Hand über `toggle_signal` an
+`gripper_motion_done` und `gripper_has_object`, solange der echte Greifer fehlt.
+Die Ablagepose steht als Default aus B9 bereit. `weight_along`/`weight_across`
+bleiben auf 0 (Basiskamera allein, Z10). `gripper_yaw_offset_deg` erst nach D23.
+Mit der vorgeschlagenen Beobachtungshöhe 0,60 m passt `t_descend_s` = 2,0 im
+`priority_handler` zu `descend_speed_mps` = 0,15 (Nachtrag 10 / J2).
+
+**Für Stufe 4c:** `object_position` von `robot_cam` an den Follower, Gewichte
+schrittweise auf 1. `w_wirksam` in `follower_status` zeigt, ob die Kamera wirkt;
+bleibt es 0, meldet das Log den Grund (B24: Zeitdomäne, R4: anderer Klotz).
+
+**Für Stufe 4b zusätzlich:** `timeout_track_s` auf 10 s, damit der Roboter der
+ganzen Zone folgt (Nachtrag 9 / G4). Als Zielquelle `fake_objects.py` →
+`vectoring` → `priority_handler`; die Basiskamera bleibt bis B23 abgeklemmt.
+`err_laengs` in `follower_status` mitlesen: Am virtuellen Roboter sollte es mit
+`lead_time_s` = 1/K im Mittel null sein — nur wenn `linear_gains` des Attractors
+wirklich K ist.
+
+---
+
 ## Offen und nicht aus AICA zu beantworten
 
-~~`tool_offset_z_m` (C8)~~ — **erledigt 15.09.2026: 0,215 m.** Aus der
-Werkzeugkonfiguration der UR-Steuerung gelesen, über die Vorwärtskinematik
-gegengeprüft. Der TCP liegt auf der Flanschachse und ist nicht verdreht.
-⚠️ Für Höhen am Aufbau ist **nicht** dieser Wert zu verwenden, sondern die
-gemessenen 245 mm (Abschnitt 8).
+~~Versatz Flansch → Griffpunkt (C8)~~ — **erledigt, korrigiert 21.09.2026:
+`flange_to_grip_point_m` = 0,235 m** (Nachtrag 6 / Z7). ⚠️ Hier stand zuvor
+„`tool_offset_z_m` — erledigt: 0,215 m". Die 215 mm sind der TCP der UR-Steuerung,
+über die Vorwärtskinematik gegengeprüft, auf der Flanschachse und nicht verdreht —
+aber **nicht** der Abstand zum Griffpunkt. Für Höhen am Aufbau gelten die gemessenen
+245 mm zur Backenspitze, für die Zielpose die 235 mm zum Griffpunkt.
 
 ~~Bandoberflächenhöhe (B17)~~ und ~~Ablagepose (B9)~~ — **erledigt 15.09.2026**,
 Werte in Abschnitt 8.
 
 Aus AICA selbst nicht zu beantworten bleiben nur noch die Werte, die am Aufbau
-gemessen werden müssen — allen voran **B1** (Bandgeschwindigkeit; die Richtung
-ist geklärt) und **C3** (Extrinsik der Basiskamera, läuft beim Kommilitonen).
+gemessen werden müssen — allen voran **B21** (misst der Tracker auch außerhalb der
+alten Region sauber?) und **C3** (Extrinsik der Basiskamera, läuft beim
+Kommilitonen). **B1** ist keine Voraussetzung mehr: Die Bandgeschwindigkeit wird
+geschätzt, B1 prüft den Schätzer nur gegen (Nachtrag 6 / Z2).

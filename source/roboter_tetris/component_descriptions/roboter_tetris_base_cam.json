@@ -2,7 +2,7 @@
   "name": "Base Kamera",
   "description": {
     "brief": "Computer Vision für Fließbandsteine (Port der C++-Detektion)",
-    "details": "Treuer Python-Port der C++-Detektion des Vorgängerprojekts: Tiefenfilterung, Konturensuche, robuste HSV-Farbbestimmung, Kamera→Roboter-Transformation und Tracking mit Geschwindigkeitsschätzung/Prädiktion. Konsumiert die Signale des AICA-RealSense-Blocks (kein Kamera-Hardware-Zugriff). Output 'objects': flaches Array, Stride 10 [id, color, x, y, z, orientation, vy, length, width, height], x/y/z in mm im Roboter-Frame."
+    "details": "Treuer Python-Port der C++-Detektion des Vorgängerprojekts: Tiefenfilterung, Konturensuche, robuste HSV-Farbbestimmung, Kamera→Roboter-Transformation und Tracking mit Geschwindigkeitsschätzung/Prädiktion. Konsumiert die Signale des AICA-RealSense-Blocks (kein Kamera-Hardware-Zugriff). Output 'objects' ist Vertrag S1: [t, n, v_band] + n×9 in SI-Einheiten im Roboter-Frame. Der Tracker vergibt die IDs und übernimmt jede zugeordnete Messung unverändert; die Geschwindigkeit je Klotz schätzt erst 'vectoring' (S3)."
   },
   "registration": "roboter_tetris::BaseCam",
   "inherits": "modulo_components::LifecycleComponent",

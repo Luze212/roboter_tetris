@@ -34,28 +34,45 @@ The scene model (`FakeBelt`) is free of ROS imports so it can be unit-tested.
 
 Defaults and where they come from
 ---------------------------------
-Everything measured at the setup is used; everything still open (B1) is a
-documented guess and a command-line option.
+Everything measured at the setup is used; everything still open (B1, B19,
+B23) is a documented guess and a command-line option.
 
-* **Belt direction is -y.** A hand-move "down the belt" on 15.09.2026 came out
-  as -275.5 mm in y against +32.7 mm in x, so the belt runs along the y axis.
-* **Lateral position x = 0.814 m.** A block on the belt measured on 14.09.2026
-  at x = 814, y = -874 mm; that is roughly the middle of the belt.
-* **Spawn/despawn in y** follow the tracker window of the predecessor group:
-  it deletes objects outside y = +375 ... -1080 mm.
+**All positions are in the robot frame** (`world` of the robot, Nachtrag 8 /
+F1), because the follower moves the robot there. The base camera's legacy
+calibration does not agree with it yet (B23): it reported a block at x = +0.814,
+where the robot touched the belt at x = -0.70 ... -0.93.
+
+* **Belt along y.** A hand-move "down the belt" on 15.09.2026 came out as
+  -275.5 mm in y against +32.7 mm in x (M10). The *sign* is B1 and open;
+  -y is a guess.
+* **Lateral position x = -0.816 m**, the middle of the belt surface the robot
+  touched at x = -0.70 ... -0.93 (M9).
+* **Spawn/despawn at y = +0.60 / -0.80** -- a GUESS: a 1.4 m stretch around the
+  touched section (y = -0.20 ... +0.07). Where the belt starts and ends in the
+  robot frame is not measured yet.
 * **z = belt surface + height/2.** The belt surface is at z = 53.6 mm (B17).
-  Note the contract calls S1 field 4 the block's *top edge*, but the
-  measurement disagrees: base_cam reported 103.1 mm for a 100 mm block, and
-  0.0536 + 0.050 = 0.1036 m matches that to within 0.5 mm. This generator
-  reproduces what the camera actually emits, not what the table claims.
+  base_cam reported 103.1 mm for a 100 mm block, and 0.0536 + 0.050 = 0.1036 m
+  matches that to within 0.5 mm -- so S1 field 4 is mid-height, not the top
+  edge (the contract documents this since 21.09.2026).
 * **Belt speed 0.1 m/s is a GUESS** -- B1 is open. The tracker discards
   anything below 30 mm/s and reports 0, so stay above that.
+
+Two things a real belt does that matter for testing `vectoring`
+----------------------------------------------------------------
+* **Measurement noise** (`noise_sigma_m`). Without it every velocity estimate is
+  trivially exact and a test proves nothing. base_cam scattered by 0.2...0.6 mm
+  on a resting block (M5); a moving one is not measured yet.
+* **Toppling on placement** (`Topple`, `--topple-id`). The only disturbance that
+  actually happens: blocks are placed freely and run with the belt, but one may
+  fall over while settling. Its centre jumps and its shape changes. There is no
+  "stalled" block -- jammed or knocked blocks do not occur (Nachtrag 6 / Z3).
 """
 
 from dataclasses import dataclass
 from typing import List, Optional, Sequence
 
 import os
+import random
 import sys
 
 # test/tools -> the package root that holds the roboter_tetris/ package.
@@ -66,10 +83,27 @@ from roboter_tetris.contracts import (  # noqa: E402
 )
 
 BELT_SURFACE_Z_M = 0.0536      # B17, measured 15.09.2026
-BELT_CENTER_X_M = 0.814        # measured block position, 14.09.2026
-Y_SPAWN_M = 0.300              # inside the tracker window (+375 mm)
-Y_DESPAWN_M = -1.080           # tracker deletes beyond this
+# Robot frame (Nachtrag 8 / F1).
+BELT_CENTER_X_M = -0.816       # middle of the touched belt surface, M9
+Y_SPAWN_M = 0.600              # GUESS: upstream end of the simulated stretch
+Y_DESPAWN_M = -0.800           # GUESS: downstream end
 DEFAULT_V_BELT_MPS = -0.100    # GUESS, B1 open; negative = along -y
+
+
+@dataclass
+class Topple:
+    """A block falling over while it settles after placement.
+
+    From ``after_s`` (seconds after spawn) on, its centre is shifted and its
+    shape is the lying one. Build it with :func:`topple_forward` rather than by
+    hand -- that gets the geometry right.
+    """
+
+    after_s: float
+    shift_along_m: float          # centre jump along the belt's running direction
+    length: float                 # shape once lying
+    width: float
+    height: float
 
 
 @dataclass
@@ -84,18 +118,35 @@ class FakeBlock:
     spawn_t: float = 0.0
     x_m: float = BELT_CENTER_X_M
     orientation: float = 0.0
-    #: Stop the block here for good -- used to produce plausibility status 1
-    #: ("stalled / stuck") downstream in `vectoring`.
-    stall_at_y_m: Optional[float] = None
+    topple: Optional[Topple] = None
+
+
+def topple_forward(block: FakeBlock, after_s: float = 0.3) -> Topple:
+    """A standing block tipping over its front edge, in the running direction.
+
+    It pivots about the bottom edge; lying, it is ``height`` long. Its centre was
+    ``length/2`` from that edge and ends up ``height/2`` from it, so it jumps by
+    ``(height - length) / 2`` -- 25 mm for the 50 x 50 x 100 reference block.
+    """
+    if block.height <= block.length:
+        raise ValueError(
+            f"Klotz {block.id} steht nicht hochkant "
+            f"({block.length:.3f} x {block.width:.3f} x {block.height:.3f} m) "
+            "und kann nicht nach vorn umkippen")
+    return Topple(after_s=after_s,
+                  shift_along_m=(block.height - block.length) / 2.0,
+                  length=block.height, width=block.width, height=block.length)
 
 
 def default_blocks() -> List[FakeBlock]:
     """Three blocks, staggered so they appear one after another.
 
     The sizes are chosen to exercise the graspability check in
-    `priority_handler`: the 100 mm block is the reference, the flat one sits
-    just above the ~24 mm lower bound from B15, and the wide one approaches the
-    127 mm gripper opening from B16.
+    `priority_handler`: the 100 mm block is the reference and the only one that
+    can topple, the wide one approaches the 127 mm gripper opening (B16), and
+    the 25 mm cube is **deliberately below** the ~30 mm graspability limit
+    (B15 with 5 mm air, Nachtrag 6 / Z7) -- a negative case: it must never be
+    selected.
     """
     return [
         FakeBlock(id=1, color=COLOR_RED, length=0.050, width=0.050,
@@ -118,30 +169,43 @@ class FakeBelt:
                  v_belt_mps: float = DEFAULT_V_BELT_MPS,
                  y_spawn_m: float = Y_SPAWN_M,
                  y_despawn_m: float = Y_DESPAWN_M,
-                 belt_surface_z_m: float = BELT_SURFACE_Z_M) -> None:
+                 belt_surface_z_m: float = BELT_SURFACE_Z_M,
+                 noise_sigma_m: float = 0.0,
+                 seed: Optional[int] = None) -> None:
         self.blocks = list(blocks)
         self.v_belt_mps = v_belt_mps
         self.y_spawn_m = y_spawn_m
         self.y_despawn_m = y_despawn_m
         self.belt_surface_z_m = belt_surface_z_m
+        #: Gaussian noise on x, y and z of every reported object. Drawn from a
+        #: private generator: the same seed and the same call sequence give the
+        #: same scene. Two calls for the same ``t`` give different noise.
+        self.noise_sigma_m = noise_sigma_m
+        self._rng = random.Random(seed)
 
     def y_of(self, block: FakeBlock, t: float) -> Optional[float]:
         """Longitudinal position at time ``t``, or ``None`` if not on the belt."""
         if t < block.spawn_t:
             return None
         y = self.y_spawn_m + self.v_belt_mps * (t - block.spawn_t)
-        if block.stall_at_y_m is not None:
-            # Past the stall point the block sits still -- what a jammed or
-            # toppled block looks like to the tracker.
-            if self.v_belt_mps < 0.0:
-                y = max(y, block.stall_at_y_m)
-            else:
-                y = min(y, block.stall_at_y_m)
+        if self._toppled(block, t):
+            # The centre jumped forward, i.e. in the running direction.
+            y += block.topple.shift_along_m * (1.0 if self.v_belt_mps > 0.0 else -1.0)
         if self.v_belt_mps < 0.0 and y < self.y_despawn_m:
             return None
         if self.v_belt_mps > 0.0 and y > self.y_despawn_m:
             return None
         return y
+
+    @staticmethod
+    def _toppled(block: FakeBlock, t: float) -> bool:
+        return (block.topple is not None
+                and t - block.spawn_t >= block.topple.after_s)
+
+    def _noise(self) -> float:
+        if self.noise_sigma_m <= 0.0:
+            return 0.0
+        return self._rng.gauss(0.0, self.noise_sigma_m)
 
     def objects_at(self, t: float) -> List[ObjectEntry]:
         out = []
@@ -149,14 +213,19 @@ class FakeBelt:
             y = self.y_of(block, t)
             if y is None:
                 continue
+            if self._toppled(block, t):
+                length, width, height = (block.topple.length, block.topple.width,
+                                         block.topple.height)
+            else:
+                length, width, height = block.length, block.width, block.height
             out.append(ObjectEntry(
                 id=float(block.id), color=float(block.color),
-                x=block.x_m, y=y,
+                x=block.x_m + self._noise(), y=y + self._noise(),
                 # See the module docstring: this mirrors what base_cam really
                 # reports, which is mid-height, not the top edge.
-                z=self.belt_surface_z_m + block.height / 2.0,
+                z=self.belt_surface_z_m + height / 2.0 + self._noise(),
                 orientation=block.orientation,
-                length=block.length, width=block.width, height=block.height,
+                length=length, width=width, height=height,
             ))
         return out
 
@@ -177,12 +246,18 @@ def build_parser():
     p.add_argument("--velocity", type=float, default=DEFAULT_V_BELT_MPS,
                    help="belt velocity in m/s along y; negative runs along -y "
                         "(default: %(default)s -- a GUESS, B1 is open)")
-    p.add_argument("--stall-id", type=int, default=None,
-                   help="stop this block permanently, to check that it ends up "
-                        "with plausibility status 1 in vectoring")
-    p.add_argument("--stall-at-y", type=float, default=-0.700,
-                   help="y in m where --stall-id stops (default: %(default)s, "
-                        "inside the tracker measurement region)")
+    p.add_argument("--topple-id", type=int, default=None,
+                   help="let this block fall over shortly after placement, to "
+                        "check that vectoring keeps it settling (status 3) until "
+                        "it runs evenly again")
+    p.add_argument("--topple-after", type=float, default=0.3,
+                   help="seconds after placement when --topple-id lands on its "
+                        "side (default: %(default)s)")
+    p.add_argument("--noise", type=float, default=0.0005,
+                   help="measurement noise in m on x, y, z (default: %(default)s, "
+                        "the 0.5 mm base_cam showed on a resting block)")
+    p.add_argument("--seed", type=int, default=None,
+                   help="seed for the noise, for a reproducible scene")
     p.add_argument("--duration", type=float, default=0.0,
                    help="stop after this many seconds (0 = run forever)")
     p.add_argument("--dry-run", action="store_true",
@@ -192,15 +267,19 @@ def build_parser():
 
 def build_belt(args) -> FakeBelt:
     blocks = default_blocks()
-    if args.stall_id is not None:
+    if args.topple_id is not None:
         for b in blocks:
-            if b.id == args.stall_id:
-                b.stall_at_y_m = args.stall_at_y
+            if b.id == args.topple_id:
+                try:
+                    b.topple = topple_forward(b, after_s=args.topple_after)
+                except ValueError as exc:
+                    raise SystemExit(f"--topple-id {args.topple_id}: {exc}")
                 break
         else:
-            raise SystemExit(f"--stall-id {args.stall_id}: kein solcher Block "
+            raise SystemExit(f"--topple-id {args.topple_id}: kein solcher Block "
                              f"(vorhanden: {[b.id for b in blocks]})")
-    return FakeBelt(blocks, v_belt_mps=args.velocity)
+    return FakeBelt(blocks, v_belt_mps=args.velocity,
+                    noise_sigma_m=args.noise, seed=args.seed)
 
 
 def run_dry(belt: FakeBelt, args) -> None:
