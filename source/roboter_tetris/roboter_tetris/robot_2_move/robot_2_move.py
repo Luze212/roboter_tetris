@@ -5,18 +5,22 @@ Attractor.  The component publishes a smooth Cartesian target trajectory; the
 Point Attractor and the robot controller execute the physical motion.
 """
 
-import json
 import math
-import os
-from typing import Optional, Tuple
+from typing import Tuple
 
 import numpy as np
 import state_representation as sr
 from clproto import MessageType
 from modulo_components.lifecycle_component import LifecycleComponent
 from modulo_core.encoded_state import EncodedState
-from modulo_interfaces.srv import StringTrigger
 from std_msgs.msg import Float64MultiArray
+from std_srvs.srv import Trigger
+
+
+# Temporary translation from the robot base/world frame to the conveyor frame.
+# Convention: p_conveyor_mm = p_world_mm + WORLD_TO_CONVEYOR_OFFSET_MM.
+# Set the three values after measuring the conveyor origin in the world frame.
+WORLD_TO_CONVEYOR_OFFSET_MM = np.array([0.0, 0.0, 0.0], dtype=np.float64)
 
 
 def rotation_matrix_to_quaternion(rotation: np.ndarray) -> np.ndarray:
@@ -53,10 +57,10 @@ def rotation_matrix_to_quaternion(rotation: np.ndarray) -> np.ndarray:
 class Robot2Move(LifecycleComponent):
     """Move robot 2 to an operator-entered Cartesian position.
 
-    Target coordinates are millimetres.  They are interpreted in ``conveyor``
-    coordinates by default, or directly in the robot base ``world`` frame when
-    ``coordinate_frame`` is set to ``world``.  The current EE orientation is
-    retained for every move.
+    Target coordinates are millimetres.  They are interpreted directly in the
+    robot base ``world`` frame by default, or in the translated ``conveyor``
+    frame when ``coordinate_frame`` is set to ``conveyor``.  The current EE
+    orientation is retained for every move.
     """
 
     def __init__(self, node_name: str, *args, **kwargs) -> None:
@@ -68,11 +72,8 @@ class Robot2Move(LifecycleComponent):
                            "Ziel-Y in mm im gewählten Koordinatenframe.")
         self.add_parameter(sr.Parameter("target_z_mm", 200.0, sr.ParameterType.DOUBLE),
                            "Ziel-Z in mm im gewählten Koordinatenframe.")
-        self.add_parameter(sr.Parameter("coordinate_frame", "conveyor", sr.ParameterType.STRING),
+        self.add_parameter(sr.Parameter("coordinate_frame", "world", sr.ParameterType.STRING),
                            "Zielkoordinaten: conveyor oder world.")
-        self.add_parameter(
-            sr.Parameter("calibration_file_path", "/tmp/calibration.json", sr.ParameterType.STRING),
-            "Pfad zur calibration.json; nur für den conveyor-Frame erforderlich.")
         self.add_parameter(sr.Parameter("move_speed_m_s", 0.05, sr.ParameterType.DOUBLE),
                            "Geplante Geschwindigkeit der Zieltrajektorie in m/s.")
         self.add_parameter(sr.Parameter("max_travel_distance_m", 0.50, sr.ParameterType.DOUBLE),
@@ -93,8 +94,9 @@ class Robot2Move(LifecycleComponent):
         self.add_predicate("at_target", False)
         self.add_predicate("has_failed", False)
 
-        # The installed Modulo Python API infers the supported AICA trigger
-        # service type from the callback.  Its signature is (name, callback).
+        # The installed Modulo Python API expects (service_name, callback).
+        # These services deliberately use AICA's default trigger type with no
+        # payload; all target values are component parameters.
         self.add_service("move_to_target", self._on_move_to_target)
         self.add_service("stop_motion", self._on_stop_motion)
 
@@ -104,7 +106,6 @@ class Robot2Move(LifecycleComponent):
         self._target_position = None
         self._held_orientation = None
         self._duration_s = 0.0
-        self._T_robot_conveyor: Optional[np.ndarray] = None
 
     def on_configure_callback(self) -> bool:
         return True
@@ -112,13 +113,6 @@ class Robot2Move(LifecycleComponent):
     def on_activate_callback(self) -> bool:
         self._state = "IDLE"
         self._state_start_time = None
-        # Load this already on activation so the operator can inspect the
-        # conveyor-frame position before issuing the first move command.  A
-        # world-frame move is independent of the calibration file.
-        frame = str(self.get_parameter("coordinate_frame").get_value()).lower()
-        self._T_robot_conveyor = (
-            self._load_robot_conveyor_transform() if frame == "conveyor" else None
-        )
         self._current_position_world_mm = []
         self._current_position_conveyor_mm = []
         self.set_predicate("is_moving", False)
@@ -161,42 +155,21 @@ class Robot2Move(LifecycleComponent):
             ], dtype=np.float64)
         return position_m, rotation_matrix_to_quaternion(rotation)
 
-    def _load_robot_conveyor_transform(self) -> Optional[np.ndarray]:
-        """Load and validate the conveyor-to-world homogeneous transform."""
-        calibration_path = str(self.get_parameter("calibration_file_path").get_value())
-        if not os.path.isfile(calibration_path):
-            self.get_logger().error(f"Calibration file not found: {calibration_path}")
-            return None
-        try:
-            with open(calibration_path, "r", encoding="utf-8") as file:
-                data = json.load(file)
-            matrix = data.get("transformations", {}).get("T_robot_conveyor", {}).get("homogeneous_matrix")
-            if matrix is None:
-                matrix = data.get("conveyor_frame", {}).get("matrix_4x4", data.get("T_robot_conveyor"))
-            transform = np.asarray(matrix, dtype=np.float64)
-            if transform.shape != (4, 4) or not np.all(np.isfinite(transform)):
-                raise ValueError("T_robot_conveyor must be a finite 4x4 matrix")
-            return transform
-        except (OSError, ValueError, TypeError, json.JSONDecodeError) as error:
-            self.get_logger().error(f"Could not read T_robot_conveyor: {error}")
-            return None
-
-    def _target_world_position(self) -> Optional[np.ndarray]:
+    def _target_world_position(self) -> np.ndarray:
         target_mm = np.array([
             float(self.get_parameter("target_x_mm").get_value()),
             float(self.get_parameter("target_y_mm").get_value()),
             float(self.get_parameter("target_z_mm").get_value()),
         ], dtype=np.float64)
         if not np.all(np.isfinite(target_mm)):
-            self.get_logger().error("Target coordinates must be finite numbers.")
-            return None
+            raise ValueError("Target coordinates must be finite numbers.")
         frame = str(self.get_parameter("coordinate_frame").get_value()).lower()
         if frame == "world":
             return target_mm / 1000.0
-        self._T_robot_conveyor = self._load_robot_conveyor_transform()
-        if self._T_robot_conveyor is None:
-            return None
-        return (self._T_robot_conveyor @ np.append(target_mm / 1000.0, 1.0))[:3]
+        if frame == "conveyor":
+            # p_conveyor = p_world + offset  =>  p_world = p_conveyor - offset
+            return (target_mm - WORLD_TO_CONVEYOR_OFFSET_MM) / 1000.0
+        raise ValueError("coordinate_frame must be 'world' or 'conveyor'.")
 
     def _fail(self, message: str) -> None:
         self._state = "IDLE"
@@ -205,9 +178,9 @@ class Robot2Move(LifecycleComponent):
         self.set_predicate("has_failed", True)
         self.get_logger().error(message)
 
-    def _on_move_to_target(self, request: StringTrigger.Request) -> StringTrigger.Response:
+    def _on_move_to_target(self, request: Trigger.Request) -> Trigger.Response:
         del request
-        response = StringTrigger.Response()
+        response = Trigger.Response()
         try:
             current_position, current_orientation = self._read_ee_pose()
         except Exception as error:
@@ -216,13 +189,13 @@ class Robot2Move(LifecycleComponent):
             response.message = "Keine gültige Robot EE Pose verfügbar."
             return response
 
-        target_position = self._target_world_position()
-        if target_position is None:
-            self._fail("Target position could not be calculated.")
+        try:
+            target_position = self._target_world_position()
+        except ValueError as error:
+            self._fail(str(error))
             response.success = False
-            response.message = "Zielposition konnte nicht berechnet werden."
+            response.message = "Ungültige Zielkoordinaten oder Coordinate Frame."
             return response
-
         distance_m = float(np.linalg.norm(target_position - current_position))
         maximum_m = float(self.get_parameter("max_travel_distance_m").get_value())
         if distance_m > maximum_m:
@@ -245,9 +218,9 @@ class Robot2Move(LifecycleComponent):
         response.message = f"Fahrt gestartet: {distance_m * 1000.0:.1f} mm."
         return response
 
-    def _on_stop_motion(self, request: StringTrigger.Request) -> StringTrigger.Response:
+    def _on_stop_motion(self, request: Trigger.Request) -> Trigger.Response:
         del request
-        response = StringTrigger.Response()
+        response = Trigger.Response()
         try:
             position, orientation = self._read_ee_pose()
             self._target_pose.set_position(position)
@@ -271,11 +244,9 @@ class Robot2Move(LifecycleComponent):
             return
 
         self._current_position_world_mm = (current_position * 1000.0).tolist()
-        if self._T_robot_conveyor is not None:
-            conveyor_position = np.linalg.inv(self._T_robot_conveyor) @ np.append(current_position, 1.0)
-            self._current_position_conveyor_mm = (conveyor_position[:3] * 1000.0).tolist()
-        else:
-            self._current_position_conveyor_mm = []
+        self._current_position_conveyor_mm = (
+            current_position * 1000.0 + WORLD_TO_CONVEYOR_OFFSET_MM
+        ).tolist()
 
         if self._state == "IDLE":
             # Holding the current measured pose avoids publishing an uninitialized

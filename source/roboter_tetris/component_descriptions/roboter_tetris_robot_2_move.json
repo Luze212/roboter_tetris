@@ -2,7 +2,7 @@
   "name": "Robot 2 Move",
   "description": {
     "brief": "Fährt Roboter 2 zu einer manuell eingegebenen kartesischen Zielposition.",
-    "details": "Erzeugt eine kartesische Target EE Pose für den Signal Point Attractor. Die Zielwerte werden in Millimetern im Förderband-Frame (conveyor) oder Roboterbasis-Frame (world) eingegeben. Während der Fahrt bleibt die aktuelle Endeffektororientierung erhalten."
+    "details": "Erzeugt eine kartesische Target EE Pose für den Signal Point Attractor. Die Zielwerte werden in Millimetern im Roboterbasis-Frame (world) oder im Förderband-Frame (conveyor) eingegeben. conveyor nutzt derzeit nur eine feste XYZ-Verschiebung von world nach conveyor mit [0, 0, 0] mm; diese Werte werden später im Code kalibriert. Während der Fahrt bleibt die aktuelle Endeffektororientierung erhalten."
   },
   "registration": "roboter_tetris::Robot2Move",
   "inherits": "modulo_components::LifecycleComponent",
@@ -29,7 +29,7 @@
     },
     {
       "display_name": "Current Position Conveyor (mm)",
-      "description": "Aktuelle EE-Position als [X, Y, Z] im Förderband-Frame in mm; leer ohne geladene Förderband-Kalibrierung.",
+      "description": "Aktuelle EE-Position als [X, Y, Z] im Förderband-Frame in mm. Derzeit gilt: conveyor = world + feste Verschiebung [0, 0, 0] mm; diese drei Werte werden später im Code angepasst.",
       "signal_name": "current_position_conveyor_mm",
       "signal_type": "double_array"
     }
@@ -38,14 +38,12 @@
     {
       "display_name": "Move To Target",
       "description": "Liest die Zielparameter ein und startet die Zieltrajektorie.",
-      "service_name": "move_to_target",
-      "payload_format": "Optionaler Text wird ignoriert. Die Zielwerte werden aus den Komponentenparametern gelesen."
+      "service_name": "move_to_target"
     },
     {
       "display_name": "Stop Motion",
       "description": "Hält die aktuelle gemessene EE-Pose als neues Ziel.",
-      "service_name": "stop_motion",
-      "payload_format": "Optionaler Text wird ignoriert."
+      "service_name": "stop_motion"
     }
   ],
   "predicates": [
@@ -61,7 +59,7 @@
     },
     {
       "display_name": "Has Failed",
-      "description": "True nach ungültiger Pose, Kalibrierdatei oder einem abgelehnten Ziel.",
+      "description": "True nach ungültiger Pose oder einem abgelehnten Ziel.",
       "predicate_name": "has_failed"
     }
   ],
@@ -92,18 +90,10 @@
     },
     {
       "display_name": "Coordinate Frame",
-      "description": "conveyor für Förderbandkoordinaten oder world für Roboterbasis-Koordinaten.",
+      "description": "Exakt 'world' eintragen: XYZ direkt im Roboterbasis-Frame. Exakt 'conveyor' eintragen: XYZ im Förderband-Frame. Aktuell wird dafür nur die feste Verschiebung conveyor = world + [0, 0, 0] mm verwendet; sie wird später im Code kalibriert.",
       "parameter_name": "coordinate_frame",
       "parameter_type": "string",
-      "default_value": "conveyor",
-      "dynamic": true
-    },
-    {
-      "display_name": "Calibration File Path",
-      "description": "JSON-Kalibrierdatei mit T_robot_conveyor, erforderlich für coordinate_frame=conveyor.",
-      "parameter_name": "calibration_file_path",
-      "parameter_type": "string",
-      "default_value": "/tmp/calibration.json",
+      "default_value": "world",
       "dynamic": true
     },
     {
