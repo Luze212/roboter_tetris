@@ -93,8 +93,10 @@ class Robot2Move(LifecycleComponent):
         self.add_predicate("at_target", False)
         self.add_predicate("has_failed", False)
 
-        self.add_service("move_to_target", StringTrigger, self._on_move_to_target)
-        self.add_service("stop_motion", StringTrigger, self._on_stop_motion)
+        # The installed Modulo Python API infers the supported AICA trigger
+        # service type from the callback.  Its signature is (name, callback).
+        self.add_service("move_to_target", self._on_move_to_target)
+        self.add_service("stop_motion", self._on_stop_motion)
 
         self._state = "IDLE"
         self._state_start_time = None
