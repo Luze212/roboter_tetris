@@ -98,7 +98,7 @@
     },
     {
       "display_name": "Calibration File Path",
-      "description": "Kalibrierdatei mit T_robot_conveyor, erforderlich für coordinate_frame=conveyor.",
+      "description": "JSON-Kalibrierdatei mit T_robot_conveyor, erforderlich für coordinate_frame=conveyor.",
       "parameter_name": "calibration_file_path",
       "parameter_type": "string",
       "default_value": "/tmp/calibration.json",

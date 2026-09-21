@@ -12,7 +12,6 @@ from typing import Optional, Tuple
 
 import numpy as np
 import state_representation as sr
-import yaml
 from clproto import MessageType
 from modulo_components.lifecycle_component import LifecycleComponent
 from modulo_core.encoded_state import EncodedState
@@ -73,7 +72,7 @@ class Robot2Move(LifecycleComponent):
                            "Zielkoordinaten: conveyor oder world.")
         self.add_parameter(
             sr.Parameter("calibration_file_path", "/tmp/calibration.json", sr.ParameterType.STRING),
-            "Pfad zur calibration.yaml/json; nur für den conveyor-Frame erforderlich.")
+            "Pfad zur calibration.json; nur für den conveyor-Frame erforderlich.")
         self.add_parameter(sr.Parameter("move_speed_m_s", 0.05, sr.ParameterType.DOUBLE),
                            "Geplante Geschwindigkeit der Zieltrajektorie in m/s.")
         self.add_parameter(sr.Parameter("max_travel_distance_m", 0.50, sr.ParameterType.DOUBLE),
@@ -164,7 +163,7 @@ class Robot2Move(LifecycleComponent):
             return None
         try:
             with open(calibration_path, "r", encoding="utf-8") as file:
-                data = yaml.safe_load(file) if calibration_path.endswith((".yaml", ".yml")) else json.load(file)
+                data = json.load(file)
             matrix = data.get("transformations", {}).get("T_robot_conveyor", {}).get("homogeneous_matrix")
             if matrix is None:
                 matrix = data.get("conveyor_frame", {}).get("matrix_4x4", data.get("T_robot_conveyor"))
@@ -172,7 +171,7 @@ class Robot2Move(LifecycleComponent):
             if transform.shape != (4, 4) or not np.all(np.isfinite(transform)):
                 raise ValueError("T_robot_conveyor must be a finite 4x4 matrix")
             return transform
-        except (OSError, ValueError, TypeError, json.JSONDecodeError, yaml.YAMLError) as error:
+        except (OSError, ValueError, TypeError, json.JSONDecodeError) as error:
             self.get_logger().error(f"Could not read T_robot_conveyor: {error}")
             return None
 
