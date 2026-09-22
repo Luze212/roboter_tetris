@@ -14,7 +14,6 @@ from clproto import MessageType
 from modulo_components.lifecycle_component import LifecycleComponent
 from modulo_core.encoded_state import EncodedState
 from std_msgs.msg import Float64MultiArray
-from std_srvs.srv import Trigger
 
 
 # Temporary translation from the robot base/world frame to the conveyor frame.
@@ -178,31 +177,24 @@ class Robot2Move(LifecycleComponent):
         self.set_predicate("has_failed", True)
         self.get_logger().error(message)
 
-    def _on_move_to_target(self, request: Trigger.Request) -> Trigger.Response:
-        del request
-        response = Trigger.Response()
+    def _on_move_to_target(self) -> dict:
+        """Start an empty AICA trigger service using the current parameters."""
         try:
             current_position, current_orientation = self._read_ee_pose()
         except Exception as error:
             self._fail(f"No valid robot_ee_pose received: {error}")
-            response.success = False
-            response.message = "Keine gültige Robot EE Pose verfügbar."
-            return response
+            return {"success": False, "message": "Keine gültige Robot EE Pose verfügbar."}
 
         try:
             target_position = self._target_world_position()
         except ValueError as error:
             self._fail(str(error))
-            response.success = False
-            response.message = "Ungültige Zielkoordinaten oder Coordinate Frame."
-            return response
+            return {"success": False, "message": "Ungültige Zielkoordinaten oder Coordinate Frame."}
         distance_m = float(np.linalg.norm(target_position - current_position))
         maximum_m = float(self.get_parameter("max_travel_distance_m").get_value())
         if distance_m > maximum_m:
             self._fail(f"Rejected target: {distance_m:.3f} m exceeds limit {maximum_m:.3f} m.")
-            response.success = False
-            response.message = "Ziel liegt außerhalb der eingestellten Sicherheitsdistanz."
-            return response
+            return {"success": False, "message": "Ziel liegt außerhalb der eingestellten Sicherheitsdistanz."}
 
         speed_m_s = float(self.get_parameter("move_speed_m_s").get_value())
         self._start_position = current_position
@@ -214,28 +206,21 @@ class Robot2Move(LifecycleComponent):
         self.set_predicate("is_moving", True)
         self.set_predicate("at_target", distance_m < 0.001)
         self.set_predicate("has_failed", False)
-        response.success = True
-        response.message = f"Fahrt gestartet: {distance_m * 1000.0:.1f} mm."
-        return response
+        return {"success": True, "message": f"Fahrt gestartet: {distance_m * 1000.0:.1f} mm."}
 
-    def _on_stop_motion(self, request: Trigger.Request) -> Trigger.Response:
-        del request
-        response = Trigger.Response()
+    def _on_stop_motion(self) -> dict:
+        """Stop with an empty AICA trigger service by holding the current pose."""
         try:
             position, orientation = self._read_ee_pose()
             self._target_pose.set_position(position)
             self._target_pose.set_orientation(orientation)
         except Exception as error:
             self._fail(f"Stop failed because robot pose is unavailable: {error}")
-            response.success = False
-            response.message = "Stop nicht möglich: keine gültige Robot EE Pose."
-            return response
+            return {"success": False, "message": "Stop nicht möglich: keine gültige Robot EE Pose."}
         self._state = "IDLE"
         self.set_predicate("is_moving", False)
         self.set_predicate("at_target", True)
-        response.success = True
-        response.message = "Zielpose auf aktuelle Roboterposition gehalten."
-        return response
+        return {"success": True, "message": "Zielpose auf aktuelle Roboterposition gehalten."}
 
     def on_step_callback(self) -> None:
         try:
