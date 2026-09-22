@@ -1,0 +1,19 @@
+{
+  "frame": "world",
+  "unit": "m",
+  "inclusive_bounds": true,
+  "regions": [
+    {
+      "name": "main_workspace",
+      "x": [-1.2, -0.53],
+      "y": [-0.32, 0.43],
+      "z": [0.305, 0.665]
+    },
+    {
+      "name": "elevated_x_extension",
+      "x": [-0.53, -0.33],
+      "y": [-0.32, 0.43],
+      "z": [0.483, 0.665]
+    }
+  ]
+}

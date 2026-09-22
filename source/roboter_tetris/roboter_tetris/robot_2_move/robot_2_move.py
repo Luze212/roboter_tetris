@@ -5,8 +5,10 @@ Attractor.  The component publishes a smooth Cartesian target trajectory; the
 Point Attractor and the robot controller execute the physical motion.
 """
 
+import json
 import math
-from typing import Tuple
+from pathlib import Path
+from typing import List, Optional, Tuple
 
 import numpy as np
 import state_representation as sr
@@ -79,6 +81,9 @@ class Robot2Move(LifecycleComponent):
             "Ziel-Z in mm. Bei conveyor: +Z ist über der Förderbandebene und entspricht +Z in world.")
         self.add_parameter(sr.Parameter("coordinate_frame", "world", sr.ParameterType.STRING),
                            "'world': Roboterbasis-Koordinaten. 'conveyor': Ursprung [-880, 1140, 305] mm in world, X/Y invertiert.")
+        self.add_parameter(
+            sr.Parameter("workspace_limits_file_path", "", sr.ParameterType.STRING),
+            "Optionale JSON-Datei mit zulässigen world-Arbeitsraumregionen. Leer verwendet die mitgelieferte workspace_limits.json.")
         self.add_parameter(sr.Parameter("move_speed_m_s", 0.05, sr.ParameterType.DOUBLE),
                            "Geplante Geschwindigkeit der Zieltrajektorie in m/s.")
         self.add_parameter(sr.Parameter("max_travel_distance_m", 0.50, sr.ParameterType.DOUBLE),
@@ -98,6 +103,7 @@ class Robot2Move(LifecycleComponent):
         self.add_predicate("is_moving", False)
         self.add_predicate("at_target", False)
         self.add_predicate("has_failed", False)
+        self.add_predicate("has_valid_workspace", False)
 
         # The installed Modulo Python API expects (service_name, callback).
         # These services deliberately use AICA's default trigger type with no
@@ -111,6 +117,7 @@ class Robot2Move(LifecycleComponent):
         self._target_position = None
         self._held_orientation = None
         self._duration_s = 0.0
+        self._workspace_regions: List[Tuple[str, np.ndarray, np.ndarray]] = []
 
     def on_configure_callback(self) -> bool:
         return True
@@ -120,9 +127,10 @@ class Robot2Move(LifecycleComponent):
         self._state_start_time = None
         self._current_position_world_mm = []
         self._current_position_conveyor_mm = []
+        workspace_is_valid = self._refresh_workspace()
         self.set_predicate("is_moving", False)
         self.set_predicate("at_target", False)
-        self.set_predicate("has_failed", False)
+        self.set_predicate("has_failed", not workspace_is_valid)
         return True
 
     def on_deactivate_callback(self) -> bool:
@@ -178,6 +186,77 @@ class Robot2Move(LifecycleComponent):
             ) / 1000.0
         raise ValueError("coordinate_frame must be 'world' or 'conveyor'.")
 
+    def _workspace_limits_path(self) -> Path:
+        configured_path = str(self.get_parameter("workspace_limits_file_path").get_value()).strip()
+        if configured_path:
+            return Path(configured_path)
+        try:
+            from ament_index_python.packages import get_package_share_directory
+            return Path(get_package_share_directory("roboter_tetris")) / "robot_2_move" / "workspace_limits.json"
+        except (ImportError, ValueError):
+            # Useful for source-tree execution and unit tests outside a ROS install.
+            return Path(__file__).with_name("workspace_limits.json")
+
+    def _load_workspace_regions(self) -> List[Tuple[str, np.ndarray, np.ndarray]]:
+        """Load finite inclusive world-frame AABBs from the JSON configuration."""
+        limits_path = self._workspace_limits_path()
+        try:
+            with limits_path.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+            if data.get("frame") != "world" or data.get("unit") != "m":
+                raise ValueError("workspace limits must use frame='world' and unit='m'.")
+            if data.get("inclusive_bounds") is not True:
+                raise ValueError("workspace limits must declare inclusive_bounds=true.")
+            regions = []
+            for index, region in enumerate(data["regions"]):
+                lower = np.array([region["x"][0], region["y"][0], region["z"][0]], dtype=np.float64)
+                upper = np.array([region["x"][1], region["y"][1], region["z"][1]], dtype=np.float64)
+                if not np.all(np.isfinite(lower)) or not np.all(np.isfinite(upper)) or np.any(lower > upper):
+                    raise ValueError(f"region {index} has invalid bounds.")
+                regions.append((str(region.get("name", f"region_{index}")), lower, upper))
+            if not regions:
+                raise ValueError("workspace limits contain no regions.")
+            self.get_logger().info(f"Loaded {len(regions)} workspace region(s) from {limits_path}.")
+            return regions
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+            self.get_logger().error(f"Could not load workspace limits from {limits_path}: {error}")
+            return []
+
+    def _refresh_workspace(self) -> bool:
+        """Reload the configured workspace, including runtime parameter changes."""
+        self._workspace_regions = self._load_workspace_regions()
+        is_valid = bool(self._workspace_regions)
+        self.set_predicate("has_valid_workspace", is_valid)
+        return is_valid
+
+    def _workspace_region_for(self, position_world_m: np.ndarray) -> Optional[str]:
+        """Return the region containing a world position, or ``None`` if unsafe."""
+        tolerance_m = 1e-9
+        for name, lower, upper in self._workspace_regions:
+            if np.all(position_world_m >= lower - tolerance_m) and np.all(position_world_m <= upper + tolerance_m):
+                return name
+        return None
+
+    def _validate_world_target(self, start_world_m: np.ndarray, target_world_m: np.ndarray) -> Optional[str]:
+        """Check a target and the complete straight target path against the workspace.
+
+        This is the shared validation point for manual targets and future
+        coordinates received from an input signal.
+        """
+        if not self._workspace_regions:
+            return "Keine gültige Arbeitsraum-Konfiguration geladen."
+        distance_m = float(np.linalg.norm(target_world_m - start_world_m))
+        sample_count = max(1, int(math.ceil(distance_m / 0.001)))
+        for step in range(sample_count + 1):
+            progress = step / sample_count
+            position = start_world_m + progress * (target_world_m - start_world_m)
+            if self._workspace_region_for(position) is None:
+                return (
+                    "Ziel oder gerade Zieltrajektorie liegt außerhalb des zulässigen Arbeitsraums "
+                    f"(bei {position[0]:.3f}, {position[1]:.3f}, {position[2]:.3f} m)."
+                )
+        return None
+
     def _fail(self, message: str) -> None:
         self._state = "IDLE"
         self.set_predicate("is_moving", False)
@@ -187,6 +266,9 @@ class Robot2Move(LifecycleComponent):
 
     def _on_move_to_target(self) -> dict:
         """Start an empty AICA trigger service using the current parameters."""
+        if not self._refresh_workspace():
+            self._fail("Keine gültige Arbeitsraum-Konfiguration geladen.")
+            return {"success": False, "message": "Keine gültige Arbeitsraum-Konfiguration geladen."}
         try:
             current_position, current_orientation = self._read_ee_pose()
         except Exception as error:
@@ -198,6 +280,10 @@ class Robot2Move(LifecycleComponent):
         except ValueError as error:
             self._fail(str(error))
             return {"success": False, "message": "Ungültige Zielkoordinaten oder Coordinate Frame."}
+        workspace_error = self._validate_world_target(current_position, target_position)
+        if workspace_error is not None:
+            self._fail(workspace_error)
+            return {"success": False, "message": "Ziel liegt außerhalb des zulässigen Arbeitsraums."}
         distance_m = float(np.linalg.norm(target_position - current_position))
         maximum_m = float(self.get_parameter("max_travel_distance_m").get_value())
         if distance_m > maximum_m:
@@ -260,6 +346,9 @@ class Robot2Move(LifecycleComponent):
         progress = min(max(elapsed_s / self._duration_s, 0.0), 1.0)
         smooth_progress = 0.5 * (1.0 - math.cos(math.pi * progress))
         commanded_position = self._start_position + smooth_progress * (self._target_position - self._start_position)
+        if self._workspace_region_for(commanded_position) is None:
+            self._fail("Erzeugte Zieltrajektorie hat den zulässigen Arbeitsraum verlassen.")
+            return
         self._target_pose.set_position(commanded_position)
         self._target_pose.set_orientation(self._held_orientation)
 

@@ -27,6 +27,10 @@ install(DIRECTORY ./component_descriptions DESTINATION .)
 # install Python modules
 ament_python_install_package(${PROJECT_NAME} SCRIPTS_DESTINATION lib/${PROJECT_NAME})
 
+# install the default safety workspace configuration for Robot 2 Move
+install(FILES roboter_tetris/robot_2_move/workspace_limits.json
+  DESTINATION share/${PROJECT_NAME}/robot_2_move)
+
 
 if(BUILD_TESTING)
 

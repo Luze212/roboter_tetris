@@ -59,8 +59,13 @@
     },
     {
       "display_name": "Has Failed",
-      "description": "True nach ungültiger Pose oder einem abgelehnten Ziel.",
+      "description": "True nach ungültiger Pose, fehlender Arbeitsraum-Konfiguration oder einem abgelehnten Ziel.",
       "predicate_name": "has_failed"
+    },
+    {
+      "display_name": "Has Valid Workspace",
+      "description": "True, wenn die Arbeitsraum-JSON erfolgreich geladen wurde. Ohne gültigen Arbeitsraum werden keine Ziele akzeptiert.",
+      "predicate_name": "has_valid_workspace"
     }
   ],
   "parameters": [
@@ -94,6 +99,14 @@
       "parameter_name": "coordinate_frame",
       "parameter_type": "string",
       "default_value": "world",
+      "dynamic": true
+    },
+    {
+      "display_name": "Workspace Limits File Path",
+      "description": "Optionaler Pfad zu einer Arbeitsraum-JSON im world-Frame. Leer verwendet die mitgelieferte Konfiguration mit Grundquader und erhöhter X-Erweiterung.",
+      "parameter_name": "workspace_limits_file_path",
+      "parameter_type": "string",
+      "default_value": "",
       "dynamic": true
     },
     {
