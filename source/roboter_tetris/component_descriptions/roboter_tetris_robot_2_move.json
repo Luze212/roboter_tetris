@@ -2,7 +2,7 @@
   "name": "Robot 2 Move",
   "description": {
     "brief": "Fährt Roboter 2 zu einer manuell eingegebenen kartesischen Zielposition.",
-    "details": "Erzeugt eine kartesische Target EE Pose für den Signal Point Attractor. Die Zielwerte werden in Millimetern im Roboterbasis-Frame (world) oder im Förderband-Frame (conveyor) eingegeben. conveyor nutzt derzeit nur eine feste XYZ-Verschiebung von world nach conveyor mit [0, 0, 0] mm; diese Werte werden später im Code kalibriert. Während der Fahrt bleibt die aktuelle Endeffektororientierung erhalten."
+    "details": "Erzeugt eine kartesische Target EE Pose für den Signal Point Attractor. Die Zielwerte werden in Millimetern im Roboterbasis-Frame (world) oder im Förderband-Frame (conveyor) eingegeben. Der conveyor-Ursprung liegt bei [-880, 1140, 305] mm in world (Bandanfang, mittig). +X conveyor zeigt nach rechts in Förderrichtung und entspricht -X world; +Y conveyor ist die Förderrichtung und entspricht -Y world; +Z conveyor entspricht +Z world. Während der Fahrt bleibt die aktuelle Endeffektororientierung erhalten."
   },
   "registration": "roboter_tetris::Robot2Move",
   "inherits": "modulo_components::LifecycleComponent",
@@ -29,7 +29,7 @@
     },
     {
       "display_name": "Current Position Conveyor (mm)",
-      "description": "Aktuelle EE-Position als [X, Y, Z] im Förderband-Frame in mm. Derzeit gilt: conveyor = world + feste Verschiebung [0, 0, 0] mm; diese drei Werte werden später im Code angepasst.",
+      "description": "Aktuelle EE-Position als [X, Y, Z] im Förderband-Frame in mm. Ursprung: [-880, 1140, 305] mm in world (Bandanfang, mittig). +X/+Y conveyor entsprechen -X/-Y world, +Z entspricht +Z world.",
       "signal_name": "current_position_conveyor_mm",
       "signal_type": "double_array"
     }
@@ -66,7 +66,7 @@
   "parameters": [
     {
       "display_name": "Target X (mm)",
-      "description": "Ziel-X im gewählten Koordinatenframe.",
+      "description": "Ziel-X im gewählten Koordinatenframe. Bei conveyor bedeutet +X: nach rechts in Förderrichtung; das entspricht -X in world.",
       "parameter_name": "target_x_mm",
       "parameter_type": "double",
       "default_value": "0.0",
@@ -74,7 +74,7 @@
     },
     {
       "display_name": "Target Y (mm)",
-      "description": "Ziel-Y im gewählten Koordinatenframe.",
+      "description": "Ziel-Y im gewählten Koordinatenframe. Bei conveyor bedeutet +Y: Förderrichtung; das entspricht -Y in world.",
       "parameter_name": "target_y_mm",
       "parameter_type": "double",
       "default_value": "0.0",
@@ -82,7 +82,7 @@
     },
     {
       "display_name": "Target Z (mm)",
-      "description": "Ziel-Z im gewählten Koordinatenframe.",
+      "description": "Ziel-Z im gewählten Koordinatenframe. Bei conveyor bedeutet +Z: über der Förderbandebene; das entspricht +Z in world.",
       "parameter_name": "target_z_mm",
       "parameter_type": "double",
       "default_value": "200.0",
@@ -90,7 +90,7 @@
     },
     {
       "display_name": "Coordinate Frame",
-      "description": "Exakt 'world' eintragen: XYZ direkt im Roboterbasis-Frame. Exakt 'conveyor' eintragen: XYZ im Förderband-Frame. Aktuell wird dafür nur die feste Verschiebung conveyor = world + [0, 0, 0] mm verwendet; sie wird später im Code kalibriert.",
+      "description": "Exakt 'world' eintragen: XYZ direkt im Roboterbasis-Frame. Exakt 'conveyor' eintragen: XYZ bezogen auf den Bandanfang mittig. Förderbandursprung = [-880, 1140, 305] mm in world. Dabei gilt: +X conveyor = -X world, +Y conveyor = -Y world und +Z conveyor = +Z world.",
       "parameter_name": "coordinate_frame",
       "parameter_type": "string",
       "default_value": "world",

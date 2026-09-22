@@ -16,10 +16,13 @@ from modulo_core.encoded_state import EncodedState
 from std_msgs.msg import Float64MultiArray
 
 
-# Temporary translation from the robot base/world frame to the conveyor frame.
-# Convention: p_conveyor_mm = p_world_mm + WORLD_TO_CONVEYOR_OFFSET_MM.
-# Set the three values after measuring the conveyor origin in the world frame.
-WORLD_TO_CONVEYOR_OFFSET_MM = np.array([0.0, 0.0, 0.0], dtype=np.float64)
+# Conveyor-frame definition in the robot base/world frame.  The origin is the
+# middle of the conveyor start.  Its axes are parallel to world, but X and Y
+# point in the negative world directions:
+#   p_world = CONVEYOR_ORIGIN_WORLD_MM + AXIS_SIGNS * p_conveyor
+# where * is element-wise multiplication.
+CONVEYOR_ORIGIN_WORLD_MM = np.array([-880.0, 1140.0, 305.0], dtype=np.float64)
+CONVEYOR_TO_WORLD_AXIS_SIGNS = np.array([-1.0, -1.0, 1.0], dtype=np.float64)
 
 
 def rotation_matrix_to_quaternion(rotation: np.ndarray) -> np.ndarray:
@@ -65,14 +68,17 @@ class Robot2Move(LifecycleComponent):
     def __init__(self, node_name: str, *args, **kwargs) -> None:
         super().__init__(node_name, *args, **kwargs)
 
-        self.add_parameter(sr.Parameter("target_x_mm", 0.0, sr.ParameterType.DOUBLE),
-                           "Ziel-X in mm im gewählten Koordinatenframe.")
-        self.add_parameter(sr.Parameter("target_y_mm", 0.0, sr.ParameterType.DOUBLE),
-                           "Ziel-Y in mm im gewählten Koordinatenframe.")
-        self.add_parameter(sr.Parameter("target_z_mm", 200.0, sr.ParameterType.DOUBLE),
-                           "Ziel-Z in mm im gewählten Koordinatenframe.")
+        self.add_parameter(
+            sr.Parameter("target_x_mm", 0.0, sr.ParameterType.DOUBLE),
+            "Ziel-X in mm. Bei conveyor: +X ist nach rechts in Förderrichtung und entspricht -X in world.")
+        self.add_parameter(
+            sr.Parameter("target_y_mm", 0.0, sr.ParameterType.DOUBLE),
+            "Ziel-Y in mm. Bei conveyor: +Y ist die Förderrichtung und entspricht -Y in world.")
+        self.add_parameter(
+            sr.Parameter("target_z_mm", 200.0, sr.ParameterType.DOUBLE),
+            "Ziel-Z in mm. Bei conveyor: +Z ist über der Förderbandebene und entspricht +Z in world.")
         self.add_parameter(sr.Parameter("coordinate_frame", "world", sr.ParameterType.STRING),
-                           "Zielkoordinaten: conveyor oder world.")
+                           "'world': Roboterbasis-Koordinaten. 'conveyor': Ursprung [-880, 1140, 305] mm in world, X/Y invertiert.")
         self.add_parameter(sr.Parameter("move_speed_m_s", 0.05, sr.ParameterType.DOUBLE),
                            "Geplante Geschwindigkeit der Zieltrajektorie in m/s.")
         self.add_parameter(sr.Parameter("max_travel_distance_m", 0.50, sr.ParameterType.DOUBLE),
@@ -166,8 +172,10 @@ class Robot2Move(LifecycleComponent):
         if frame == "world":
             return target_mm / 1000.0
         if frame == "conveyor":
-            # p_conveyor = p_world + offset  =>  p_world = p_conveyor - offset
-            return (target_mm - WORLD_TO_CONVEYOR_OFFSET_MM) / 1000.0
+            return (
+                CONVEYOR_ORIGIN_WORLD_MM
+                + CONVEYOR_TO_WORLD_AXIS_SIGNS * target_mm
+            ) / 1000.0
         raise ValueError("coordinate_frame must be 'world' or 'conveyor'.")
 
     def _fail(self, message: str) -> None:
@@ -230,7 +238,8 @@ class Robot2Move(LifecycleComponent):
 
         self._current_position_world_mm = (current_position * 1000.0).tolist()
         self._current_position_conveyor_mm = (
-            current_position * 1000.0 + WORLD_TO_CONVEYOR_OFFSET_MM
+            CONVEYOR_TO_WORLD_AXIS_SIGNS
+            * (current_position * 1000.0 - CONVEYOR_ORIGIN_WORLD_MM)
         ).tolist()
 
         if self._state == "IDLE":
