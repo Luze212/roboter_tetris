@@ -3,7 +3,13 @@
 **Datum:** 2026-09-13
 **Paket:** `roboter_tetris` (AICA Package, UR10e)
 **Status:** ✅ **umgesetzt** — §1 (`base_cam`, dazu der Tracker-Eingriff 2.4), §2
-(`robot_cam`/`_2`), §3 (Greifer); lokal getestet, in AICA noch nicht gelaufen.
+(`robot_cam`/`_2`), §3 (Greifer); lokal getestet, in AICA geladen — `base_cam` und
+Greifer laufen am Aufbau (Nachträge 12, 13), die Roboterkamera ist noch offen (B6).
+
+> ⚠️ **Seit 23.09.2026 teilweise überholt** (`entscheidungen.md` Nachtrag 13):
+> `base_cam` rechnet die Ecken auf der Oberseite und die Höhe aus der
+> Kalibrierung (L6); die Roboterkamera nimmt die Banddistanz aus dem Bildmedian,
+> nur `robot_cam_2` wird weiter verfolgt — der A/B-Vergleich unten entfällt (L5).
 Wird nach dem ersten Lauf am Aufbau gelöscht, gemeinsam mit der `vectoring`-Spec.
 
 > **Vorrang.** Normativ sind `docs/architektur/entscheidungen.md` und
