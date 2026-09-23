@@ -61,11 +61,18 @@ def _s2(t, flange, world_x, world_y, block_height, params=PARAMS, valid=True):
 
 # == 4c: hand-eye and height correction ============================================================
 
+#: The previous group's hand-eye result (C1) -- no longer the default since the
+#: re-measurement of 23.09.2026, but still the reference for the conventions.
+C1 = dict(handeye_x=0.1087, handeye_y=-0.03436, handeye_z=-0.05987,
+          handeye_roll_deg=1.6604, handeye_pitch_deg=1.5596, handeye_yaw_deg=91.5014)
+
+
 def test_hand_eye_rpy_reproduce_the_calibration_quaternion():
-    """Calibration_results_final.yaml: qw 0.6978, qx 0.000363, qy 0.01987, qz 0.716."""
-    q = quat_from_rpy(math.radians(PARAMS.handeye_roll_deg),
-                      math.radians(PARAMS.handeye_pitch_deg),
-                      math.radians(PARAMS.handeye_yaw_deg))
+    """Calibration_results_final.yaml: qw 0.6978, qx 0.000363, qy 0.01987, qz 0.716.
+    Checks the convention R = Rz * Ry * Rx against the file's own numbers."""
+    q = quat_from_rpy(math.radians(C1["handeye_roll_deg"]),
+                      math.radians(C1["handeye_pitch_deg"]),
+                      math.radians(C1["handeye_yaw_deg"]))
     assert all(abs(a - b) < 2e-4 for a, b in zip(q, (0.6978, 0.000363, 0.01987, 0.716)))
 
 
@@ -77,11 +84,25 @@ def test_camera_point_to_world_against_a_hand_calculated_point():
       tool down (x, y, z) -> (x, -y, -z) + flange = (-0.7113, 0.02436, 0.25987)
     The wrong direction (camera -> flange) lands elsewhere, and still looks
     plausible -- that is why this is checked against a number."""
-    params = replace(PARAMS, handeye_roll_deg=0.0, handeye_pitch_deg=0.0,
-                     handeye_yaw_deg=90.0)
+    params = replace(PARAMS, **{**C1, "handeye_roll_deg": 0.0,
+                                "handeye_pitch_deg": 0.0, "handeye_yaw_deg": 90.0})
     flange = Pose(-0.8, 0.0, 0.6, *DOWN)
     world = camera_to_world(flange, (0.01, 0.02, 0.4), params)
     assert all(abs(a - b) < 1e-9 for a, b in zip(world, (-0.7113, 0.02436, 0.25987)))
+
+
+def test_measured_hand_eye_places_a_real_view_on_the_touched_block():
+    """Nachtrag 13 / L11, the hold-out view of 23.09.2026: flat block touched at
+    x -789.34, y 60.20, top face z 78.25 mm; from a flange pose 26 cm away, the
+    top-face centre seen at (13.95, -123.64, 405.0) mm in the camera. The
+    default hand-eye puts it within a few mm -- the previous group's (C1) did
+    not (14.8 mm in x/y, 123 mm in z)."""
+    flange = Pose(-0.77039, -0.179528, 0.536794, -0.007325, 0.703491, 0.710629, 0.007281)
+    x, y, z = camera_to_world(flange, (0.01395, -0.12364, 0.405), PARAMS)
+    assert math.hypot(x + 0.78934, y - 0.06020) < 0.004
+    assert abs(z - 0.07825) < 0.012
+    xc, yc, zc = camera_to_world(flange, (0.01395, -0.12364, 0.405), replace(PARAMS, **C1))
+    assert math.hypot(xc + 0.78934, yc - 0.06020) > 0.010 and zc - 0.07825 > 0.10
 
 
 def test_height_correction_comes_first():
@@ -204,7 +225,8 @@ def test_frozen_correction_ignores_new_measurements():
 
 def test_grip_height_is_mid_block_but_never_too_close_to_the_belt():
     assert abs(PARAMS.grip_flange_z(0.100) - (0.0536 + 0.050 + 0.235)) < 1e-12
-    assert abs(PARAMS.grip_flange_z(0.020) - (0.0536 + 0.015 + 0.235)) < 1e-12
+    # Floor 21 mm (pad centre): the closed jaw tip stays 10 mm above the belt (L14).
+    assert abs(PARAMS.grip_flange_z(0.020) - (0.0536 + 0.021 + 0.235)) < 1e-12
 
 
 def _following_core(params=PARAMS, y=-0.02, plane=0.9, height=0.1):

@@ -95,6 +95,9 @@ Erkenntnis in fünf Dateien schreiben.
 | Woher die Kalibrierung der Basiskamera stammt, warum sie senkrecht schaut und was die Parallaxe war | ebd. Nachtrag 13 / L6 |
 | Warum `base_cam` nur ~7 Messungen/s schafft (ein Python-Prozess, Warteschlangen) | ebd. Nachtrag 13 / L2 |
 | Warum Greifzone und Wartebereich außerhalb des Bildes der Basiskamera liegen | ebd. Nachtrag 13 / L4 |
+| Wie Klötze hinter dem Bild der Basiskamera weitergeführt werden (Status 4) | ebd. Nachtrag 13 / L10; `architektur/datenvertraege.md` S3 |
+| Woher die Hand-Auge-Kalibrierung der Roboterkamera stammt | ebd. Nachtrag 13 / L11 |
+| Arbeitsraum, Greifzone, Wartepose und Folgehöhe | ebd. Nachtrag 13 / L14; `Safety/workspace_bounds.json`; `uebersicht/einrichtung-projektanwendung.md` §9 |
 | Wie der Follower startet (Abbruchpfad) und warum Arbeitsraum und Beobachtungspose keine Defaults haben | ebd. Nachtrag 8 / F3, F4 |
 | Wie `lead_time_s` eingemessen wird (B4) und was `outcome = 4` heißt | ebd. Nachtrag 9 / G7, G2 |
 | Wie die Roboterkamera wirkt und wie der Greifzyklus abläuft, warum die Freihöhe 0,49 m ist | ebd. Nachtrag 10 / J1–J8 |

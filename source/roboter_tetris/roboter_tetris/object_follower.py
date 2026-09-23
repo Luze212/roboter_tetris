@@ -43,8 +43,11 @@ DESCRIPTIONS = {
                          "weiter (m), sind die Daten falsch - Abbruch. (D15)",
     "lead_time_s": "Vorhalt als Zeit (s), Theorie 1/K. In 4b über err_laengs einmessen (B4).",
     "latency_compensation_s": "Zusätzlicher Vorhersagehorizont (s) (D7).",
-    "max_extrapolation_s": "Deckel der Vorhersage (s), Gate-Prüfung 3 (D14).",
-    "target_timeout_s": "S4-Zeitstempel steht so lange (s) still -> Abbruch, Gate-Prüfung 2.",
+    "max_extrapolation_s": "Deckel der Vorhersage (s), Gate-Prüfung 3 (D14). Muss über "
+                           "dem Alter von S4 vor der nächsten Messung liegen - gemessen "
+                           "bis ~0,5 s (Nachtrag 13 / L2).",
+    "target_timeout_s": "S4-Zeitstempel steht so lange (s) still -> Abbruch, Gate-Prüfung 2. "
+                        "Über dem Abstand zweier Messungen der Basiskamera (bis ~0,5 s).",
     "timeout_approach_s": "ANFAHREN darf so lange (s) über die erwartete Ankunft des "
                           "Klotzes an der Zone hinaus dauern (D5).",
     "timeout_track_s": "Höchstdauer (s) in FOLGEN bis zum Absenken (D5). Zum Einmessen "
@@ -65,17 +68,18 @@ DESCRIPTIONS = {
     "robot_cam_max_age_s": "Ältere Messung (s) -> Rückfall auf w = 0 (D6).",
     "require_robot_cam_for_grasp": "Absenken nur mit voll eingeblendeter Roboterkamera "
                                    "(D9/D10). Vorerst aus (Nachtrag 6 / Z10).",
-    "handeye_x": "Hand-Auge Flansch -> Kamera, x (m) (C1).",
-    "handeye_y": "Hand-Auge Flansch -> Kamera, y (m) (C1).",
-    "handeye_z": "Hand-Auge Flansch -> Kamera, z (m) (C1).",
-    "handeye_roll_deg": "Hand-Auge, Rollwinkel (Grad), R = Rz * Ry * Rx (C1).",
-    "handeye_pitch_deg": "Hand-Auge, Nickwinkel (Grad) (C1).",
-    "handeye_yaw_deg": "Hand-Auge, Gierwinkel (Grad) (C1).",
+    "handeye_x": "Hand-Auge Flansch -> Kamera, x (m). Eingemessen 23.09.2026 (Nachtrag 13 / L11).",
+    "handeye_y": "Hand-Auge Flansch -> Kamera, y (m). Eingemessen 23.09.2026 (Nachtrag 13 / L11).",
+    "handeye_z": "Hand-Auge Flansch -> Kamera, z (m). Eingemessen 23.09.2026 (Nachtrag 13 / L11).",
+    "handeye_roll_deg": "Hand-Auge, Rollwinkel (Grad), R = Rz * Ry * Rx (Nachtrag 13 / L11).",
+    "handeye_pitch_deg": "Hand-Auge, Nickwinkel (Grad) (Nachtrag 13 / L11).",
+    "handeye_yaw_deg": "Hand-Auge, Gierwinkel (Grad) (Nachtrag 13 / L11).",
     "belt_surface_z_m": "Höhe der Bandoberfläche in world (m), gemessen (B17).",
     "flange_to_grip_point_m": "Flansch -> Griffpunkt (m), gemessen 0,235 - nicht der TCP "
                               "der UR-Steuerung (215 mm) (Nachtrag 6 / Z7).",
-    "min_grip_height_m": "Untere Grenze der Greifhöhe über dem Band (m): halbe "
-                         "Auflagenhöhe + 5 mm Luft (B15).",
+    "min_grip_height_m": "Untere Grenze der Greifhöhe über dem Band (m), Mitte der Auflage. "
+                         "0,021: liegt über der Arbeitsraum-Untergrenze (geschlossene "
+                         "Backenspitze 10 mm über dem Band, Nachtrag 13 / L14).",
     "descend_speed_mps": "Sinkgeschwindigkeit (m/s). Gekoppelt an t_descend_s des "
                          "priority_handler (Nachtrag 10 / J2).",
     "lift_clearance_m": "So hoch (m) über die Greifhöhe fährt der Roboter beim Heben "

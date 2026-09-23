@@ -82,10 +82,34 @@
     },
     {
       "display_name": "Verfall (s)",
-      "description": "Nach dieser Zeit ohne Messung wird ein Track vergessen. Sein Beitrag zur Bandgeschwindigkeit bleibt erhalten.",
+      "description": "Nach dieser Zeit (s) ohne Messung wird ein EINSCHWINGENDER Track vergessen. Sein Beitrag zur Bandgeschwindigkeit bleibt erhalten. Finale Tracks werden stattdessen vorhergesagt (predict_max_s).",
       "parameter_name": "track_expiry_s",
       "parameter_type": "double",
-      "default_value": "0.5",
+      "default_value": "1.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Vorhersage max. (s)",
+      "description": "So lange wird ein FINALER Track ohne Messung mit der gepoolten Bandgeschwindigkeit weitergeführt und als Status 4 (vorhergesagt) gemeldet. Die Greifzone liegt hinter dem Bild der Basiskamera; vom Bildrand bis zum Bandende sind es bei 0,13 m/s rund 7 s (Nachtrag 13 / L10).",
+      "parameter_name": "predict_max_s",
+      "parameter_type": "double",
+      "default_value": "8.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Übergabe-Abstand (m)",
+      "description": "Liegt eine Messung so nah an einem vorhergesagten Track, endet die Vorhersage: Die Basiskamera sieht denselben Klotz wieder, unter neuer ID.",
+      "parameter_name": "handover_distance_m",
+      "parameter_type": "double",
+      "default_value": "0.05",
+      "dynamic": true
+    },
+    {
+      "display_name": "Pool-Mindestgeschwindigkeit (m/s)",
+      "description": "Nur Abschnitte, die sich mindestens so schnell bewegen, gehen in die gepoolte Bandgeschwindigkeit ein. Stehende Objekte - ruhende Klötze, die Greiferbacken - bleiben draußen; sonst überdecken ihre langen, ruhigen Abschnitte die bewegten (am Aufbau: Pool 0 mm/s bei -127 mm/s je Klotz, Nachtrag 13). Band ≈ 0,13 m/s.",
+      "parameter_name": "pool_min_speed_mps",
+      "parameter_type": "double",
+      "default_value": "0.05",
       "dynamic": true
     }
   ]

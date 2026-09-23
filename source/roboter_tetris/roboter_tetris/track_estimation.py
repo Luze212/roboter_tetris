@@ -29,6 +29,20 @@ Per track
 3. **Outliers.** A measurement too far from the prediction is dropped; several
    in a row are a real change of position (a topple) and restart the track.
 
+Behind the image
+----------------
+A **final** track that misses a frame is not forgotten but carried on with the
+pooled belt velocity and reported as status 4 (predicted), for at most
+``predict_max_s``. The base camera sees only the first ~0.6 m of the belt; the
+grasp zone lies behind it (Nachtrag 13 / L4, L9). The prediction is the same
+projection a final track always uses -- its clean samples moved to the frame
+time with the belt velocity -- just without new samples. ``base_cam`` no longer
+carries tracks on itself (its measuring region spans the whole belt), so S1
+holds measurements only. Should the camera see the block again under a new ID
+(a short occlusion), the predicted track is dropped once a measurement lies
+within ``handover_distance_m`` of it. Settling tracks are still forgotten after
+``track_expiry_s``: without a settled velocity there is nothing to predict with.
+
 Pool
 ----
 All clean sections of all tracks of one run form a joint least-squares fit:
@@ -36,6 +50,13 @@ common slope, one intercept per section. That equals the mean of the section
 slopes weighted by their ``S_tt`` -- a long, clean track counts more than a short
 one. Compared with averaging frozen snapshots this is 160 to 280 times more
 precise over a full pass (Z9).
+
+Only **moving** sections count: a section whose own speed is below
+``pool_min_speed_mps`` stays out. Standing blocks -- or the gripper jaws seen
+as blocks -- give long, perfectly clean sections with v = 0, and weighted by
+``S_tt`` they buried the moving ones: at the setup the pool reported 0 mm/s
+while every single block measured -127 mm/s (Nachtrag 13, Block 3). The belt
+runs at a fixed ~0.13 m/s, so a floor far below that costs nothing.
 
 Each section keeps five running sums per coordinate. Times and positions are
 stored **relative to the section start**: with timestamps around 1.7e9 s the
@@ -48,7 +69,8 @@ from dataclasses import dataclass
 from typing import Deque, Dict, List, Optional, Sequence, Tuple
 
 from .contracts import (
-    ObjectEntry, TRACK_FINAL, TRACK_SETTLING, TrackEntry, pack_tracks,
+    ObjectEntry, TRACK_FINAL, TRACK_PREDICTED, TRACK_SETTLING, TrackEntry,
+    pack_tracks,
 )
 
 Velocity = Tuple[float, float]
@@ -69,8 +91,18 @@ class EstimatorParams:
     outlier_persist_frames: int = 3
     #: Measurements averaged for position, orientation and geometry.
     smoothing_window: int = 30
-    #: A track not seen for this long is forgotten (its pool share stays).
-    track_expiry_s: float = 0.5
+    #: A SETTLING track not seen for this long is forgotten (its pool share
+    #: stays). At ~7 measurements/s, 0.5 s were barely three frames.
+    track_expiry_s: float = 1.0
+    #: A FINAL track not seen is predicted for at most this long (s): from the
+    #: image edge (y ~ 0.55) to the belt end (-0.375) at 0.13 m/s are ~7 s.
+    predict_max_s: float = 8.0
+    #: A measurement this close to a predicted track (m) ends the prediction:
+    #: the camera sees that block again, under a new ID.
+    handover_distance_m: float = 0.05
+    #: Sections slower than this stay out of the pool (m/s): standing objects.
+    #: 0.05 as the previous group's "belt not running" floor; belt ~0.13 m/s.
+    pool_min_speed_mps: float = 0.05
 
 
 @dataclass
@@ -188,13 +220,22 @@ class TrackEstimator:
         self.params = params or EstimatorParams()
         self._tracks: Dict[float, _Track] = {}
         self._closed_sections: List[_Section] = []
+        #: Time of the latest S1 frame: "not seen" means "not in that frame".
+        self._frame_t: Optional[float] = None
 
     # -- Pool -----------------------------------------------------------------
 
     def _sections(self) -> List[_Section]:
+        """Sections that feed the pool: at least two samples, and moving."""
         open_ = [tr.section for tr in self._tracks.values()
                  if tr.section is not None]
-        return [s for s in self._closed_sections + open_ if s.n >= 2]
+        floor = self.params.pool_min_speed_mps
+        pooled = []
+        for s in self._closed_sections + open_:
+            v = s.velocity()
+            if v is not None and math.hypot(*v) >= floor:
+                pooled.append(s)
+        return pooled
 
     def belt_velocity(self) -> Tuple[Optional[Velocity], int]:
         """Pooled belt velocity and the number of sections behind it.
@@ -214,6 +255,7 @@ class TrackEstimator:
     def update(self, t: float, objects: Sequence[ObjectEntry]) -> None:
         """Take one S1 frame (header time ``t``, objects in SI units)."""
         p = self.params
+        self._frame_t = t
         maxlen = max(2 * p.settle_half_window, p.smoothing_window)
         v_belt, _ = self.belt_velocity()
         for obj in objects:
@@ -229,7 +271,34 @@ class TrackEstimator:
                 tr.samples = deque(tr.samples, maxlen=maxlen)
             tr.last_seen = t
             self._take(tr, sample, v_belt)
+        self._hand_over(t, v_belt)
         self._expire(t)
+
+    def _hand_over(self, t: float, v_belt: Optional[Velocity]) -> None:
+        """Drop predicted tracks that a measurement of this frame lies on."""
+        if v_belt is None:
+            return
+        measured = [tr.samples[-1] for tr in self._tracks.values()
+                    if tr.last_seen == t and tr.samples]
+        if not measured:
+            return
+        limit = self.params.handover_distance_m
+        for tid in [tid for tid, tr in self._tracks.items()
+                    if self._is_predicted(tr, t, v_belt)]:
+            p = self._predict(self._tracks[tid], t, v_belt)
+            if p is not None and any(math.hypot(s.x - p[0], s.y - p[1]) <= limit
+                                     for s in measured):
+                self._drop(tid)
+
+    @staticmethod
+    def _is_predicted(tr: "_Track", t: float, v_belt: Optional[Velocity]) -> bool:
+        return (tr.status == TRACK_FINAL and v_belt is not None
+                and tr.last_seen is not None and tr.last_seen < t)
+
+    def _drop(self, tid: float) -> None:
+        tr = self._tracks.pop(tid)
+        if tr.section is not None:
+            self._closed_sections.append(tr.section)
 
     def _predict(self, tr: _Track, t: float,
                  v_belt: Optional[Velocity]) -> Optional[Tuple[float, float]]:
@@ -291,12 +360,16 @@ class TrackEstimator:
                 tr.section.add(s)
 
     def _expire(self, t: float) -> None:
-        limit = self.params.track_expiry_s
-        for tid in [tid for tid, tr in self._tracks.items()
-                    if t - tr.last_seen > limit]:
-            tr = self._tracks.pop(tid)
-            if tr.section is not None:
-                self._closed_sections.append(tr.section)
+        """Settling tracks after ``track_expiry_s``; final ones are predicted
+        up to ``predict_max_s`` -- if there is a belt velocity to predict with."""
+        p = self.params
+        v_belt, _ = self.belt_velocity()
+        for tid in list(self._tracks):
+            tr = self._tracks[tid]
+            unseen = t - tr.last_seen
+            predictable = tr.status == TRACK_FINAL and v_belt is not None
+            if unseen > (p.predict_max_s if predictable else p.track_expiry_s):
+                self._drop(tid)
 
     # -- Output ---------------------------------------------------------------
 
@@ -312,6 +385,10 @@ class TrackEstimator:
                 vx=v[0], vy=v[1], v_change=tr.v_change, ori_quality=0.0)
 
         # Final: average only the clean section, projected to t with the belt.
+        # Seen in this frame: final. Not seen: predicted -- the same projection,
+        # carried on without new samples.
+        frame_t = t if self._frame_t is None else self._frame_t
+        status = TRACK_PREDICTED if tr.last_seen < frame_t else TRACK_FINAL
         clean = [s for s in tr.samples if s.t >= tr.clean_start_t]
         clean = clean[-self.params.smoothing_window:]
         n = len(clean)
@@ -325,7 +402,7 @@ class TrackEstimator:
             length=sum(s.length for s in clean) / n,
             width=sum(s.width for s in clean) / n,
             height=sum(s.height for s in clean) / n,
-            status=float(TRACK_FINAL), vx=own[0], vy=own[1],
+            status=float(status), vx=own[0], vy=own[1],
             v_change=tr.v_change, ori_quality=quality)
 
     def snapshot(self, t: float) -> Tuple[Optional[Velocity], int, List[TrackEntry]]:

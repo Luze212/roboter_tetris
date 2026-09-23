@@ -18,31 +18,33 @@ Block wird sofort nach seinem Ende dokumentiert** — nicht gesammelt am Schluss
 | 0, 1 | ✅ (22.09.) — Nachtrag 12 / K1, K2, K4 |
 | Rechenlast | ✅ Ursache gefunden: **alle Python-Komponenten teilen sich einen Prozess** (GIL), Bilder stauten sich in Warteschlangen der Tiefe 10. Rates gesenkt, Warteschlange Tiefe 1 → 7 Messungen/s, Alter 139 ms (Nachtrag 13 / L2) |
 | 2 | ✅ **B23 erledigt.** Kamera schaut senkrecht, Parallaxe in der Detektion korrigiert, neue Extrinsik als Standardwert; Position ≤ 6 mm auch für 100-mm-Klötze. Höhe 11,5 mm zu niedrig (L6) |
-| 3 | — Band ≈ 0,13 m/s per Stoppuhr (L7); Schätzer noch nicht gegen das laufende Band geprüft |
-| 6 | Vorbereitet: nur noch `robot_cam_2`, Banddistanz aus dem Median (L5) |
+| 3 | ✅ **Pool −127,9 mm/s** (Stoppuhr 125–133), alle Klötze nach ~1 s final, hinter dem Bild als Status 4 bis ans Bandende (L9, L10). **Ziel 3 bestätigt** |
+| 6 | 🟡 **Hand-Auge neu eingemessen und bestätigt** (2–4 mm, L11, L13). Erkennung von `robot_cam_2` an flachen Klötzen unzuverlässig (bis 32 mm) → neuer Erkennungskern am Schreibtisch; erster Griff ohne Roboterkamera |
+| 5 | ✅ **Arbeitsraum und Greifzone festgelegt** (L14): ws x −1,0 … −0,30, y −0,32 … +0,48, z 0,3086 … 0,60; Zone y +0,40 … −0,22 |
 
 **Entscheidungen des Tages:** Greifzone und Wartebereich **außerhalb des Bildes
 der Basiskamera** (L4); die Strecke dahinter überbrückt die Roboterkamera.
 
 ### Weiter am nächsten Termin
 
-0. **Nach dem Build:** `base_kamera` neu einfügen (neue Standardwerte inkl.
-   `top_depth_bias_mm` 11,5) und die Höhe an einem 25- und einem 100-mm-Klotz
-   gegenprüfen.
+0. **Build** mit den Standardwerten von L14 (Greifzone, `min_grip_height_m`);
+   `priority_handler` und `object_follower` neu einfügen.
 1. **Anwendung schlank halten:** keine unkonfigurierten Kamerablöcke, kein
    `interface_streamer`, 3D-Ansicht minimiert; `vectoring`/`priority_handler`
    20 Hz, `data_tracker` 2 Hz. Neue Standardwerte gelten nur für neu eingefügte
    Blöcke.
-2. **Block 3** (Band läuft): Schätzung gegen 0,13 m/s, Einschwingen 3 → 0.
-3. **Block 6** mit `robot_cam_2` über einem ruhenden Klotz außerhalb des Bildes der
-   Basiskamera; Belichtungsautomatik der D435i vorher aus.
-4. **Vor Block 4/7 im Code:** `max_extrapolation_s` und die 0,5-s-Grenzen an den
-   gemessenen Horizont (bis 0,5 s) anpassen; Datenweg hinter dem Bild der
-   Basiskamera (Nachtrag 13 / L1); Greifzone neu
-   (etwa y 0,30 … −0,30, Bandende −0,375); `fake_objects.py` mit realer Rate und Latenz.
-5. Ablagepose einmal anfahren und prüfen, ob die Basiskamera den Greifer sieht.
+2. **`object_follower`** mit den Werten aus Einrichtung §9 (Arbeitsraum,
+   `observe_*` −0,816 / +0,35 / 0,45 / 90°) und `t_descend_s` 1,2 im
+   `priority_handler`; Gewichte der Roboterkamera 0.
+3. **Block 7, erster Lauf am echten Roboter** — gedrosselt (IK 0,10 m/s), Hand am
+   Not-Aus, Zielquelle `fake_objects.py` bei 0,05 m/s statt Basiskamera, zuerst ohne
+   Absenken (`stable_cycles` hoch): Aufrichten, Wartepose, Folgen, `err_laengs`.
+4. Dann Basiskamera und echtes Band (IK ≥ 0,30 m/s), erster Testgriff am
+   Referenzklotz; Ablagepose dabei gegenlesen (B9).
+5. Offen am Schreibtisch: neuer Erkennungskern für die Roboterkamera (L13),
+   `fake_objects.py` mit realer Rate und Latenz.
 
-Rohdaten: `architektur/bilder/2026-09-23-b23-punkte.json`. Werkzeuge: §3; neu in
+Rohdaten: `architektur/bilder/2026-09-23-b23-punkte.json`, `…-handauge-ansichten.json`. Werkzeuge: §3; neu in
 `signal_reader.py` ist die Auswertung des Signalalters bei jedem Vertragssignal.
 Mitlesen belastet den Rechner spürbar — **immer nur ein Leseprozess gleichzeitig.**
 

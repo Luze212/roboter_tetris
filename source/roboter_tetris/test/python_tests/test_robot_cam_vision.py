@@ -25,7 +25,7 @@ def _intrinsics():
 def _scene(block=(130, 80, 60, 60), block_bgr=RED_BGR, belt_mm=1000.0,
            block_near=True):
     """Color: green belt with a block rectangle. Depth: belt everywhere; the block
-    region reads 0 (too close) when ``block_near`` (so the gate accepts it)."""
+    region reads 100 mm above the belt when ``block_near`` (so the gate accepts it)."""
     h, w = 240, 320
     color = np.zeros((h, w, 3), dtype=np.uint8)
     color[:] = GREEN_BGR
@@ -33,7 +33,7 @@ def _scene(block=(130, 80, 60, 60), block_bgr=RED_BGR, belt_mm=1000.0,
     x, y, bw, bh = block
     color[y:y + bh, x:x + bw] = block_bgr
     if block_near:
-        depth[y:y + bh, x:x + bw] = 0.0
+        depth[y:y + bh, x:x + bw] = belt_mm - 100.0
     return color, depth
 
 
@@ -75,6 +75,18 @@ def test_depth_gate_rejects_belt_reflection():
     # With the gate off, the white patch is accepted (color-only test mode).
     params_off = RobotDetectionParams(use_depth_gate=False, depth_average_frames=1)
     assert detect_object(color, depth, fx, fy, cx, cy, params_off) is not None
+
+
+def test_depth_gate_rejects_a_glare_streak_without_depth():
+    """23.09.2026 (Nachtrag 13 / L11): a bright reflection streak on the belt
+    reads no depth at all. The gate used to count depth 0 as "near" and took
+    the streak for the block."""
+    color, depth = _scene(block=(130, 80, 60, 60), block_bgr=WHITE_BGR,
+                          block_near=False)
+    depth[80:140, 130:190] = 0.0                 # the streak: white, no depth
+    fx, fy, cx, cy = _intrinsics()
+    params = RobotDetectionParams(use_depth_gate=True, depth_average_frames=1)
+    assert detect_object(color, depth, fx, fy, cx, cy, params) is None
 
 
 def test_depth_gate_keeps_near_white_block():
@@ -146,7 +158,7 @@ def _two_blob_scene(belt_mm=1000.0, near=(140, 90, 40, 40), far=(250, 40, 60, 16
     depth = np.full((h, w), belt_mm, dtype=np.float32)
     for (x, y, bw, bh) in (near, far):
         color[y:y + bh, x:x + bw] = RED_BGR
-        depth[y:y + bh, x:x + bw] = 0.0
+        depth[y:y + bh, x:x + bw] = belt_mm - 100.0
     return color, depth
 
 
@@ -173,13 +185,15 @@ def test_oversized_blob_rejects_the_whole_frame():
     fx, fy, cx, cy = _intrinsics()
 
     # Without the upper bound the blob is accepted and reports the image centre.
-    loose = RobotDetectionParams(depth_average_frames=1, max_contour_area=0.0)
+    loose = RobotDetectionParams(depth_average_frames=1, max_contour_area=0.0,
+                                 use_depth_gate=False)
     bogus = detect_object(color, depth, fx, fy, cx, cy, loose)
     assert bogus is not None
     assert abs(bogus.x_mm) < 30.0 and abs(bogus.y_mm) < 30.0   # the signature
 
     # With it, the frame is rejected outright.
-    guarded = RobotDetectionParams(depth_average_frames=1, max_contour_area=50000.0)
+    guarded = RobotDetectionParams(depth_average_frames=1, max_contour_area=50000.0,
+                                   use_depth_gate=False)
     assert detect_object(color, depth, fx, fy, cx, cy, guarded) is None
 
 

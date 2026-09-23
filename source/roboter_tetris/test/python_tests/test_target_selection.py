@@ -321,8 +321,10 @@ def test_synthetic_run_picks_1_and_2_and_never_the_small_cube():
     belt = fake_objects.FakeBelt(fake_objects.default_blocks(),
                                  noise_sigma_m=0.0005, seed=3)
     estimator = TrackEstimator()
-    selector = TargetSelector()                 # the placeholder defaults
-    flange = (fake_objects.BELT_CENTER_X_M, -0.20)   # above the belt
+    selector = TargetSelector()                 # the zone defaults of 23.09.2026
+    # Waiting above the upstream end of the zone (y +0.40): from the old wait
+    # position at the zone end the approach is too long and nothing is chosen.
+    flange = (fake_objects.BELT_CENTER_X_M, 0.30)
     chosen, gripped, seq = [], set(), 0
     locked_since = None
     fps = 30.0

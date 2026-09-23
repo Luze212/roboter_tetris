@@ -172,7 +172,9 @@ def test_synthetic_run_shows_picks_and_the_missed_cube():
     locked_since = {}
     seen_picked, seen_oob, seen_gone = set(), set(), set()
     fps = 30.0
-    for k in range(int(21.0 * fps)):
+    # 23 s: a gripped block stays in tracks as predicted (Nachtrag 13 / L10), so
+    # the target stays locked until it is placed and the run takes a little longer.
+    for k in range(int(23.0 * fps)):
         t = k / fps
         objects = [o for o in unpack_objects(belt.signal_at(t)).objects
                    if o.id not in gripped]
@@ -180,7 +182,7 @@ def test_synthetic_run_shows_picks_and_the_missed_cube():
         v_belt, n_pool, entries = estimator.snapshot(t)
         msg = TracksMsg(t, (v_belt or (0.0, 0.0))[0], (v_belt or (0.0, 0.0))[1],
                         float(n_pool), entries)
-        selection = selector.step(msg, (fake_objects.BELT_CENTER_X_M, -0.20))
+        selection = selector.step(msg, (fake_objects.BELT_CENTER_X_M, 0.30))  # wait above the zone start
         # Stand-in follower: grip 2 s after choosing, place 3 s after gripping.
         target = selector.locked_id
         if target is not None:
@@ -209,4 +211,6 @@ def test_synthetic_run_shows_picks_and_the_missed_cube():
     assert seen_oob == {3.0}
     final = _entries(book)
     assert 1.0 not in final and 2.0 not in final       # expired after placing
-    assert final[3.0].out_of_bounds == 1.0 and final[3.0].present == 1.0
+    # The cube keeps its out_of_bounds flag while listed; with the zone upstream
+    # (23.09.2026) it may already have left the list by the end of the run.
+    assert 3.0 not in final or final[3.0].out_of_bounds == 1.0

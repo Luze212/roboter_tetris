@@ -204,18 +204,18 @@
     },
     {
       "display_name": "max_extrapolation_s",
-      "description": "Deckel der Vorhersage (s), Gate-Prüfung 3 (D14).",
+      "description": "Deckel der Vorhersage (s), Gate-Prüfung 3 (D14). Muss über dem Alter von S4 vor der nächsten Messung liegen - gemessen bis ~0,5 s (Nachtrag 13 / L2). Vorher 0,2: die Vorhersage stand still, der Flansch lief unbemerkt hinter dem Klotz her.",
       "parameter_name": "max_extrapolation_s",
       "parameter_type": "double",
-      "default_value": "0.2",
+      "default_value": "0.6",
       "dynamic": true
     },
     {
       "display_name": "target_timeout_s",
-      "description": "S4-Zeitstempel steht so lange (s) still -> Abbruch, Gate-Prüfung 2.",
+      "description": "S4-Zeitstempel steht so lange (s) still -> Abbruch, Gate-Prüfung 2. Über dem Abstand zweier Messungen der Basiskamera (bis ~0,5 s, Nachtrag 13 / L2).",
       "parameter_name": "target_timeout_s",
       "parameter_type": "double",
-      "default_value": "0.5",
+      "default_value": "1.0",
       "dynamic": true
     },
     {
@@ -316,50 +316,50 @@
     },
     {
       "display_name": "handeye_x",
-      "description": "Hand-Auge Flansch -> Kamera, x (m) (C1).",
+      "description": "Hand-Auge Flansch -> Kamera, x (m). Neu eingemessen 23.09.2026 aus fünf Ansichten eines angetasteten Klotzes, Rest ≤ 4,4 mm (Nachtrag 13 / L11). Die Werte der Vorgängergruppe (C1: 0,1087 / -0,03436 / -0,05987) lagen in z 13 cm daneben.",
       "parameter_name": "handeye_x",
       "parameter_type": "double",
-      "default_value": "0.1087",
+      "default_value": "0.0783",
       "dynamic": true
     },
     {
       "display_name": "handeye_y",
-      "description": "Hand-Auge Flansch -> Kamera, y (m) (C1).",
+      "description": "Hand-Auge Flansch -> Kamera, y (m). Eingemessen 23.09.2026 (Nachtrag 13 / L11).",
       "parameter_name": "handeye_y",
       "parameter_type": "double",
-      "default_value": "-0.03436",
+      "default_value": "-0.0326",
       "dynamic": true
     },
     {
       "display_name": "handeye_z",
-      "description": "Hand-Auge Flansch -> Kamera, z (m) (C1).",
+      "description": "Hand-Auge Flansch -> Kamera, z (m). Eingemessen 23.09.2026 (Nachtrag 13 / L11).",
       "parameter_name": "handeye_z",
       "parameter_type": "double",
-      "default_value": "-0.05987",
+      "default_value": "0.0720",
       "dynamic": true
     },
     {
       "display_name": "handeye_roll_deg",
-      "description": "Hand-Auge, Rollwinkel (Grad), R = Rz * Ry * Rx (C1).",
+      "description": "Hand-Auge, Rollwinkel (Grad), R = Rz * Ry * Rx. Eingemessen 23.09.2026 (Nachtrag 13 / L11).",
       "parameter_name": "handeye_roll_deg",
       "parameter_type": "double",
-      "default_value": "1.6604",
+      "default_value": "4.26",
       "dynamic": true
     },
     {
       "display_name": "handeye_pitch_deg",
-      "description": "Hand-Auge, Nickwinkel (Grad) (C1).",
+      "description": "Hand-Auge, Nickwinkel (Grad). Eingemessen 23.09.2026 (Nachtrag 13 / L11).",
       "parameter_name": "handeye_pitch_deg",
       "parameter_type": "double",
-      "default_value": "1.5596",
+      "default_value": "0.08",
       "dynamic": true
     },
     {
       "display_name": "handeye_yaw_deg",
-      "description": "Hand-Auge, Gierwinkel (Grad) (C1).",
+      "description": "Hand-Auge, Gierwinkel (Grad). Eingemessen 23.09.2026 (Nachtrag 13 / L11).",
       "parameter_name": "handeye_yaw_deg",
       "parameter_type": "double",
-      "default_value": "91.5014",
+      "default_value": "90.95",
       "dynamic": true
     },
     {
@@ -380,10 +380,10 @@
     },
     {
       "display_name": "min_grip_height_m",
-      "description": "Untere Grenze der Greifhöhe über dem Band (m): halbe Auflagenhöhe + 5 mm Luft (B15).",
+      "description": "Untere Grenze der Greifhöhe über dem Band (m), Mitte der Auflage. 0,021: Flansch 0,3096 m liegt über der Arbeitsraum-Untergrenze 0,3086 (geschlossene Backenspitze 10 mm über dem Band, Nachtrag 13 / L14). Die Auflage reicht von 11 bis 31 mm, ein 30-mm-Klotz wird noch gefasst.",
       "parameter_name": "min_grip_height_m",
       "parameter_type": "double",
-      "default_value": "0.015",
+      "default_value": "0.021",
       "dynamic": true
     },
     {

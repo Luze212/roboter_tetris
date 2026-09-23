@@ -12,7 +12,7 @@ from modulo_components.lifecycle_component import LifecycleComponent
 import state_representation as sr
 from std_msgs.msg import Float64MultiArray
 
-from .contracts import ContractError, pack_tracks, unpack_objects
+from .contracts import TRACK_SELECTABLE, ContractError, pack_tracks, unpack_objects
 from .track_estimation import EstimatorParams, TrackEstimator
 
 # No new S1 frame for this long -> input counts as stalled (wall-clock seconds).
@@ -50,9 +50,24 @@ class Vectoring(LifecycleComponent):
             "Anzahl Messungen, über die Position, Orientierung und Abmessungen "
             "gemittelt werden — erst ab dem Einschwingen.")
         self.add_parameter(
-            sr.Parameter("track_expiry_s", 0.5, sr.ParameterType.DOUBLE),
-            "Nach dieser Zeit (s) ohne Messung wird ein Track vergessen. Sein "
-            "Beitrag zur Bandgeschwindigkeit bleibt erhalten.")
+            sr.Parameter("track_expiry_s", 1.0, sr.ParameterType.DOUBLE),
+            "Nach dieser Zeit (s) ohne Messung wird ein EINSCHWINGENDER Track "
+            "vergessen. Sein Beitrag zur Bandgeschwindigkeit bleibt erhalten.")
+        self.add_parameter(
+            sr.Parameter("predict_max_s", 8.0, sr.ParameterType.DOUBLE),
+            "So lange (s) wird ein FINALER Track ohne Messung mit der gepoolten "
+            "Bandgeschwindigkeit weitergeführt (Status 4, vorhergesagt) - hinter dem "
+            "Bild der Basiskamera liegt die Greifzone. Bildrand bis Bandende bei "
+            "0,13 m/s: ~7 s (Nachtrag 13 / L10).")
+        self.add_parameter(
+            sr.Parameter("handover_distance_m", 0.05, sr.ParameterType.DOUBLE),
+            "Liegt eine Messung so nah (m) an einem vorhergesagten Track, endet die "
+            "Vorhersage: Die Kamera sieht denselben Klotz wieder, unter neuer ID.")
+        self.add_parameter(
+            sr.Parameter("pool_min_speed_mps", 0.05, sr.ParameterType.DOUBLE),
+            "Mindestgeschwindigkeit (m/s), ab der ein Abschnitt in die gepoolte "
+            "Bandgeschwindigkeit eingeht. Stehende Objekte (ruhende Klötze, "
+            "Greiferbacken) bleiben draußen. Band ≈ 0,13 m/s (Nachtrag 13).")
 
         # -- Input / output (std_msgs signals are plain Python values) -----------
         self._objects_in = []
@@ -86,9 +101,12 @@ class Vectoring(LifecycleComponent):
         if name == "outlier_persist_frames" and value < 1:
             self.get_logger().warn("outlier_persist_frames must be at least 1")
             return False
-        if name in ("settle_v_tolerance", "outlier_distance_m",
-                    "track_expiry_s") and value <= 0.0:
+        if name in ("settle_v_tolerance", "outlier_distance_m", "track_expiry_s",
+                    "predict_max_s", "handover_distance_m") and value <= 0.0:
             self.get_logger().warn(f"{name} must be positive")
+            return False
+        if name == "pool_min_speed_mps" and value < 0.0:
+            self.get_logger().warn("pool_min_speed_mps must not be negative")
             return False
         return True
 
@@ -101,6 +119,9 @@ class Vectoring(LifecycleComponent):
                 self.get_parameter("outlier_persist_frames").get_value()),
             smoothing_window=int(self.get_parameter("smoothing_window").get_value()),
             track_expiry_s=self.get_parameter("track_expiry_s").get_value(),
+            pool_min_speed_mps=self.get_parameter("pool_min_speed_mps").get_value(),
+            predict_max_s=self.get_parameter("predict_max_s").get_value(),
+            handover_distance_m=self.get_parameter("handover_distance_m").get_value(),
         )
 
     # -- Lifecycle ----------------------------------------------------------------
@@ -166,4 +187,4 @@ class Vectoring(LifecycleComponent):
 
         self.set_predicate("is_receiving", True)
         self.set_predicate("has_belt_estimate", n_pool > 0)
-        self.set_predicate("has_tracks", any(e.status == 0 for e in entries))
+        self.set_predicate("has_tracks", any(e.status in TRACK_SELECTABLE for e in entries))

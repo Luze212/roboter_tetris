@@ -75,7 +75,7 @@ Blätter: Von ihnen führt keine Leitung zurück in den Regelpfad.
 | `base_cam` | Kamera | color, depth, info | `objects` (S1), `debug_image` | `vision/*` | läuft am Aufbau; S1 und Tracker-Eingriff 2.4 neu |
 | `robot_cam_2` (`robot_cam` nicht mehr) | Kamera | color, depth, info | `object_position` (S2), `debug_image` | `vision/robot_detection*` | Banddistanz aus dem Bildmedian, am Aufbau offen (B6) |
 | `vectoring` | 20 Hz | `objects` | `tracks` (S3) | `track_estimation.py` | gebaut |
-| `priority_handler` | 20 Hz | `tracks`, `picked_id`, `robot_state` | `target` (S4), `not_pickable` (S5) | `target_selection.py` | gebaut, Greifzone auf Platzhaltern |
+| `priority_handler` | 20 Hz | `tracks`, `picked_id`, `robot_state` | `target` (S4), `not_pickable` (S5) | `target_selection.py` | gebaut, Greifzone festgelegt (B19) |
 | `data_tracker` | 2 Hz | `tracks`, `not_pickable`, `picked_id` | `world_state` (S10) | `world_bookkeeping.py` | gebaut |
 | `object_follower` | 100 Hz | `target`, `object_position`, `robot_state`, `gripper_motion_done`, `gripper_has_object` | `target_pose` (S6), `gripper_close`, `picked_id` (S7), `follower_status` (S8) | `follower_logic.py` | gebaut, alle vier Stufen |
 | `robotiq_gripper` | ereignisgetrieben | `gripper_close` | `motion_done`, `has_object` (S9) | `GripperMotionState` | läuft am Aufbau; zwei Ausgänge neu |
@@ -97,7 +97,9 @@ Komponente indiziert von Hand in ein fremdes Array.
 2. **`vectoring`** schätzt je Klotz die Geschwindigkeit. Ein frisch aufgelegter
    Klotz ist *einschwingend*, bis zwei aufeinanderfolgende Halbsekunden dieselbe
    Geschwindigkeit messen, dann *final*. Aus allen finalen Klötzen entsteht die
-   gepoolte **Bandgeschwindigkeit** (Ziel 3).
+   gepoolte **Bandgeschwindigkeit** (Ziel 3). Verlässt ein finaler Klotz das Bild,
+   führt `vectoring` ihn mit dieser Geschwindigkeit weiter (*vorhergesagt*,
+   Status 4) — die Greifzone liegt hinter dem Bild (Nachtrag 13 / L4, L10).
 3. **`priority_handler`** wählt unter den finalen, greifbaren, erreichbaren Klötzen
    den dringendsten und hält ihn fest (Ziel 4). Er rechnet die **Greifebene** —
    bis dorthin muss das Absenken begonnen haben.

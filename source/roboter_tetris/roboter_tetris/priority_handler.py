@@ -19,7 +19,7 @@ from .target_selection import SelectorParams, TargetSelector
 
 # No new S3 frame for this long -> withdraw the target (wall-clock seconds).
 # A target on dead data is more dangerous than no target.
-STALE_TIMEOUT_S = 0.5
+STALE_TIMEOUT_S = 1.0   # s; base_cam delivers ~7/s, gaps up to ~0.5 s (Nachtrag 13 / L2)
 WARN_LOG_PERIOD_S = 2.0
 
 _ZONE = ("zone_x_min", "zone_x_max", "zone_y_min", "zone_y_max")
@@ -35,9 +35,9 @@ class PriorityHandler(LifecycleComponent):
         d = SelectorParams()
 
         # -- Parameters (operator-facing descriptions) ----------------------------
-        zone_note = (" PLATZHALTER bis B19, im Robotersystem (Band angetastet bei "
-                     "x -0,70...-0,93). Die Greifzone muss innerhalb der Messregion "
-                     "von base_cam liegen (track_velocity_region_y_*).")
+        zone_note = (" Festgelegt 23.09.2026 (B19, Nachtrag 13 / L14): im Arbeitsraum, "
+                     "außerhalb des Bildes der Basiskamera; y +0,40 ... -0,22 bei "
+                     "Bandende -0,32.")
         self.add_parameter(sr.Parameter("zone_x_min", d.zone_x_min, sr.ParameterType.DOUBLE),
                            "Greifzone in world, untere x-Grenze (m)." + zone_note)
         self.add_parameter(sr.Parameter("zone_x_max", d.zone_x_max, sr.ParameterType.DOUBLE),

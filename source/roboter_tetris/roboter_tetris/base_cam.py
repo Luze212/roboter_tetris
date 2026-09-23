@@ -159,7 +159,11 @@ class BaseCam(LifecycleComponent):
                            "Suchbereich y-Max in mm (alte Config: 190)")
 
         # -- Tracker parameters (C++ tracker.hpp, turned into world: the belt runs
-        #    from y = +1080 to -375, K5) ------------------------------------------
+        #    from y = +1080 to -375, K5). The measuring region spans the whole belt
+        #    since 23.09.2026 (Nachtrag 13 / L10): inside it an unseen track is
+        #    deleted after track_max_missed_in_region frames, outside it the tracker
+        #    carried it on with its own noisy EMA velocity -- behind the image that is
+        #    now vectoring's job, with the pooled velocity. ------------------------
         self.add_parameter(sr.Parameter("track_max_match_distance_mm", 300.0, sr.ParameterType.DOUBLE),
                            "Tracker: max. Matching-Distanz in mm")
         self.add_parameter(sr.Parameter("track_min_y_mm", -375.0, sr.ParameterType.DOUBLE),
@@ -168,9 +172,9 @@ class BaseCam(LifecycleComponent):
                            "Tracker: Löschen wenn y darüber (Bandanfang)")
         self.add_parameter(sr.Parameter("track_max_missed_in_region", 3, sr.ParameterType.INT),
                            "Tracker: max. verpasste Frames in der Mess-Region")
-        self.add_parameter(sr.Parameter("track_velocity_region_y_min", 500.0, sr.ParameterType.DOUBLE),
+        self.add_parameter(sr.Parameter("track_velocity_region_y_min", -375.0, sr.ParameterType.DOUBLE),
                            "Tracker: Mess-Region y-Min in mm")
-        self.add_parameter(sr.Parameter("track_velocity_region_y_max", 1000.0, sr.ParameterType.DOUBLE),
+        self.add_parameter(sr.Parameter("track_velocity_region_y_max", 1080.0, sr.ParameterType.DOUBLE),
                            "Tracker: Mess-Region y-Max in mm")
         self.add_parameter(sr.Parameter("vel_filter_alpha", DEFAULT_VEL_FILTER_ALPHA, sr.ParameterType.DOUBLE),
                            "EMA-Tiefpass der Bandgeschwindigkeit (0-1; 0.3 = 30 % neu)")

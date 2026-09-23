@@ -153,10 +153,14 @@ class FollowerParams:
     lead_time_s: float = 0.2
     #: Added to the prediction horizon (D7).
     latency_compensation_s: float = 0.0
-    #: Cap of the prediction horizon, gate check 3 (D14).
-    max_extrapolation_s: float = 0.2
-    #: S4 timestamp standing still this long -> abort, gate check 2.
-    target_timeout_s: float = 0.5
+    #: Cap of the prediction horizon, gate check 3 (D14). Measured at the
+    #: setup: S4 is up to ~0.5 s old before the next one arrives (Nachtrag 13 /
+    #: L2). A cap below that froze the prediction and left the flange 10-60 mm
+    #: behind the block, unseen by err_along (L1). Was 0.2.
+    max_extrapolation_s: float = 0.6
+    #: S4 timestamp standing still this long -> abort, gate check 2. Was 0.5,
+    #: barely above the measured gap between two base camera measurements.
+    target_timeout_s: float = 1.0
     #: ANFAHREN may take until the block reaches the zone, plus this (D5).
     timeout_approach_s: float = 2.0
     #: Time in FOLGEN before the grasp must begin (D5, Thema 6: 2-3 s).
@@ -180,17 +184,24 @@ class FollowerParams:
     robot_cam_max_age_s: float = 0.3
     #: Start ABSENKEN only with the robot camera fully blended in (D9/D10).
     require_robot_cam_for_grasp: bool = False
-    #: Hand-eye flange -> camera (C1), R = Rz * Ry * Rx.
-    handeye_x: float = 0.1087
-    handeye_y: float = -0.03436
-    handeye_z: float = -0.05987
-    handeye_roll_deg: float = 1.6604
-    handeye_pitch_deg: float = 1.5596
-    handeye_yaw_deg: float = 91.5014
+    #: Hand-eye flange -> camera, R = Rz * Ry * Rx. Re-measured 23.09.2026 from
+    #: five views of one touched block, residual <= 4.4 mm (Nachtrag 13 / L11).
+    #: The previous group's values (C1: 0.1087 / -0.03436 / -0.05987, rpy
+    #: 1.66 / 1.56 / 91.50) put the camera 6 cm ABOVE the flange; it sits 7 cm below.
+    handeye_x: float = 0.0783
+    handeye_y: float = -0.0326
+    handeye_z: float = 0.0720
+    handeye_roll_deg: float = 4.26
+    handeye_pitch_deg: float = 0.08
+    handeye_yaw_deg: float = 90.95
     # -- 4d: grasp cycle -----------------------------------------------------
     belt_surface_z_m: float = 0.0536          # B17
     flange_to_grip_point_m: float = 0.235     # Nachtrag 6 / Z7
-    min_grip_height_m: float = 0.015          # B15, 5 mm air
+    #: Lowest grip point above the belt (pad centre). 0.021 since 23.09.2026: the
+    #: workspace floor keeps the closed jaw tip 10 mm above the belt (flange
+    #: 0.3086), and 53.6 + 21 + 235 = 309.6 mm clears it (Nachtrag 13 / L14).
+    #: Pad 11...31 mm: a 30 mm block is still gripped. Was 0.015 (B15).
+    min_grip_height_m: float = 0.021
     #: 0.15 m/s: observation height 0.60 -> grip height 0.34 in 1.7 s. Couples
     #: to t_descend_s of the priority_handler (Nachtrag 10 / J2).
     descend_speed_mps: float = 0.15

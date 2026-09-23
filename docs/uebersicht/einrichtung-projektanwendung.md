@@ -32,7 +32,7 @@ Komponentenbeschreibungen im AICA-Image (`v2.0.5-jazzy`, core v5.0.0).
 | **`rgb_camera.global_time_enabled`** der **Basiskamera** | **`true`** | **Kritisch.** Steht er auf `false`, stempelt die L515 in ihrer Hardwareuhr: fremde Epoche (gemessen: Jahr 2006), Drift von **3,9 ms/s** gegen die ROS-Zeit, und nach wenigen Minuten bleibt der Stempel ganz stehen. Dann verwirft das Frame-Gating in `base_cam` jedes Bild nach dem ersten und die Objektliste bleibt leer. Am 14.09. genau so gemessen. |
 | **`depth_module.global_time_enabled`** der Basiskamera | **`true`** | dito |
 | Beides bei der **Roboterkamera** | `true` | steht dort bereits richtig — beim Neuanlegen nicht verlieren. Der Follower ordnet ihre Bilder über die Bildzeit seinem Ringpuffer zu (B24) |
-| **`object_follower`: `ws_*`, `observe_*`** | ohne Default | Arbeitsraum (B10) und Beobachtungspose (B8) — ohne sie scheitert `configure` mit einer Liste der fehlenden. Vorschläge für den virtuellen Roboter: §9 |
+| **`object_follower`: `ws_*`, `observe_*`** | ohne Default — **Werte in §9** | Arbeitsraum (B10, festgelegt) und Beobachtungspose (B8) — ohne sie scheitert `configure` mit einer Liste der fehlenden |
 
 > ⚠️ **Der AICA-RealSense-Block exponiert diese Parameter nicht** (er bietet 25,
 > diese sind nicht dabei). Sie lassen sich nur zur Laufzeit über den
@@ -172,7 +172,7 @@ aber bei der Beurteilung der Geometrie zu wissen.
 | Komponente | Rate | Anmerkung |
 |---|---|---|
 | `base_cam`, `robot_cam_2` | 10 Hz (Default); über 30 Hz sinnlos | `base_cam` schafft damit ~7 Messungen/s (23.09.). Nur `robot_cam_2` in die Anwendung, nicht `robot_cam` (Nachtrag 13 / L5) |
-| `vectoring`, `priority_handler` | **20 Hz** | Mehr bringt nichts, solange < 10 Messungen/s ankommen. Einschwing-Halbfenster in `vectoring` = **5** (Standardwert seit 23.09.; zählt Messungen) |
+| `vectoring`, `priority_handler` | **20 Hz** | Mehr bringt nichts, solange < 10 Messungen/s ankommen. Einschwing-Halbfenster in `vectoring` = **5** (Standardwert seit 23.09.; zählt Messungen); `pool_min_speed_mps` = 0,05 — nur bewegte Klötze gehen in die Bandgeschwindigkeit ein; `predict_max_s` = 8 — finale Tracks laufen hinter dem Bild als Status 4 weiter (L10) |
 | `object_follower` | 100 Hz, bei Rechenzeitmangel 50 Hz | glatte Zielpose für den Attractor (Thema 2) |
 | `data_tracker` | 2 Hz | nur Anzeige |
 | `interface_streamer` | 5 Hz, nur bei Bedarf in der Anwendung | Bildverarbeitung, kostet Messrate |
@@ -186,16 +186,17 @@ Komponentenrate statt der Kamerarate verschickt.
 ### Kopplung, die leicht übersehen wird
 
 `track_velocity_region_y_min` / `_max` und `track_min_y_mm` / `track_max_y_mm` von
-`base_cam` liegen in `world` (Standardwerte seit 23.09.2026): Messregion
-**500 … 1000 mm**, Tracker-Grenzen **−375 … +1080 mm** = das Band von Rolle zu
-Rolle. Das Bild der Basiskamera deckt y ≈ 460 … 1030 mm ab.
+`base_cam` liegen in `world` (Standardwerte seit 23.09.2026): Tracker-Grenzen
+**−375 … +1080 mm** = das Band von Rolle zu Rolle, und seit L10 ist die
+Messregion **dasselbe ganze Band** — `base_cam` führt nichts mehr selbst weiter,
+hinter dem Bild übernimmt `vectoring` (Status 4). Das Bild der Basiskamera deckt y ≈ 460 … 1030 mm ab.
 
 ⚠️ **Geändert 23.09.2026 (Nachtrag 13 / L4):** Die Greifzone liegt **außerhalb**
 des Bildes der Basiskamera (etwa y 0,30 … −0,30), damit der Greifer nicht als
 Klotz erkannt wird. Die frühere Regel „Greifzone innerhalb der Messregion“ (N2)
 ist damit aufgegeben. Ihr Grund — ein verschwundenes Ziel in der Zone schnell zu
-bemerken — geht auf die Roboterkamera über; hinter dem Bild führt `base_cam` die
-Tracks nur rechnerisch weiter (offen: Nachtrag 13 / L1). Die Greifzone endet vor
+bemerken — geht auf die Roboterkamera über; hinter dem Bild führt `vectoring` die
+Tracks mit der gepoolten Geschwindigkeit weiter (Nachtrag 13 / L10). Die Greifzone endet vor
 dem Bandende bei y = −0,375.
 
 > Früher kam ein zweiter Grund hinzu: Außerhalb der Region *rechnete* der Tracker
@@ -269,7 +270,8 @@ Nachtrag 5.
 | Transferhöhe Flansch, Referenzklotz | **≈ 490 mm** — `transfer_height_m` | D12; vorher 445, ohne den gehaltenen Klotz (Nachtrag 10 / J1) |
 | Ablagepose Flansch | x = **−316,49** · y = **+476,21** · z = **+419,71** mm | B9 |
 | Ablage-Orientierung (w,x,y,z) | 0,006857 · 0,680692 · 0,732524 · −0,004575 | B9 |
-| Arbeitsraum Z im Flanschmaß (Anhaltspunkt) | **0,310…0,585 m** | Vorgängerprojekt + 0,215 (B10) |
+| **Arbeitsraum `ws_*`** (festgelegt 23.09.2026) | x −1,0 … −0,30 · y −0,32 … +0,48 · z 0,3086 … 0,60 m | B10, `Safety/workspace_bounds.json`, §9 |
+| Greifzone (`priority_handler`) | x −0,95 … −0,68 · y +0,40 … −0,22 m | B19, Standardwert |
 | Bandrichtung | praktisch die **y-Achse** | M10 |
 | Bandebenheit | quer 0,39°, längs 0,01° | M9 |
 | Band von Rolle zu Rolle in `world` | y ≈ **+1,08 … −0,375 m** (~1,5 m) | Nachtrag 13 / L7 |
@@ -289,21 +291,26 @@ Programm gegenlesen**, bevor sie fest eingetragen wird.
 
 ---
 
-## 9. Vorläufige Werte für den virtuellen Roboter (Stufen 4a–4c)
+## 9. Werte für den `object_follower` (Stand 23.09.2026)
 
-⚠️ **Nur für den virtuellen Roboter.** Arbeitsraum (B10) und Beobachtungspose (B8)
-sind nicht festgelegt, deshalb haben die Parameter keinen Default. Diese Werte
-reichen, um die Stufen am virtuellen Roboter zu fahren. Am echten Roboter gelten sie
-**nicht**, bis B10 nach `Safety/README.md` dokumentiert ist.
+Der Arbeitsraum ist seit 23.09.2026 **am Aufbau festgelegt** (B10, Quelle
+`source/roboter_tetris/roboter_tetris/Safety/workspace_bounds.json`, Herleitung
+`entscheidungen.md` Nachtrag 13 / L14). Die Parameter haben bewusst keinen Default —
+beim Anlegen von Hand übernehmen.
 
-| Parameter | Vorschlag | Herleitung |
+| Parameter | Wert | Herleitung |
 |---|---|---|
-| `ws_x_min` / `ws_x_max` | −1,10 / −0,20 m | Band bei x = −0,70 … −0,93 (M9), Ablagepose x = −0,316 (B9) |
-| `ws_y_min` / `ws_y_max` | −0,60 / +0,60 m | Zonen-Platzhalter −0,45 … +0,05, Ablagepose y = +0,476 |
-| `ws_z_min` / `ws_z_max` | 0,30 / 0,80 m | Greifhöhe eines 30-mm-Klotzes 0,304 m im Flanschmaß; Freihöhe 0,49 |
-| `observe_x` / `observe_y` | −0,80 / −0,10 m | über der Bandmitte, im Zonen-Platzhalter |
-| `observe_z` | 0,60 m | geschätzt; B8 legt sie an der Roboterkamera fest |
-| `observe_yaw_deg` | 90° | nahe der geteachten Ablagepose (94°), damit das Handgelenk wenig dreht |
+| `ws_x_min` / `ws_x_max` | −1,000 / −0,300 | abgefahren bis −0,530; erweitert für die Ablage (x −0,316) |
+| `ws_y_min` / `ws_y_max` | −0,320 / +0,480 | Bandende / abgefahren bis +0,445, erweitert für die Ablage (y +0,476) |
+| `ws_z_min` / `ws_z_max` | 0,3086 / 0,600 | Backenspitze 10 mm über dem Band / darüber Singularität |
+| `observe_x` / `observe_y` | −0,816 / **+0,35** | Bandmitte, am Anfang der Greifzone (y +0,40 … −0,22) |
+| `observe_z` | **0,45** | ohne Roboterkamera tief folgen; mit Roboterkamera höher (B8) |
+| `observe_yaw_deg` | 90° | Backen quer zur Bandrichtung, nahe der Ablage-Orientierung (94°) |
+| `priority_handler`: `t_descend_s` | **1,2** | (0,45 − 0,31) / 0,15 m/s + Einschwingen; passt zu `observe_z` 0,45 (J2) |
+
+⚠️ Erster Lauf am echten Roboter gedrosselt (Fahrplan §2) — und nur mit
+`fake_objects.py` bei kleiner Geschwindigkeit, weil das echte Band (0,13 m/s)
+gedrosselt nicht einzuholen ist.
 
 Die Werte stammen aus denselben Zahlen wie die Tests (`test_follower_logic.py`).
 

@@ -10,7 +10,8 @@ import math
 import os
 
 from roboter_tetris.contracts import (
-    ObjectEntry, TRACK_FINAL, TRACK_SETTLING, unpack_objects, unpack_tracks,
+    ObjectEntry, TRACK_FINAL, TRACK_PREDICTED, TRACK_SETTLING, unpack_objects,
+    unpack_tracks,
 )
 from roboter_tetris.track_estimation import (
     EstimatorParams, TrackEstimator, mean_orientation,
@@ -178,9 +179,61 @@ def test_pool_keeps_the_share_of_blocks_that_have_left():
     for k in range(90, 150):                    # block 1 is gone (gripped)
         t = k / FPS
         est.update(t, [_obj(2, 0.7, 0.6 + V_TRUE * t)])
-    ids = [e.id for e in est.snapshot(t)[2]]
-    assert ids == [2.0]                         # track 1 expired ...
-    assert est.belt_velocity()[1] == 2          # ... its pool share did not
+    entries = {e.id: e for e in est.snapshot(t)[2]}
+    # Track 1 is no longer measured: carried on with the belt (Nachtrag 13 / L10) ...
+    assert entries[1.0].status == TRACK_PREDICTED
+    assert entries[2.0].status == TRACK_FINAL
+    assert abs(entries[1.0].y - (0.3 + V_TRUE * t)) < 0.002
+    assert est.belt_velocity()[1] == 2          # ... and its pool share stays
+    for k in range(150, 150 + int((est.params.predict_max_s + 0.5) * FPS)):
+        t = k / FPS
+        est.update(t, [_obj(2, 0.7, 0.6 + V_TRUE * t)])
+    assert [e.id for e in est.snapshot(t)[2]] == [2.0]   # predicted at most predict_max_s
+    assert est.belt_velocity()[1] == 2
+
+
+def test_a_settling_track_is_forgotten_not_predicted():
+    est = TrackEstimator()
+    est.update(0.0, [_obj(1, 0.8, 0.3)])
+    est.update(0.1, [_obj(1, 0.8, 0.3 + V_TRUE * 0.1)])
+    est.update(0.1 + est.params.track_expiry_s + 0.1, [])
+    assert est.snapshot(0.1 + est.params.track_expiry_s + 0.1)[2] == []
+
+
+def test_a_new_measurement_on_a_predicted_track_ends_the_prediction():
+    """Short occlusion in the image: base_cam sees the block again under a new
+    ID. The predicted old track must not live on as a duplicate."""
+    est = TrackEstimator()
+    for k in range(60):
+        t = k / FPS
+        est.update(t, [_obj(1, 0.8, 0.3 + V_TRUE * t)])
+    for k in range(60, 66):                     # 0.2 s unseen -> predicted
+        t = k / FPS
+        est.update(t, [])
+    assert est.snapshot(t)[2][0].status == TRACK_PREDICTED
+    t = 66 / FPS
+    est.update(t, [_obj(7, 0.8, 0.3 + V_TRUE * t)])
+    assert [e.id for e in est.snapshot(t)[2]] == [7.0]
+
+
+def test_standing_objects_stay_out_of_the_pool():
+    """Block 3, 23.09.2026: two blocks measured standing for half a minute
+    buried every moving block -- the pool said 0 mm/s while each block ran at
+    -127 mm/s. Sections below pool_min_speed_mps stay out."""
+    est = TrackEstimator(EstimatorParams(settle_half_window=5, smoothing_window=5))
+    t = 0.0
+    for _ in range(300):                               # 30 s standing, 10 Hz
+        est.update(t, [_obj(1, -0.80, 0.70)])
+        t += 0.1
+    assert est.belt_velocity() == (None, 0)           # standing: no belt estimate
+    y = 0.95
+    for _ in range(30):                                # 3 s moving at -0.127 m/s
+        est.update(t, [_obj(2, -0.85, y)])
+        t += 0.1
+        y -= 0.0127
+    v, n_pool = est.belt_velocity()
+    assert n_pool == 1
+    assert abs(v[1] - (-0.127)) < 1e-6 and abs(v[0]) < 1e-9
 
 
 def test_a_long_clean_section_counts_more_than_a_short_one():

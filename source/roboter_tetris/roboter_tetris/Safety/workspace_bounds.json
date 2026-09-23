@@ -1,30 +1,30 @@
 {
   "schema_version": 1,
-  "status": "placeholder_not_yet_defined",
-  "description": "Erlaubter kartesischer Bewegungsbereich des Roboterflansches (Sicherheitsgrenze, keine Kalibrierung im messtechnischen Sinn). Zielposen ausserhalb dieses Bereichs duerfen nicht per set_trajectory angefahren werden. Alle Werte sind Platzhalter (null) und MUESSEN vor produktivem Einsatz durch eine dokumentierte Festlegung ersetzt werden.",
+  "status": "defined",
+  "description": "Erlaubter kartesischer Bewegungsbereich des Roboterflansches (ur_tool0) in world (Sicherheitsgrenze, keine Kalibrierung im messtechnischen Sinn). Zielposen ausserhalb dieses Bereichs werden vom Sicherheitsgate des object_follower abgefangen.",
   "reference_frame": "world",
   "units": {
     "position": "m"
   },
   "bounds_m": {
-    "x_min": null,
-    "x_max": null,
-    "y_min": null,
-    "y_max": null,
-    "z_min": null,
-    "z_max": null
+    "x_min": -1.0,
+    "x_max": -0.3,
+    "y_min": -0.32,
+    "y_max": 0.48,
+    "z_min": 0.3086,
+    "z_max": 0.6
   },
   "basis": {
-    "method": null,
-    "notes": "TBD: entweder aus der Hersteller-Reichweite (Datenblatt) minus Sicherheitsmarge ableiten, oder direkt am Aufbau (Foerderband-/Ablagebereich, Hindernisse) vermessen. Bis 'method' gesetzt ist, duerfen 'bounds_m' nicht als sicherheitsrelevante Grenze in einer Komponente uebernommen werden."
+    "method": "Vermessung am Aufbau: Flansch per Handfuehrung ueber den Bandbereich gefahren (23.09.2026)",
+    "notes": "Band: x -1.000 ... -0.530, y -0.320 ... +0.445 -- sicher erreichbar, ohne Singularitaet, ausserhalb des Bildes der Basiskamera (beginnt bei y ~ +0.46); y -0.32 ist das Bandende (danach senkt sich das Band ab). z_max 0.60: darueber faehrt der Arm im hinteren Bereich in eine Singularitaet. z_min 0.3086 = Band 0.0536 + 0.010 Abstand der geschlossenen Backenspitze + 0.245 Flansch->Backenspitze. ERWEITERT fuer die Ablage neben dem Band (x -0.316, y +0.476): x_max -0.530 -> -0.30, y_max 0.445 -> 0.48. Auf dem Band zielt der Follower nie in die Erweiterung (Greifzone y <= +0.40, Anfahren auf zone_upstream geklemmt); sie wird nur beim Transfer auf Freihoehe zur Ablage durchfahren. Die Ecke x -1.0 / y +0.48 liegt im Quader, wird aber von keinem Zustand angefahren. Gelenkwinkel wurden beim Abfahren nicht mitgeschrieben; der Abstand zu Singularitaeten beruht auf Beobachtung."
   },
   "validation": {
-    "defined_at": null,
-    "operator": null,
-    "safety_margin_m": null,
-    "notes": "Noch nicht festgelegt/validiert."
+    "defined_at": "2026-09-23",
+    "operator": "Projektteam am Aufbau (Handfuehrung), dokumentiert in docs/architektur/entscheidungen.md Nachtrag 13 / L14",
+    "safety_margin_m": 0.01,
+    "notes": "Marge 10 mm nur in z (Backenspitze ueber dem Band). Die Bandhoehe 53.6 mm hat +-5 mm systematische Unsicherheit (B17) -- beim ersten Testgriff pruefen."
   },
   "runtime_parameters": {
-    "note": "Diese Datei ist die dokumentierte Quelle der Wahrheit, nicht die Laufzeit-Konfiguration. Die Werte werden manuell in die entsprechenden AICA-Parameter (z. B. workspace_x_min/x_max/y_min/y_max/z_min/z_max) der bewegungsausloesenden Komponente(n) uebernommen, analog zu cal_x/cal_y/cal_z aus Calibration/extrinsic_transform.json."
+    "note": "Laufzeitwirksam sind die AICA-Parameter ws_x_min/ws_x_max/ws_y_min/ws_y_max/ws_z_min/ws_z_max des object_follower (bewusst ohne Default, Nachtrag 8 / F3) -- beim Anlegen der Anwendung von Hand aus dieser Datei uebernehmen."
   }
 }

@@ -102,7 +102,7 @@ Stand und Reihenfolge: `uebersicht/fahrplan-aufbau.md`.
 | `robotiq_gripper` | **funktionsfähig** am Aufbau; seit 2.3 mit `motion_done`/`has_object` |
 | `base_cam` | **funktionsfähig**, erkennt Klötze zuverlässig; seit 2.1/2.4 Vertrag S1 und gemessene Längsposition. Seit 23.09.2026 Übergangskalibrierung in `world` und korrigierte Parallaxe: ≤ 6 mm zu den Antastpunkten des Roboters (B23 erledigt, Nachtrag 13) |
 | `vectoring` | gebaut — Geschwindigkeitsschätzung je Klotz und gepoolt (Ziel 3) |
-| `priority_handler` | gebaut — Zielauswahl, Erreichbarkeit, Greifebene (Ziel 4); Greifzone auf Platzhaltern bis B19 |
+| `priority_handler` | gebaut — Zielauswahl, Erreichbarkeit, Greifebene (Ziel 4); Greifzone seit 23.09.2026 festgelegt (B19), wählt auch vorhergesagte Klötze hinter dem Bild |
 | `data_tracker` | gebaut — Klotzliste für die Anzeige |
 | `object_follower` | gebaut, alle vier Stufen — Start, Folgen, Roboterkamera als Korrektur, Greifzyklus mit Ablage |
 | `interface_streamer` | gebaut — Übersichtsbild für RViz |
@@ -316,9 +316,8 @@ Ohne Handlungsbedarf, aber gut zu wissen:
 - `component_descriptions/roboter_tetris_auto_calibration.json` existiert, die
   Klasse `AutoCalibration` ist aber **nicht in `setup.cfg` registriert**. Gehört
   zum Kalibrierprojekt — nicht anfassen.
-- `Safety/workspace_bounds.json` steht auf `placeholder_not_yet_defined` mit
-  lauter `null`. Laut eigenem README darf daraus nichts als Sicherheitsgrenze
-  übernommen werden, solange das so ist.
+- `Safety/workspace_bounds.json` ist seit 23.09.2026 **festgelegt** (am Aufbau
+  abgefahren, `status: defined`, Nachtrag 13 / L14).
 - `Calibration/calibration.json` enthält Legacy-Werte, markiert als
   `legacy_initial_values` — noch nicht validiert.
 - **Tests:** Seit 1.1 prüft `test_contracts.py` jedes Signalformat. Jede neue

@@ -43,8 +43,8 @@ Aufbau ist im Gang — Stand und nächste Schritte: **`fahrplan-aufbau.md`**
 | | Komponente | Stand |
 |---|---|---|
 | ✅ läuft am Aufbau | `base_cam` (Übergangskalibrierung, B23 erledigt), `vectoring`, `priority_handler`, `data_tracker`, `robotiq_gripper`, Attractor → IK-Velocity-Controller | Datenpfad bis `data_tracker` geprüft (Nachtrag 12 / K4); Schätzung mit laufendem Band offen (Block 3) |
-| 🟡 gebaut, am Aufbau offen | `object_follower` (4a–4d), `interface_streamer`, `fake_objects.py` | Follower-Parameter an die gemessene Latenz anpassen, bevor er fährt (Nachtrag 13 / L1) |
-| 🟡 gebaut, am Aufbau durchgefallen | `robot_cam_2` (weiter verfolgt), `robot_cam` (nicht mehr) | Banddistanz-Korrektur seit 23.09., B6 offen |
+| 🟡 gebaut, am Aufbau offen | `object_follower` (4a–4d), `interface_streamer`, `fake_objects.py` | Parameter angepasst (L10, L11, L14); erster Lauf am echten Roboter steht aus (Block 7) |
+| 🟡 misst, Erkennung unzuverlässig | `robot_cam_2` (weiter verfolgt), `robot_cam` (nicht mehr) | Banddistanz und Nah-Gate korrigiert, Hand-Auge neu (L11–L13); neuer Erkennungskern nötig |
 
 ### ⚠️ Zuerst lesen: was sich am 22./23.09. verschoben hat
 
@@ -64,8 +64,14 @@ Nachträge 12 und 13 in `architektur/entscheidungen.md`:
   (L4) — sonst erkennt sie den Greifer als Klötze. Die Strecke dahinter
   überbrückt die Roboterkamera.
 - **Band ≈ 0,13 m/s** (Stoppuhr), von y +1,08 bis −0,375 in `world` (L7).
-- **Offen vor dem ersten Folgen:** Deckel der Vorhersage und 0,5-s-Grenzen an die
-  gemessene Latenz, Datenweg hinter dem Bild der Basiskamera (L1).
+- **Hinter dem Bild führt `vectoring` weiter** (S3-Status 4 „vorhergesagt“, L10);
+  Pool nur aus bewegten Klötzen; Band −127,9 mm/s geschätzt — **Ziel 3 bestätigt**.
+  Follower-Deckel 0,6 s, Zeitgrenzen 1,0 s.
+- **Hand-Auge der Roboterkamera neu eingemessen** (Vorgänger lag in z 13 cm
+  daneben, L11); die Erkennung von `robot_cam_2` ist an flachen Klötzen noch
+  unzuverlässig (L13) → erster Griff ohne Roboterkamera.
+- **Arbeitsraum und Greifzone festgelegt** (L14, `Safety/workspace_bounds.json`),
+  `min_grip_height_m` 0,021.
 
 ### Was sich am 21.09. verschoben hat
 
@@ -106,7 +112,7 @@ Fundstelle in `architektur/entscheidungen.md`:
 | 🟡 **B21** — misst der Tracker außerhalb der alten Region sauber? | Voraussetzung für 2.4 und damit für eine nicht zirkuläre Geschwindigkeitsschätzung (Nachtrag 6 / Z4). |
 | 🔴 **C3** — Extrinsik der Basiskamera | Läuft als Projekt eines Kommilitonen. Die Basiskamera steht auf einem **beweglichen** Gestell, deshalb wird die Bestimmung automatisiert. **Überbrückt** durch die Übergangskalibrierung (Nachtrag 13 / L6) — wird die Kamera bewegt, gilt sie nicht mehr. |
 | ✅ **B23** — Basiskamera und Roboter im selben System | Erledigt 23.09.2026: fünf Antastpunkte, Rest ≤ 6 mm (Nachtrag 13 / L6). |
-| 🟡 **Latenz im Follower** | `max_extrapolation_s` 0,2 s gegen gemessene bis 0,5 s — sonst läuft der Flansch still hinter dem Klotz her (Nachtrag 13 / L1). |
+| ✅ **Latenz im Follower** | `max_extrapolation_s` 0,6 s, Zeitgrenzen 1,0 s (Nachtrag 13 / L10). |
 
 > **B1 ist nicht mehr rot.** Die Bandgeschwindigkeit wird geschätzt; B1 ist nur
 > noch die Gegenprobe mit der Stoppuhr.
@@ -288,10 +294,10 @@ Einrichtung §9.
 Debug-Bild ablesen), dann **B8** (Beobachtungshöhe, trägt `observe_z`) und D18.
 **B24:** stempelt die D435i in der Rechneruhr?
 
-**5. Greifzone** — **B19 + B11**: Arm die Bandstrecke abfahren,
-Gelenkgeschwindigkeiten mitlesen; die Werte ersetzen die Platzhalter `zone_*` im
-`priority_handler`. Seit 23.09. liegt die Zone **außerhalb** des Bildes der
-Basiskamera (etwa y 0,30 … −0,30, Nachtrag 13 / L4).
+**5. Greifzone** ✅ — **B19 + B10** am 23.09.2026 von Hand abgefahren: Arbeitsraum
+in `Safety/workspace_bounds.json`, Zone y +0,40 … −0,22 als Standardwert im
+`priority_handler` — außerhalb des Bildes der Basiskamera (Nachtrag 13 / L4, L14).
+B11 nur beobachtet (Gelenke nicht mitgeschrieben).
 `is_zone_feasible` zeigt, ob die Zone lang genug ist. **B10:** Arbeitsraum nach
 `Safety/README.md` festlegen.
 

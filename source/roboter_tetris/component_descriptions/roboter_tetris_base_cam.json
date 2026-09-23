@@ -291,18 +291,18 @@
     },
     {
       "display_name": "Tracker: Mess-Region Y-Min (mm)",
-      "description": "Vertrauenswürdige Region für Geschwindigkeitsmessung",
+      "description": "Mess-Region des Trackers (world, mm). Darin wird ein nicht gesehener Track nach wenigen Fehlbildern gelöscht, außerhalb führte ihn der Tracker mit seiner eigenen Geschwindigkeit weiter. Seit 23.09.2026 das ganze Band (-375 … 1080): Das Weiterführen hinter dem Bild übernimmt vectoring (Nachtrag 13 / L10).",
       "parameter_name": "track_velocity_region_y_min",
       "parameter_type": "double",
-      "default_value": "500.0",
+      "default_value": "-375.0",
       "dynamic": true
     },
     {
       "display_name": "Tracker: Mess-Region Y-Max (mm)",
-      "description": "Vertrauenswürdige Region für Geschwindigkeitsmessung",
+      "description": "Mess-Region des Trackers (world, mm). Darin wird ein nicht gesehener Track nach wenigen Fehlbildern gelöscht, außerhalb führte ihn der Tracker mit seiner eigenen Geschwindigkeit weiter. Seit 23.09.2026 das ganze Band (-375 … 1080): Das Weiterführen hinter dem Bild übernimmt vectoring (Nachtrag 13 / L10).",
       "parameter_name": "track_velocity_region_y_max",
       "parameter_type": "double",
-      "default_value": "1000.0",
+      "default_value": "1080.0",
       "dynamic": true
     },
     {

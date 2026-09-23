@@ -193,7 +193,7 @@ nicht wiederholt werden muss.
 
 | Gesucht | Wert | Fundstelle |
 |---|---|---|
-| Hand-Auge Roboterkamera (**C1/C4**) | `camera_mount_to_camera`: x = 0,1087 · y = −0,03436 · **z = −0,05987** (m), rpy = (0,02898 · 0,02722 · 1,597) rad ≈ (1,66° · 1,56° · **91,5°**). **Bezug geklärt: Flansch → Kamera** (Beweiskette in `vorgaengerprojekt-abgleich.md` §2) — damit direkt als `handeye_*` des `object_follower` verwendbar. | `Robot/Calibration_results_final.yaml` |
+| Hand-Auge Roboterkamera (**C1/C4**) — ⚠️ **Versatz überholt**, neu eingemessen 23.09.2026 (`entscheidungen.md` Nachtrag 13 / L11) | `camera_mount_to_camera`: x = 0,1087 · y = −0,03436 · **z = −0,05987** (m), rpy = (0,02898 · 0,02722 · 1,597) rad ≈ (1,66° · 1,56° · **91,5°**). **Bezug geklärt: Flansch → Kamera** (Beweiskette in `vorgaengerprojekt-abgleich.md` §2) — damit direkt als `handeye_*` des `object_follower` verwendbar. | `Robot/Calibration_results_final.yaml` |
 | Wartepose Roboterkamera (**B8**) | `Kamera_2_Kalib`: die **aktive** Zeile ist TCP **Z = 0,15 m** mit *senkrechter* Orientierung; die Zeile mit **Z = 0,1 m** und geneigter Haltung ist **auskommentiert** (siehe Falle 3). | `Robot/pose.yaml` |
 | Arbeitsraum-Indiz (**B10**) | Workspace **vollständig**: X −0,05…1,05 · Y −0,8…0,3 · Z 0,095…0,37 (m). Wurde vor jeder Bewegung geprüft (`Robot/save_pos.py`). ⚠️ **TCP-Bezug, nicht Flansch** — siehe `vorgaengerprojekt-abgleich.md` Falle 5. | `Robot/pose.yaml` |
 | Bandmitte | `KAMERA_MITTE_X` = 0,418329 | `Robot/move_handler_strat2.py` |

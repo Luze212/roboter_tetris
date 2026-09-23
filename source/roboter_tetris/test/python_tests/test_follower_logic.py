@@ -251,7 +251,8 @@ def test_prediction_and_lead_as_time():
 
 def test_prediction_horizon_is_capped_both_ways():
     old = tracking_point(_s4(1.0, -0.20), 2.0, TRACK, clamp_upstream=False)
-    assert old.capped and abs(old.block_y - (-0.20 - 0.1 * 0.2)) < 1e-12
+    cap = TRACK.max_extrapolation_s
+    assert old.capped and abs(old.block_y - (-0.20 - 0.1 * cap)) < 1e-12
     future = tracking_point(_s4(1.0, -0.20), 0.9, TRACK, clamp_upstream=False)
     assert future.capped and future.block_y == -0.20
 
@@ -333,8 +334,9 @@ def test_each_abort_reason_ends_the_attempt_with_picked_id():
 
 def test_standing_s4_timestamp_aborts():
     core = _tracking_core(y=0.30)
-    assert core.step(AT_OBSERVE, _s4(0.0, 0.30), 0.4).state == STATE_APPROACH
-    core.step(AT_OBSERVE, _s4(0.0, 0.30), 0.6)
+    limit = TRACK.target_timeout_s
+    assert core.step(AT_OBSERVE, _s4(0.0, 0.30), limit - 0.1).state == STATE_APPROACH
+    core.step(AT_OBSERVE, _s4(0.0, 0.30), limit + 0.1)
     assert core.picked[0] == 1.0
     assert any("steht still" in e for e in core.pop_events())
 

@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from typing import List, NamedTuple, Optional, Sequence, Set, Tuple
 
 from .contracts import (
-    TRACK_FINAL, AttemptWatcher, PickedId, TrackEntry, TracksMsg, along_belt,
+    TRACK_SELECTABLE, AttemptWatcher, PickedId, TrackEntry, TracksMsg, along_belt,
     pack_not_pickable, pack_target,
 )
 
@@ -31,13 +31,15 @@ MIN_BELT_SPEED_MPS = 0.01
 
 @dataclass
 class SelectorParams:
-    # Grasp zone in the robot frame (B19). PLACEHOLDERS: x spans the belt
-    # surface the robot touched (-0.70 ... -0.93, M9), y is a 0.5 m guess
-    # around the touched section (Nachtrag 8 / F1).
+    # Grasp zone in world (B19, 23.09.2026, Nachtrag 13 / L14). x: the belt
+    # surface the robot touched (-0.70 ... -0.93, M9). y: inside the workspace
+    # driven by hand (-0.32 ... +0.445), outside the base camera image -- 5 cm
+    # below its upper edge for the approach, 10 cm above the belt end for moving
+    # on with the belt after the grip.
     zone_x_min: float = -0.95
     zone_x_max: float = -0.68
-    zone_y_min: float = -0.45
-    zone_y_max: float = 0.05
+    zone_y_min: float = -0.22
+    zone_y_max: float = 0.40
     #: Binding speed limit of the approach: the lower of attractor and IK
     #: controller (A1) -- by default the IK controller's 0.25 m/s.
     attractor_v_max_mps: float = 0.25
@@ -219,7 +221,7 @@ class TargetSelector:
             track = by_id.get(self.locked_id)
             if track is None:
                 self.withdraw("verloren, ID nicht mehr in tracks")
-            elif track.status != TRACK_FINAL:
+            elif track.status not in TRACK_SELECTABLE:
                 self.withdraw("schwingt neu ein (Status 3)")
             elif frame is None:
                 self.withdraw("keine Bandschätzung")
@@ -246,8 +248,11 @@ class TargetSelector:
                 msg.t, locked is not None, frame.zone_upstream,
                 frame.grasp_plane, frame.v_belt, locked,
                 t_rest=t_available(frame, locked) if locked is not None else 0.0)
+            # Not the ones already attempted: a gripped block is no longer seen
+            # and vectoring carries it on as predicted (status 4) -- it is not
+            # "missed", it is in the bin.
             past_plane = [track.id for track in msg.tracks
-                          if track.id != self.locked_id
+                          if track.id != self.locked_id and track.id not in self._done
                           and frame.s(track.x, track.y) > frame.grasp_plane]
 
         return Selection(
@@ -266,7 +271,7 @@ class TargetSelector:
         params = self.params
         best = None
         for track in tracks:
-            if track.status != TRACK_FINAL or track.id in self._done:
+            if track.status not in TRACK_SELECTABLE or track.id in self._done:
                 continue
             if not self._graspable(track):
                 continue

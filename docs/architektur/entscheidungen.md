@@ -22,7 +22,7 @@ frühere Festlegung berührt; an der alten Stelle steht dann ein Verweis.
 | Nachtrag 10 | Bau `object_follower` 4c/4d: J1 Freihöhe, J2 Absenkzeit, J3–J8 |
 | Nachtrag 11 | Bau `interface_streamer`: V1–V3 |
 | Nachtrag 12 | Inbetriebnahme am Aufbau (22.09.): K1–K6, u. a. 180° `base`/`world`, falsche Gier der Altkalibrierung |
-| **Nachtrag 13** | **Audit und Aufbau (23.09.):** L1 Audit, L2 Datenrate/Latenz, L3 Hardware-Takt, L4 Greifer im Bild, L5 Roboterkamera, L6 B23 abgeschlossen (Neigung, Parallaxe, neue Extrinsik), L7 Bandgeschwindigkeit, L8 Standardwerte |
+| **Nachtrag 13** | **Audit und Aufbau (23.09.):** L1 Audit, L2 Datenrate/Latenz, L3 Hardware-Takt, L4 Greifer im Bild, L5 Roboterkamera, L6 B23 abgeschlossen (Neigung, Parallaxe, neue Extrinsik), L7 Bandgeschwindigkeit, L8 Standardwerte, L9 Block 3 und Pool-Mindestgeschwindigkeit, L10 Weiterführung hinter dem Bild, L11 Roboterkamera und Hand-Auge, L12 Nah-Gate ohne fehlende Tiefe, L13 Erkennung der Roboterkamera, L14 Arbeitsraum und Greifzone |
 
 ⚠️ Namensgleichheit: **F1–F3 in Nachtrag 2** und **F1–F6 in Nachtrag 8** sind
 verschiedene Punkte — im Text immer mit Nachtragsnummer zitiert.
@@ -900,6 +900,7 @@ abdeckt.
 Umsetzung: Rechteck-Clamp auf die Zielpose. Voraussetzung bleibt B10 —
 `Safety/workspace_bounds.json` steht weiterhin auf `placeholder_not_yet_defined`
 mit lauter `null`, und laut eigenem README darf daraus nichts übernommen werden.
+> ✅ **B10 festgelegt 23.09.2026** (Nachtrag 13 / L14), `status: defined`.
 
 ### Singularitäten
 
@@ -2918,7 +2919,7 @@ sind heute gemessen (L2, L4, L7). Offen aus dem Audit bleiben:
   Messungen. Genau dort wird gegriffen (L4). Vorschlag: S1 kennzeichnet
   weitergeführte Einträge, `vectoring` extrapoliert selbst mit der gepoolten
   Geschwindigkeit, Tracks verfallen am Zonenende statt nach 0,5 s.
-- **Greifzonen-Platzhalter** y −0,45 … +0,05 reicht über das Bandende (−0,375) hinaus.
+- **Greifzonen-Platzhalter** y −0,45 … +0,05 reicht über das Bandende (−0,375) hinaus. *(Behoben: L14.)*
 - **Startverhalten:** Der Attractor fährt beim Start auf die gespeicherte Zielpose.
 
 ### L2 — Datenrate und Latenz der Basiskamera
@@ -3052,3 +3053,202 @@ y ≈ 0,46 … 1,03 ab; die übrigen ~0,84 m (6,5 s) sieht sie nicht.
 Einschwing-Halbfenster 5 (zählt Messungen; bei 5–7 Messungen/s ≈ 0,7–1 s).
 ⚠️ **Gespeicherte Blockparameter gehen vor:** Neue Standardwerte gelten nur für
 neu eingefügte Blöcke. `rate` bleibt in der Oberfläche (K2).
+
+### L9 — Block 3: Schätzung je Klotz stimmt, Pool und Bildrand nicht
+
+Nach dem Build mit `top_depth_bias_mm`: Höhe flach 23,8 mm (echt 24,2), hoch
+96,2 mm (echt 100,4) — Schritt 0 bestanden. Dann Band an, drei Klötze, 120 s
+`tracks`:
+
+| Klotz | im Bild (y, mm) | final nach | geschätzte Geschwindigkeit |
+|---|---|---|---|
+| flach | 776 → 586 | 1,7 s | **−128,0 mm/s** |
+| gekippt, liegend | 971 → 608 | 3,3 s | **−126,6 mm/s** |
+| hoch, stehend | 959 → 548 | nie | — |
+
+**Je Klotz trägt Ziel 3:** Stoppuhr 125–133 mm/s, Richtung sauber −y (quer
+< 1,1 mm/s).
+
+**Befund 1 — Pool stand auf 0.** Zwei Abschnitte stammten von den **stehenden**
+Klötzen aus Schritt 0; nach `S_tt` gewichtet, begruben sie die kurzen bewegten
+Abschnitte. **Entscheidung (Nutzer):** Nicht vergessen, sondern nur **bewegte**
+Abschnitte poolen — neuer Parameter `pool_min_speed_mps` = 0,05 (Untergrenze der
+Vorgängergruppe; Band ≈ 0,13). Stehende Objekte, auch erkannte Greiferbacken,
+bleiben damit draußen, die Präzision langer Abschnitte bleibt. Umgesetzt mit Test.
+
+**Befund 2 — Tracks enden am Bildrand.** Das sichtbare Bild endet bei
+y ≈ 0,55–0,61, die Messregion erst bei 0,50: Die Klötze verlassen das Bild noch
+*in* der Region und werden nach drei Fehlbildern gelöscht. Hinter dem Bild kommt
+nichts an — die Greifzone (L4) sieht nie ein Ziel. Das bestätigt L1 („Strecke
+ohne Basiskamera“) am echten Band; die Weiterführung gehört in `vectoring`, mit
+der gepoolten Geschwindigkeit. Offen.
+
+**Befund 3 — Einschwingen knapp.** Ein Klotz ist nur ~3,5 s im Bild; der
+stehende hohe Klotz wurde darin nicht final. Ursache noch nicht untersucht.
+
+### L10 — Hinter dem Bild führt `vectoring` weiter (umgesetzt)
+
+Umsetzung von L1 („Strecke ohne Basiskamera“) nach Befund 2 aus L9:
+
+- **Neuer Status 4 „vorhergesagt“** in S3 (`contracts.TRACK_PREDICTED`). Ein
+  finaler Track, der im letzten Bild fehlt, wird nicht vergessen, sondern mit der
+  gepoolten Geschwindigkeit fortgeschrieben — dieselbe Projektion, die ein finaler
+  Track immer nutzt, nur ohne neue Messungen. Höchstens `predict_max_s` = 8 s
+  (Bildrand bis Bandende bei 0,13 m/s ≈ 7 s). Einschwingende Tracks werden wie
+  bisher nach `track_expiry_s` vergessen (jetzt 1,0 s statt 0,5).
+- **Übergabe:** Liegt eine Messung näher als `handover_distance_m` = 0,05 m an
+  einem vorhergesagten Track, endet dessen Vorhersage — der Klotz ist unter neuer
+  ID wieder im Bild.
+- **`base_cam` führt nicht mehr selbst weiter:** Die Messregion umfasst das ganze
+  Band (−375 … 1080). Innerhalb löscht der Tracker nach drei Fehlbildern, außerhalb
+  hatte er mit seiner EMA-Geschwindigkeit weitergeführt. S1 enthält damit nur
+  Messungen. Reine Parameteränderung.
+- **Empfänger:** `priority_handler` wählt aus Status 0 und 4 und meldet bereits
+  versuchte IDs nicht mehr als „hinter der Greifebene“ (ein gegriffener Klotz läuft
+  vorhergesagt weiter). Ein gegriffener Klotz hält das Ziel jetzt bis zur Meldung in
+  `picked_id` — vorher verschwand seine ID schon beim Anheben. `data_tracker`
+  zählt den Ablauf ab dem *ersten* Erledigt-Zeitpunkt. Anzeige: „vorhergesagt“.
+- **Zeitgrenzen an die gemessene Latenz (L2):** Follower `max_extrapolation_s`
+  0,2 → **0,6**, `target_timeout_s` 0,5 → **1,0**; `priority_handler`
+  `STALE_TIMEOUT_S` 0,5 → **1,0**.
+
+Tests: 248 lokal grün (neu: Vorhersage und Ablauf, Übergabe, Vergessen
+einschwingender Tracks; angepasst: Deckel und Zeitgrenzen des Followers, Laufzeit
+des synthetischen Buchhaltungstests). Am Aufbau zu prüfen: Tracks laufen als
+Status 4 bis in die Greifzone, die Position stimmt dort (Antasten).
+
+**Block 3 wiederholt (nach dem Build), 150 s, vier Klötze:**
+
+| Klotz | final nach | vorhergesagt ab | Ende der Vorhersage |
+|---|---|---|---|
+| hoch (96 mm) | 0,9 s (y 873) | y 515 | y −493 |
+| flach (24 mm) | 1,0 s (y 695) | y 515 | y −496 |
+| hoch | 1,2 s (y 827) | y 508 | y −502 |
+| hoch (100 mm) | 1,3 s (y 829) | y 522 | y −487 |
+
+- **Pool −127,9 mm/s**, quer −0,1 mm/s, ab dem ersten Klotz stabil (−127,8 …
+  −128,1) — Stoppuhr 125–133 mm/s. **Ziel 3 ist am laufenden Band bestätigt.**
+- Alle Klötze werden nach ~1 s final, auch die hohen (vorher nie); jeder läuft ab
+  dem Bildrand (y ≈ 0,51) als Status 4 durch die Greifzone bis hinter das Bandende.
+  Keine doppelten IDs, keine Übergabe nötig.
+- `predict_max_s` = 8 s reicht ~0,12 m über das Bandende (−0,375) hinaus;
+  unkritisch, die Greifzone endet vorher.
+- Offen: Genauigkeit der Vorhersage in der Greifzone. Nach der Rechnung klein
+  (Pool-Streuung < 0,5 mm/s × ≤ 6 s ≈ 3 mm, dazu B23 ≤ 6 mm); direkt messen lässt
+  sie sich erst mit der Roboterkamera (Block 6) oder beim ersten Griff.
+
+### L11 — Block 6: Roboterkamera misst, die Hand-Auge-Kalibrierung war falsch
+
+**Messung.** `robot_cam_2` über einem 100-mm-Klotz hinter dem Bild der
+Basiskamera (Flansch z 624 mm): `valid = 1`, Streuung < 1 mm, Banddistanz
+**499 mm** — die Median-Banddistanz (L5) trägt (am 22.09. noch 184 statt 284 mm).
+Belichtungsautomatik der D435i war aus (`exposure` 166).
+
+**Hand-Auge falsch (C1).** Die Umrechnung nach `world` legte das Band auf z = 185
+statt 53,6 mm und den Klotz 34 mm neben den Antastpunkt. Die Richtung Flansch →
+Kamera im Code stimmt (die umgekehrte lag 200 mm daneben); falsch ist der
+**Versatz**: Die Vorgängergruppe setzt die Kamera 6 cm *über* den Flansch, sie sitzt
+7 cm darunter — unabhängig bestätigt durch die Banddistanz.
+
+**Neu eingemessen** an einem angetasteten flachen Klotz (50 × 75 × 25 mm) aus fünf
+Ansichten, Flanschhöhe 0,47–0,62 m, eine mit um ~20° gekipptem Werkzeug. Die Mitte
+der Oberseite wurde **offline** aus Farb- und Tiefenbild segmentiert, unabhängig von
+`robot_cam_2` (s. u.). Ausgleich der sechs Werte:
+
+| Flansch → Kamera | x mm | y mm | z mm | Roll | Pitch | Yaw |
+|---|---|---|---|---|---|---|
+| Vorgängergruppe (C1) | 108,7 | −34,4 | −59,9 | 1,66° | 1,56° | 91,50° |
+| **neu** | **78,3** | **−32,6** | **72,0** | **4,26°** | **0,08°** | **90,95°** |
+
+Rest ≤ 4,4 mm je Ansicht. Die fünfte Ansicht, vorher aus den übrigen vier
+vorhergesagt: **1,7 mm** (C1: 14,8 mm). x und Roll sind korreliert (vier Ansichten:
+x 93,7 / Roll 2,0°) — beide Sätze sagen im gemessenen Höhenbereich auf ~2 mm gleich
+voraus. Neue Standardwerte `handeye_*` im Follower; Test mit der echten
+Prüfansicht. Rohdaten: `architektur/bilder/2026-09-23-handauge-ansichten.json`.
+
+**Drei Befunde an `robot_cam_2` selbst (offen, B6):**
+
+1. **Glanzstreifen als Klotz.** Auf dem Band liegt ein heller Reflexstreifen ohne
+   gültige Tiefe; das Nah-Gate zählt fehlende Tiefe als „nah“ und nahm den Streifen,
+   als der Klotz am Bildrand stand (`bilder/2026-09-23-robotcam2-glanzstreifen.png`).
+   Auch bei sichtbarem Klotz verschmolz der Streifen mit dessen Umriss. Vorschlag:
+   Das Gate verlangt gültige Tiefe über dem Band, nicht nur fehlende.
+2. **Seitenfläche.** Schräg gesehen gehört die zugewandte Seitenfläche eines hohen
+   Klotzes zum Umriss; die Mitte rutscht zur Kamera (≈ 14 mm beim 100-mm-Klotz,
+   `bilder/2026-09-23-robotcam2-seitenflaeche.png`). Beim Folgen steht die Kamera
+   nahezu senkrecht darüber, der Effekt bleibt aber bei Versatz — Kandidat für
+   eine Oberseiten-Auswahl über die Tiefe.
+3. **Rate:** 2 Messungen/s bei 460 ms Alter (Debug-Bild an, gemeinsamer
+   Python-Prozess, L2).
+
+### L12 — Nah-Gate: nur gültige Tiefe über dem Band zählt (umgesetzt)
+
+Folgerung aus L11, Befund 1. `near_mask` (gemeinsamer Kern, wirkt in beiden
+Varianten auf das Gate und in `robot_cam_2` auf die Tiefenkanten) zählt fehlende
+Tiefe (0) nicht mehr als „nah“, nur noch gültige Tiefe mindestens 20 mm über dem
+Band. Die matte Oberseite liefert aus Beobachtungshöhe gültige Tiefe (325–385 mm
+gemessen); fehlende Tiefe kommt von Glanz, glänzenden Seitenflächen oder zu
+geringem Abstand. Tests: synthetische Klötze jetzt erhöht statt Tiefe 0; neu ein
+Glanzstreifen ohne Tiefe, der verworfen werden muss.
+
+**Nachgerechnet mit dem echten Code an den fünf Rohansichten aus L11** (Abstand
+der gemeldeten Mitte zur offline ausgeschnittenen Oberseite, ~0,6 mm/px):
+
+| Ansicht | vorher | nachher |
+|---|---|---|
+| F1 | 31 px (mit Glanzstreifen verschmolzen) | **5 px** |
+| F2 | 66 px | 28 px |
+| F3 | **260 px** (Glanzstreifen gewählt) | **4,5 px** |
+| F4 (Werkzeug ~20° gekippt) | 22 px | 22 px |
+| F5 (Klotz am oberen Bildrand) | 44 px, falsch | keine Erkennung |
+
+Der Glanzstreifen ist damit gelöst. Offen bleiben 14–17 mm Versatz in F2/F4 —
+vermutlich Seitenfläche oder Schatten im Umriss (L11, Befund 2) — und die Rate.
+
+### L13 — Roboterkamera nach dem Build: Hand-Auge bestätigt, Erkennung nicht
+
+Gegenprobe an einer neuen Pose über dem angetasteten flachen Klotz: offline
+ausgeschnittene Oberseite mit der neuen Hand-Auge-Kalibrierung **3,3 mm** vom
+Antastpunkt — die Kalibrierung trägt (sechs Ansichten, 2–4 mm). `robot_cam_2` selbst
+meldete die Mitte **32 mm** daneben (62 px). Offline an allen sechs Rohbildern:
+
+| Ansatz | Abweichung zur Oberseite je Bild (px, ~0,6 mm/px) |
+|---|---|
+| Kante (`robot_cam_2`) | 5 · 28 · 4 · 22 · — · 66 |
+| Farbe (`robot_cam`) | keine Erkennung (Bandmaske versagt) |
+| nur Tiefe über dem Band | 36 · 23 · 45 · — · — · — |
+| positive Klotzfarbe (gesättigt), Tiefe nur für die Oberseite — offline | ≈ 0 |
+
+Beim flachen Klotz trennt die Tiefe kaum (Oberseite 23 mm über dem Band), und die
+Kanten schließen sich oft nicht. Die positive Klotzfarbe trägt für Rot und Blau;
+Weiß ist offen (K3). **Entscheidung:** Die Roboterkamera wird vorerst nicht weiter
+repariert; der erste Griff läuft mit der Basiskamera allein (Gewichte 0, Z10). Ein
+neuer Erkennungskern entsteht am Schreibtisch mit den gesicherten Rohbildern.
+
+### L14 — Arbeitsraum (B10), Greifzone (B19), Greifhöhe
+
+Von Hand abgefahren (Nutzer): sicher, ohne Singularität, außerhalb des Bildes der
+Basiskamera — **x −1,000 … −0,530, y −0,320 … +0,445**; y −0,32 ist das Bandende
+(danach senkt sich das Band). **z max 0,60** (darüber Singularität im hinteren
+Bereich), **z min 0,3086** (geschlossene Backenspitze 10 mm über dem Band:
+53,6 + 10 + 245 mm). Die Gelenke wurden nicht mitgeschrieben.
+
+- **Ablage neben dem Band** (x −0,316, y +0,476) liegt außerhalb → Arbeitsraum für
+  den Follower erweitert auf **x_max −0,30, y_max +0,48**. Auf dem Band zielt der
+  Follower nie dorthin (Zone, Klemmung beim Anfahren); nur der Transfer auf
+  Freihöhe führt hinein. Festgehalten in `Safety/workspace_bounds.json`
+  (`status: defined`).
+- **Greifzone** (`priority_handler`, Standardwert): x −0,95 … −0,68,
+  **y +0,40 … −0,22** — 5 cm unter dem Arbeitsraumrand fürs Anfahren, 10 cm über dem
+  Bandende fürs Mitfahren nach dem Greifen.
+- **`min_grip_height_m` 0,015 → 0,021:** Sonst läge die Greifhöhe flacher Klötze
+  (Flansch 0,3036) unter der Arbeitsraum-Untergrenze, und das Gate bräche ab. Die
+  Auflage reicht von 11 bis 31 mm; die Greifbarkeitsgrenze 30 mm bleibt.
+- **Wartepose am Zonenanfang:** Ein synthetischer Lauf mit Wartepose am Zonenende
+  (y −0,20) fand kein erreichbares Ziel mehr. Vorschlag `observe_*`: x −0,816
+  (Bandmitte), **y +0,35**, Gier 90°.
+- **Höhe beim Folgen:** Mit `observe_z` 0,60 und `t_descend_s` 2,0 liegt die
+  Greifebene bei 0,128 m/s bei y ≈ +0,32 — nur 8 cm nach Zonenbeginn. Ohne
+  Roboterkamera spricht nichts gegen tieferes Folgen: **`observe_z` 0,45,
+  `t_descend_s` 1,2** (0,14 m / 0,15 m/s + Einschwingen) → Greifebene y ≈ +0,20,
+  20 cm Fenster. Für die Roboterkamera später wieder höher (B8).

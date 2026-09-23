@@ -7,6 +7,14 @@ noch nicht gelaufen). Logik in `follower_logic.py` (ohne ROS), Schale in
 `object_follower.py`. Beim Bau entschieden: `entscheidungen.md` **Nachtrag 8** (4a),
 **9** (4b), **10** (4c, 4d).
 
+> ⚠️ **Seit 23.09.2026 geänderte Standardwerte** (`entscheidungen.md` Nachtrag 13):
+> `max_extrapolation_s` 0,2 → **0,6**, `target_timeout_s` 0,5 → **1,0** (L10);
+> Hand-Auge `handeye_*` neu eingemessen — **0,0783 / −0,0326 / 0,0720 m,
+> 4,26 / 0,08 / 90,95°** statt C1 (L11); `min_grip_height_m` 0,015 → **0,021** (L14).
+> Der Arbeitsraum `ws_*` ist festgelegt (B10, `Safety/workspace_bounds.json`),
+> Vorschläge für `observe_*`: Einrichtung §9. Die Tabellen unten zeigen den Stand
+> beim Bau.
+
 > **Diese Spec wird gelöscht**, sobald der Follower am Aufbau gelaufen ist.
 
 > **Vorrang.** Normativ sind `docs/architektur/entscheidungen.md` und

@@ -56,7 +56,7 @@ __all__ = [
     # Shared vocabularies
     "COLOR_RED", "COLOR_YELLOW", "COLOR_GREEN", "COLOR_BLUE", "COLOR_WHITE",
     "COLOR_BLACK", "COLOR_UNKNOWN",
-    "TRACK_FINAL", "TRACK_SETTLING",
+    "TRACK_FINAL", "TRACK_SETTLING", "TRACK_PREDICTED", "TRACK_SELECTABLE",
     "OUTCOME_PLACED", "OUTCOME_MISSED_GRIP", "OUTCOME_LOST", "OUTCOME_TOO_LATE",
     "OUTCOME_ABORTED",
     "FOLLOWER_STATES",
@@ -89,6 +89,12 @@ COLOR_BLUE, COLOR_WHITE, COLOR_BLACK, COLOR_UNKNOWN = 3, 4, 5, 6
 #: unassigned means an old note about "status 1" can never mean something else.
 TRACK_FINAL = 0       #: velocity measured as constant; selectable, feeds the pool
 TRACK_SETTLING = 3    #: just placed, may still be toppling; not yet selectable
+#: Final, but no longer measured (left the base camera image, or missed a frame):
+#: the position is carried on with the pooled belt velocity. Selectable -- the
+#: grasp zone lies behind the image (entscheidungen.md Nachtrag 13 / L4, L10).
+TRACK_PREDICTED = 4
+#: Statuses a consumer may choose a target from.
+TRACK_SELECTABLE = (TRACK_FINAL, TRACK_PREDICTED)
 
 #: Outcome codes carried in S7 field 2.
 OUTCOME_PLACED = 0       #: block is in the bin (also after an abort while holding it)

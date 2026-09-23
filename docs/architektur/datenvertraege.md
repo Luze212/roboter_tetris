@@ -249,10 +249,20 @@ erhalten. Wer eine Verwendung im Regelpfad sucht, sucht vergeblich.
 |---|---|---|
 | 0 | **final** — Geschwindigkeit konstant gemessen; der Klotz wird nicht mehr in Frage gestellt | Kandidat für `priority_handler`; seine Messungen fließen in den Pool |
 | 3 | **einschwingend** — gerade aufgelegt, kippt womöglich noch | noch nicht Kandidat |
+| 4 | **vorhergesagt** (seit 23.09.2026) — war final, wird aber im letzten Bild nicht mehr gemessen: Die Position ist die geglättete, mit der **gepoolten** Bandgeschwindigkeit auf `t` fortgeschrieben, höchstens `predict_max_s` lang | Kandidat wie 0; keine neuen Messungen, also kein Beitrag zum Pool |
 | ~~1~~, ~~2~~ | **entfallen, werden nicht wiederverwendet** | — |
 
 Code 3 ist kein Fehler, sondern der Normalzustand direkt nach dem Auflegen.
-`priority_handler` nimmt ausschließlich Status 0.
+`priority_handler` wählt aus Status 0 und 4 (`contracts.TRACK_SELECTABLE`).
+
+> **Warum 4** (`entscheidungen.md` Nachtrag 13 / L10): Die Basiskamera sieht nur
+> die ersten ~0,6 m des Bandes, die Greifzone liegt dahinter (L4). Vorher endete
+> jeder Track am Bildrand — hinter dem Bild kam nichts an (L9) —, oder `base_cam`
+> führte ihn mit ihrer eigenen, verrauschten Geschwindigkeit weiter. Jetzt enthält
+> S1 nur Messungen, und das Weiterführen macht `vectoring` mit der gepoolten
+> Geschwindigkeit. Taucht der Klotz im Bild unter neuer ID wieder auf, endet die
+> Vorhersage (`handover_distance_m`). Einschwingende Tracks werden nicht
+> vorhergesagt, sondern nach `track_expiry_s` vergessen.
 
 > **Warum 1 und 2 entfallen** (Nachtrag 6 / Z3): Sie standen für „steht /
 > verklemmt" und „Sprung / angestoßen". Beides gibt es nicht — die Klötze werden
@@ -319,7 +329,7 @@ zu Feld 12, dass stromabwärts nicht begrenzt wird, bleibt damit richtig: Ein
 laufender Griff darf dem Block über das Zonenende hinaus folgen (P4).
 
 **Zu Feld 13/14 — warum der Pool und nicht die eigene Schätzung des Ziels.** Das
-Ziel ist immer ein finaler Track (Status 0), gehört also selbst zum Pool — bei
+Ziel ist immer ein finaler oder vorhergesagter Track (Status 0/4), gehört also selbst zum Pool — bei
 `has_target = 1` ist `n_pool ≥ 1` garantiert. Pool und eigene Schätzung messen
 dieselbe Größe, der Pool nur mit mehr Daten. Der Follower bekommt die Geschwindigkeit
 über S4, weil er S3 nicht liest (ein Eingang, ein Vertrag).
@@ -358,7 +368,8 @@ verschwindet seine ID oder fällt sein Status auf 3 zurück, setzt
 Reine Buchhaltung für die Anzeige. Nicht im Regelpfad.
 
 Inhalt: die IDs aller **aktuellen** Tracks, die die Greifebene überschritten haben,
-jeder Status — ohne das aktuelle Ziel, solange es gewählt ist. Die Liste ist keine
+jeder Status — ohne das aktuelle Ziel, solange es gewählt ist, und ohne bereits
+versuchte IDs (ein gegriffener Klotz läuft als Status 4 weiter). Die Liste ist keine
 Historie: Sie ist durch die Zahl der Tracks begrenzt, das Festhalten
 (`out_of_bounds`) übernimmt der `data_tracker`. Ohne Bandschätzung gibt es keine
 Ebene, die Liste ist dann leer.
@@ -529,7 +540,7 @@ def pack_objects(t, v_belt, objects) -> list: ...
 def unpack_objects(arr) -> ObjectsMsg | None: ...
 
 # Gemeinsame Vokabeln
-TRACK_FINAL, TRACK_SETTLING          # S3 Status (1, 2 stillgelegt)
+TRACK_FINAL, TRACK_SETTLING, TRACK_PREDICTED, TRACK_SELECTABLE   # S3 Status (1, 2 stillgelegt)
 OUTCOME_PLACED … OUTCOME_ABORTED     # S7 outcome 0–4
 STATE_WAIT … STATE_ABORT             # S8 Zustandscodes 0–8
 COLOR_RED … COLOR_UNKNOWN            # S1 Farben 0–6

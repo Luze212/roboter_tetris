@@ -60,7 +60,7 @@
   "parameters": [
     {
       "display_name": "Greifzone x min (m)",
-      "description": "Untere x-Grenze der Greifzone in world. PLATZHALTER bis B19, im Robotersystem (Band angetastet bei x -0,70...-0,93, M9). Die Greifzone muss innerhalb der Messregion von base_cam liegen (track_velocity_region_y_min/_max).",
+      "description": "Untere x-Grenze der Greifzone in world. Festgelegt 23.09.2026 (B19, Nachtrag 13 / L14): im Arbeitsraum, außerhalb des Bildes der Basiskamera; y +0,40 ... -0,22 bei Bandende -0,32.",
       "parameter_name": "zone_x_min",
       "parameter_type": "double",
       "default_value": "-0.95",
@@ -68,7 +68,7 @@
     },
     {
       "display_name": "Greifzone x max (m)",
-      "description": "Obere x-Grenze der Greifzone in world. PLATZHALTER bis B19, im Robotersystem (Band angetastet bei x -0,70...-0,93, M9). Die Greifzone muss innerhalb der Messregion von base_cam liegen (track_velocity_region_y_min/_max).",
+      "description": "Obere x-Grenze der Greifzone in world. Festgelegt 23.09.2026 (B19, Nachtrag 13 / L14): im Arbeitsraum, außerhalb des Bildes der Basiskamera; y +0,40 ... -0,22 bei Bandende -0,32.",
       "parameter_name": "zone_x_max",
       "parameter_type": "double",
       "default_value": "-0.68",
@@ -76,18 +76,18 @@
     },
     {
       "display_name": "Greifzone y min (m)",
-      "description": "Untere y-Grenze der Greifzone in world. PLATZHALTER bis B19, im Robotersystem (Band angetastet bei x -0,70...-0,93, M9). Die Greifzone muss innerhalb der Messregion von base_cam liegen (track_velocity_region_y_min/_max).",
+      "description": "Untere y-Grenze der Greifzone in world. Festgelegt 23.09.2026 (B19, Nachtrag 13 / L14): im Arbeitsraum, außerhalb des Bildes der Basiskamera; y +0,40 ... -0,22 bei Bandende -0,32.",
       "parameter_name": "zone_y_min",
       "parameter_type": "double",
-      "default_value": "-0.45",
+      "default_value": "-0.22",
       "dynamic": true
     },
     {
       "display_name": "Greifzone y max (m)",
-      "description": "Obere y-Grenze der Greifzone in world. PLATZHALTER bis B19, im Robotersystem (Band angetastet bei x -0,70...-0,93, M9). Die Greifzone muss innerhalb der Messregion von base_cam liegen (track_velocity_region_y_min/_max).",
+      "description": "Obere y-Grenze der Greifzone in world. Festgelegt 23.09.2026 (B19, Nachtrag 13 / L14): im Arbeitsraum, außerhalb des Bildes der Basiskamera; y +0,40 ... -0,22 bei Bandende -0,32.",
       "parameter_name": "zone_y_max",
       "parameter_type": "double",
-      "default_value": "0.05",
+      "default_value": "0.40",
       "dynamic": true
     },
     {

@@ -80,8 +80,8 @@ sind.
 
 | Name | Typ | Default | Bedeutung |
 |---|---|---|---|
-| `zone_x_min` / `zone_x_max` | double | −0.95 / −0.68 | Greifzone in `world` — **Platzhalter bis B19**, im Robotersystem: das angetastete Band x = −0,70 … −0,93 (Nachtrag 8 / F1) |
-| `zone_y_min` / `zone_y_max` | double | −0.45 / 0.05 | **Vier Grenzen** — im Plan fehlte `y_min`. **Platzhalter bis B19**, geschätzt um den angetasteten Abschnitt. Vorher lagen die Platzhalter im System der Basiskamera (x ≈ +0,8) — auf der anderen Seite der Basis (B23) | ⚠️ Seit Nachtrag 13 / L4 liegt die Zone außerhalb des Bildes der Basiskamera, etwa y 0,30 … −0,30; das Band endet bei −0,375.
+| `zone_x_min` / `zone_x_max` | double | −0.95 / −0.68 | Greifzone in `world` — ~~Platzhalter bis B19~~ bestätigt 23.09.2026 (Nachtrag 13 / L14), im Robotersystem: das angetastete Band x = −0,70 … −0,93 (Nachtrag 8 / F1) |
+| `zone_y_min` / `zone_y_max` | double | −0.22 / 0.40 (bis 23.09.: −0.45 / 0.05) | **Vier Grenzen** — im Plan fehlte `y_min`. **Platzhalter bis B19**, geschätzt um den angetasteten Abschnitt. Vorher lagen die Platzhalter im System der Basiskamera (x ≈ +0,8) — auf der anderen Seite der Basis (B23) | ⚠️ Seit Nachtrag 13 / L4 liegt die Zone außerhalb des Bildes der Basiskamera, etwa y 0,30 … −0,30; das Band endet bei −0,375.
 | `attractor_v_max_mps` | double | 0.25 | max. Fahrgeschwindigkeit, für die Anfahrtsschätzung — der **kleinere** Wert aus Attractor und IK-Controller; bindend ist meist der IK-Controller (A1) |
 | `attractor_gain` | double | 5.0 | `K`, für die Einschwingzeit `3/K` — muss zu `linear_gains` des Attractors passen (Einrichtung §2) |
 | `t_descend_s` | double | 2.0 | Absenkzeit — geht in die Greifebene ein (D22). Gekoppelt: `(observe_z − Greifhöhe) / descend_speed_mps` des Followers + Einschwingen (Nachtrag 10 / J2; vorher 1,0) |

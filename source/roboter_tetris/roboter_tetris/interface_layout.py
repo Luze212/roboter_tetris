@@ -25,7 +25,7 @@ import numpy as np
 
 from .contracts import (
     COLOR_BLACK, COLOR_BLUE, COLOR_GREEN, COLOR_RED, COLOR_UNKNOWN,
-    COLOR_WHITE, COLOR_YELLOW, FOLLOWER_STATES, TRACK_FINAL, TRACK_SETTLING,
+    COLOR_WHITE, COLOR_YELLOW, FOLLOWER_STATES, TRACK_FINAL, TRACK_PREDICTED, TRACK_SETTLING,
     FollowerStatus, WorldStateMsg,
 )
 
@@ -102,6 +102,10 @@ def object_row(entry) -> Row:
     if entry.status == TRACK_FINAL:
         speed = math.hypot(entry.vx, entry.vy)
         return Row(f"{head} final           v = {speed * 1000:.0f} mm/s   "
+                   f"h {entry.height * 1000:.0f} mm")
+    if entry.status == TRACK_PREDICTED:
+        speed = math.hypot(entry.vx, entry.vy)
+        return Row(f"{head} vorhergesagt    v = {speed * 1000:.0f} mm/s   "
                    f"h {entry.height * 1000:.0f} mm")
     if entry.status == TRACK_SETTLING:
         return Row(f"{head} einschwingend   dv = {entry.v_change * 1000:.0f} mm/s")

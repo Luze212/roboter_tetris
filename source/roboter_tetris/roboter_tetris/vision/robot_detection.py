@@ -11,10 +11,11 @@ Pipeline (pure numpy/cv2, no ROS imports, unit-testable with synthetic images):
 1. Mask out the green belt in HSV -> invert -> block candidates.
 2. Morphological open to remove speckle.
 3. Optional depth near-gate: keep only blobs that overlap a "near" region of the
-   aligned depth (depth == 0 from the too-close / glossy object, or depth clearly
-   above the belt). A specular reflection on the belt reads valid belt depth and
-   is therefore rejected — this is what disambiguates a white block from a belt
-   glare spot.
+   aligned depth -- **valid** depth clearly above the belt. Since 23.09.2026 a
+   missing depth (0) no longer counts: a bright glare streak on the belt reads 0,
+   and the gate took it for a block (entscheidungen.md Nachtrag 13 / L11, L12).
+   The matte top face reads valid depth from the observation height (325-385 mm
+   measured); only glossy side faces and a far too close camera read 0.
 4. Largest qualifying blob -> ``minAreaRect`` -> center + orientation.
 5. Belt distance ``z`` = median of the valid depth over the frame
    (:func:`belt_reference_mm`).
@@ -40,10 +41,10 @@ import cv2
 import numpy as np
 
 # A qualifying blob must overlap the depth near-region by at least this fraction
-# of its own area (guards against a single stray zero pixel passing the gate).
+# of its own area (guards against a few stray pixels passing the gate).
 GATE_MIN_OVERLAP = 0.10
-# How far above the belt (mm) a pixel must sit to count as "near" (object), in
-# addition to the depth == 0 case. Loose, because the sensor is noisy.
+# How far above the belt (mm) a pixel with valid depth must sit to count as
+# "near" (object). Loose, because the sensor is noisy.
 GATE_HEIGHT_MARGIN_MM = 20.0
 
 
@@ -139,16 +140,15 @@ def belt_reference_mm(depth_mm: np.ndarray) -> Optional[float]:
 
 
 def near_mask(depth_mm: np.ndarray, belt_ref: Optional[float] = None) -> np.ndarray:
-    """Pixels that read as an object: invalid depth (too close / glossy) or
-    clearly elevated above the belt. Belt and belt reflections read valid belt
-    depth and are excluded. ``belt_ref`` saves a second median when the caller
+    """Pixels that read as an object: VALID depth clearly above the belt.
+    Missing depth (0) is not an object -- a glare streak on the belt reads 0 as
+    well (Nachtrag 13 / L12). ``belt_ref`` saves a second median when the caller
     already has it."""
-    near = depth_mm == 0
     if belt_ref is None:
         belt_ref = belt_reference_mm(depth_mm)
-    if belt_ref is not None:
-        near = near | (depth_mm < belt_ref - GATE_HEIGHT_MARGIN_MM)
-    return near
+    if belt_ref is None:
+        return np.zeros(depth_mm.shape, dtype=bool)
+    return (depth_mm > 0) & (depth_mm < belt_ref - GATE_HEIGHT_MARGIN_MM)
 
 
 def _normalize_orientation(angle_deg: float) -> float:

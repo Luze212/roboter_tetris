@@ -82,7 +82,11 @@ class WorldBook:
         for track_id, entry in self._entries.items():
             if entry.present and track_id not in seen:
                 entry.present = False
-                entry.done_since = t
+                # The FIRST time it was done counts: a picked block stays in
+                # tracks as predicted (status 4) for a while, and leaving later
+                # must not restart its expiry (Nachtrag 13 / L10).
+                if entry.done_since is None:
+                    entry.done_since = t
         self._expired &= seen                # forget IDs that finally left
         self._expire(t)
 

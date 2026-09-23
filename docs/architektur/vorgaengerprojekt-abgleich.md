@@ -52,7 +52,7 @@ Liste (`Robot/idle_handler_strat2.py`).
 
 | Punkt | Befund | Fundstelle | Sicherheit |
 |---|---|---|---|
-| **C1 / C4** | **Die Hand-Auge-Kalibrierung ist Flansch → Kamera.** Damit ist die offene Hälfte („meint `mount` den Flansch oder den Greifpunkt?") geklärt. Werte direkt als `handeye_*` verwendbar: x = 0,1087 · y = −0,03436 · z = −0,05987 m; rpy = (0,02898 · 0,02722 · 1,597) rad ≈ (1,66° · 1,56° · 91,5°). | Beweiskette unten | **belegt** |
+| **C1 / C4** | **Die Hand-Auge-Kalibrierung ist Flansch → Kamera.** *(Richtung bestätigt; der Versatz war falsch — neu eingemessen 23.09.2026, `entscheidungen.md` Nachtrag 13 / L11.)* Damit ist die offene Hälfte („meint `mount` den Flansch oder den Greifpunkt?") geklärt. Werte direkt als `handeye_*` verwendbar: x = 0,1087 · y = −0,03436 · z = −0,05987 m; rpy = (0,02898 · 0,02722 · 1,597) rad ≈ (1,66° · 1,56° · 91,5°). | Beweiskette unten | **belegt** |
 | **A6** | Beide Kameras liefen mit **640×480 @ 30 fps** (Color BGR8, Depth Z16). Der in Thema 2 angenommene Kameratakt von ~30 Bildern/s ist damit plausibilisiert. | `cameras/camera_reader_base.cpp:72–73` | belegt für den *alten* Aufbau |
 | **B16** | Greiferhub wurde auf **0…130 mm** kalibriert (`GRIPPER.calibrate(0, 130)`), Bezug 2F-140. Brauchbarer Startwert für `max_gripper_opening_m`. | `Robot/base_strat2.py:35` | belegt |
 | **B10** | Der Arbeitsraum war nicht nur notiert, sondern **wurde vor jeder Bewegung geprüft** (`save_pos.is_save_position`, Rechteck-Test — dieselbe Form wie unsere Gate-Prüfung 5). Werte: X −0,05…1,05 · Y −0,8…0,3 · Z 0,095…0,37 m. | `Robot/pose.yaml`, `Robot/save_pos.py` | belegt, **aber TCP-Bezug**, siehe Falle 5 |

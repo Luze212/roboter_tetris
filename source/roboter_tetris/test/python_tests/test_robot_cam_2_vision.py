@@ -24,14 +24,14 @@ def _intrinsics():
 
 def _scene(block=(130, 80, 60, 60), belt_mm=1000.0, block_near=True):
     """Color: gray belt with a bright block rectangle (strong edge at its border).
-    Depth: belt everywhere; block region reads 0 (near) when ``block_near``."""
+    Depth: belt everywhere; block region 100 mm above the belt when ``block_near``."""
     h, w = 240, 320
     color = np.full((h, w, 3), BELT_GRAY, dtype=np.uint8)
     depth = np.full((h, w), belt_mm, dtype=np.float32)
     x, y, bw, bh = block
     color[y:y + bh, x:x + bw] = BLOCK_GRAY
     if block_near:
-        depth[y:y + bh, x:x + bw] = 0.0
+        depth[y:y + bh, x:x + bw] = belt_mm - 100.0
     return color, depth
 
 
@@ -133,7 +133,7 @@ def _two_blob_scene(belt_mm=1000.0, near=(140, 90, 40, 40), far=(250, 40, 60, 16
     depth = np.full((h, w), belt_mm, dtype=np.float32)
     for (x, y, bw, bh) in (near, far):
         color[y:y + bh, x:x + bw] = BLOCK_GRAY
-        depth[y:y + bh, x:x + bw] = 0.0
+        depth[y:y + bh, x:x + bw] = belt_mm - 100.0
     return color, depth
 
 
