@@ -1,6 +1,6 @@
 # Projektkontext Robotetris
 
-**Stand 21.09.2026.** Rahmenbedingungen, Abgrenzungen und Arbeitsweise.
+**Stand 23.09.2026.** Rahmenbedingungen, Abgrenzungen und Arbeitsweise.
 Gedacht als Einstieg für jede Sitzung, die ohne Vorkontext startet — vor den
 technischen Dokumenten zu lesen.
 
@@ -21,7 +21,7 @@ und durchlaufen den Arbeitsbereich.
 |---|---|---|---|
 | 1 | Ansteuerung des UR10e mit AICA | AICA-Kette Attractor → IK-Velocity-Controller | **erledigt** |
 | 2 | Entwicklung eines schnellen Kalibrierungsverfahrens | Kommilitone, **getrenntes Projekt** (`Calibration/*`). Wir sind Abnehmer; offen ist nur die Übergabeform (C6). | läuft |
-| 3 | Verfahren zur **Geschwindigkeitsschätzung** und Positionsberechnung der Gegenstände | `base_cam` (Position), `vectoring` (Geschwindigkeit je Klotz und gepoolt) | Position läuft am Aufbau; Schätzung **gebaut**, am Aufbau offen (B21, B23) |
+| 3 | Verfahren zur **Geschwindigkeitsschätzung** und Positionsberechnung der Gegenstände | `base_cam` (Position), `vectoring` (Geschwindigkeit je Klotz und gepoolt) | Position läuft am Aufbau, gegen den Roboter ≤ 6 mm (B23 erledigt); Schätzung **gebaut**, mit laufendem Band offen (Block 3, B21) |
 | 4 | Algorithmus zur **Priorisierung** des zuerst zu greifenden Gegenstandes und zur **Bahnplanung** für das kontrollierte Greifen | `priority_handler` (Auswahl, Erreichbarkeit, Greifebene); `object_follower` mit den AICA-Bausteinen (Bahn) | **gebaut**, am Aufbau offen |
 
 **Zusätzlich, als eigenes Ziel:** den Prozess nachvollziehbar darstellen —
@@ -59,8 +59,8 @@ demselben Band**. Sie hat:
   Null-Bereich bestimmt.
 
 **Dieser Behelf funktioniert bei uns nur bedingt** — deshalb die beiden
-Erkennungsvarianten `robot_cam` (farbbasiert) und `robot_cam_2` (kantenbasiert),
-die aktuell gegeneinander getestet werden.
+Erkennungsvarianten `robot_cam` (farbbasiert) und `robot_cam_2` (kantenbasiert).
+Seit 23.09.2026 wird nur noch die Kantenvariante verfolgt (Nachtrag 13 / L5).
 
 > **Der Grund ist physikalisch und in `docs/architektur/robot-cam-befunde.md`
 > ausgeführt:** Die Tiefenkamera sitzt seitlich versetzt und sieht in Greifnähe
@@ -92,20 +92,21 @@ inzwischen eigenständig geklärt (kein Greifer im URDF, geregelt wird der Flans
 
 ## 3. Was heute funktioniert
 
-**Stand 21.09.2026: Alle Komponenten sind gebaut** und lokal getestet (259 Tests,
-davon 8 nur in der AICA-Testumgebung lauffähig). In AICA ist von den neuen noch
-keine gelaufen — das ist der erste Schritt am Aufbau.
+**Stand 23.09.2026: Alle Komponenten sind gebaut** und laufen in AICA; der
+Datenpfad `base_cam` → `vectoring` → `priority_handler` → `data_tracker` ist am
+Aufbau geprüft. Noch nicht gefahren sind der Follower und die Roboterkamera.
+Stand und Reihenfolge: `uebersicht/fahrplan-aufbau.md`.
 
 | Komponente | Stand |
 |---|---|
 | `robotiq_gripper` | **funktionsfähig** am Aufbau; seit 2.3 mit `motion_done`/`has_object` |
-| `base_cam` | **funktionsfähig**, erkennt Klötze zuverlässig; seit 2.1/2.4 Vertrag S1 und gemessene Längsposition. ⚠️ Alte Kalibrierwerte passen nicht zu den Antastpunkten des Roboters (B23) |
+| `base_cam` | **funktionsfähig**, erkennt Klötze zuverlässig; seit 2.1/2.4 Vertrag S1 und gemessene Längsposition. Seit 23.09.2026 Übergangskalibrierung in `world` und korrigierte Parallaxe: ≤ 6 mm zu den Antastpunkten des Roboters (B23 erledigt, Nachtrag 13) |
 | `vectoring` | gebaut — Geschwindigkeitsschätzung je Klotz und gepoolt (Ziel 3) |
 | `priority_handler` | gebaut — Zielauswahl, Erreichbarkeit, Greifebene (Ziel 4); Greifzone auf Platzhaltern bis B19 |
 | `data_tracker` | gebaut — Klotzliste für die Anzeige |
 | `object_follower` | gebaut, alle vier Stufen — Start, Folgen, Roboterkamera als Korrektur, Greifzyklus mit Ablage |
 | `interface_streamer` | gebaut — Übersichtsbild für RViz |
-| `robot_cam` / `robot_cam_2` | implementiert und unit-getestet, **am Aufbau am 15.09.2026 durchgefallen** (B6). `robot_cam` farbbasiert (Band ausmaskieren), `robot_cam_2` kantenbasiert mit Tiefenkanten-Fusion. Identische I/O, im Graphen austauschbar. ⚠️ Beide scheitern **nicht an der Erkennung, sondern an der Auswahl** — Einzelheiten: `architektur/robot-cam-befunde.md` §9. **Auswahlkorrektur seit 2.2 umgesetzt**, am Aufbau noch nicht erprobt. |
+| `robot_cam` / `robot_cam_2` | implementiert und unit-getestet, **am Aufbau am 15.09.2026 durchgefallen** (B6). `robot_cam` farbbasiert (Band ausmaskieren), `robot_cam_2` kantenbasiert mit Tiefenkanten-Fusion. Identische I/O, im Graphen austauschbar. ⚠️ Beide scheitern **nicht an der Erkennung, sondern an der Auswahl** — Einzelheiten: `architektur/robot-cam-befunde.md` §9. **Auswahlkorrektur seit 2.2 umgesetzt**; zweiter Anlauf 22.09. scheiterte an der Banddistanz (K3), seit 23.09. aus dem Bildmedian. **Weiter nur `robot_cam_2`** (Nachtrag 13 / L5). |
 | `move_to_pose_test`, `true_signal`, `toggle_signal` | Testhilfen; `toggle_signal` ersetzt am virtuellen Roboter die Greifer-Rückmeldung |
 | `test/tools/fake_objects.py` | synthetische Klötze statt `base_cam` — treibt die ganze Kette ohne Kamera, im Robotersystem |
 | AICA-Kette Attractor → IK-Velocity-Controller | **getestet**, Roboter folgt einem per Maus verschobenen Frame |
@@ -134,8 +135,9 @@ geändert werden; tabu ist nur die Kalibrierung. Für `vision/` heißt das:
 |---|---|
 | `vision/board.py` | **nicht anfassen** — die Kalibrierung nutzt sie (`Calibration/board_detection.py`) |
 | `vision/tracker.py` | ein beschlossener Eingriff: gemessene statt gerechneter Längsposition (Umsetzungsplan 2.4) |
-| `vision/robot_detection*.py` | nur die gemeinsame Blob-Auswahl (seit 2.2 umgesetzt); **die beiden Detektionskerne und die Rückprojektion bleiben**, weil der A/B-Test aus B6 die Kerne vergleicht und der Follower die Rückprojektion korrigiert |
-| `vision/detection.py`, `color_estimation.py` | kein Anlass zur Änderung |
+| `vision/robot_detection*.py` | gemeinsame Blob-Auswahl (2.2) und seit 23.09. die Banddistanz aus dem Bildmedian (Nachtrag 13 / L5). Der A/B-Vergleich entfällt (nur noch `robot_cam_2`). Die Höhenkorrektur der Rückprojektion bleibt im Follower (N1) — nicht doppelt korrigieren |
+| `vision/detection.py` | seit 23.09. geändert: Ecken auf der Oberseite statt auf Bandhöhe, Höhe aus der Kalibrierung (Nachtrag 13 / L6) |
+| `color_estimation.py` | kein Anlass zur Änderung |
 
 Geprüft: Die Kalibrierung importiert aus `vision/` ausschließlich `board.py`.
 
@@ -188,7 +190,7 @@ Setups** (§6) — was nicht gepusht ist, existiert auf dem anderen Rechner nich
 | Greifer | Robotiq 2-Finger (2F-140), über USB/Modbus direkt angesteuert — **nicht** als ros2_control-Hardware-Interface. An den letzten Fingergliedern sitzen **verschraubte 3D-Druck-Aufsätze** (Gewindeeinsätze); darauf eine mit Isolierband befestigte Gummi-Grippmatte, Greiffläche **20 mm hoch × 15 mm breit**. Öffnungsweite **127 mm** |
 | Basiskamera | RealSense, am Bandanfang auf einem **beweglichen Gestell** — daher die automatisierte Extrinsik-Kalibrierung als Parallelprojekt (C3) |
 | Roboterkamera | RealSense, am Arm montiert — **festes Bauteil am Flansch, unverändert seit der Vorgängergruppe**. Deren Hand-Auge-Kalibrierung gilt damit unmittelbar (C1) |
-| Band | **grün-türkis** — gemessen **H ≈ 88–90**, nicht die ursprünglich angenommenen 60; der Farbton wandert zudem mit der Belichtungszeit (`architektur/robot-cam-befunde.md` §9.3). Konstante Geschwindigkeit, **nicht einstellbar**; sie wird im Betrieb **geschätzt** (Ziel 3), B1 prüft das nur gegen. Richtung ist praktisch die **y-Achse**; im Robotersystem angetastet bei x ≈ −0,70 … −0,93 m (die Basiskamera sieht es mit alten Kalibrierwerten woanders, B23). Spiegelungen treten **nur hier** auf, nicht auf den Klötzen |
+| Band | **grün-türkis** — gemessen **H ≈ 88–90**, nicht die ursprünglich angenommenen 60; der Farbton wandert zudem mit der Belichtungszeit (`architektur/robot-cam-befunde.md` §9.3). Konstante Geschwindigkeit, **nicht einstellbar**; sie wird im Betrieb **geschätzt** (Ziel 3), B1 prüft das nur gegen. Richtung ist praktisch die **y-Achse**; im Robotersystem angetastet bei x ≈ −0,70 … −0,93 m; von Rolle zu Rolle y ≈ +1,08 … −0,375 m, ≈ 0,13 m/s per Stoppuhr (Nachtrag 13 / L7). Spiegelungen treten **nur hier** auf, nicht auf den Klötzen |
 | Klötze | rechtwinklig, **unterschiedlich groß**, von Hand aufgelegt, realistisch 2–3 gleichzeitig. Farben **rot, blau, weiß**. 3D-gedruckt: Oberseite **matt**, Seitenflächen **spiegelnd** (siehe `architektur/robot-cam-befunde.md`) |
 | Ablage | seitlich neben dem Band auf der Roboterseite; Pose in der Luft über einer Auffangkiste, der Klotz fällt hinein |
 | Freiraum | senkrecht über dem Arbeitsbereich frei; nur die Basiskamera steht am Bandanfang, den der Roboter kaum erreicht |

@@ -8,6 +8,22 @@ Pure numpy/cv2 — no ROS imports. Inputs: BGR color image, depth image in mm
 (float32), camera intrinsics. Output: detections in the robot frame (mm), as
 :class:`~roboter_tetris.vision.tracker.TrackedObject` plus pixel-space drawing
 info for the debug image.
+
+Top face, not belt (changed 23.09.2026, Nachtrag 13): the C++ original
+deprojected each ``minAreaRect`` corner with the depth of that single pixel.
+Those pixels sit on the block edge and read the belt, so the top outline was
+projected onto the belt along the viewing ray -- a parallax growing with block
+height and distance from the image centre (16 mm for a 100 mm block at the
+setup). And the height came from the *mean* depth over the contour, pulled
+towards the belt by the edge pixels, which a fixed +20 mm bias only matched for
+one block height. Now one robust top-face depth (median over the contour)
+places the corners, and the height is the world z of the top face above the
+belt surface -- both follow from the calibration instead of a bias.
+
+One offset remains: the L515 reads the block tops (3D-printed plastic) about
+11.5 mm too deep, the belt not (25 and 100 mm blocks alike, Nachtrag 13 / L6).
+``top_depth_bias_mm`` takes it off the top-face depth, which corrects the height
+and the slight scale error of the position together.
 """
 
 import math
@@ -20,9 +36,8 @@ import numpy as np
 from .color_estimation import estimate_object_color_id
 from .tracker import TrackedObject
 
-# Constants from the C++ original
+# Constants from the C++ original (HEIGHT_BIAS_MM = 20 is gone since 23.09.2026)
 BORDER_MARGIN_PX = 2
-HEIGHT_BIAS_MM = 20.0
 NEAR_SQUARE_ASPECT = 0.92
 
 
@@ -36,7 +51,9 @@ class DetectionParams:
     """
 
     roi: Tuple[int, int, int, int] = (0, 0, 0, 0)  # x, y, w, h; zero area = full frame
-    conveyor_z_dist: float = 865.0       # mm, camera to conveyor plane
+    conveyor_z_dist: float = 865.0       # mm, camera to conveyor plane (segmentation only)
+    belt_surface_z_mm: float = 53.6      # mm, belt surface in the robot frame (B17)
+    top_depth_bias_mm: float = 0.0       # mm, subtracted from the top-face depth
     min_obj_height: float = 15.0         # mm
     max_obj_height_mm: float = 150.0     # mm
     z_offset: float = 0.0                # mm, conveyor reflection margin
@@ -149,7 +166,6 @@ def detect_objects(color_bgr: np.ndarray, depth_mm: np.ndarray,
     Returns ``(detections, debug_infos)`` — parallel lists of
     :class:`TrackedObject` (robot frame, mm) and :class:`DebugInfo`.
     """
-    full_h, full_w = depth_mm.shape[:2]
     rx0, ry0, rw, rh = roi_bounds(depth_mm.shape, params)
 
     depth_roi = depth_mm[ry0:ry0 + rh, rx0:rx0 + rw]
@@ -162,21 +178,17 @@ def detect_objects(color_bgr: np.ndarray, depth_mm: np.ndarray,
 
     transform = params.cam_to_robot if params.cam_to_robot is not None else np.eye(4)
 
-    def deproject_box(box_roi):
-        """Deproject 4 ROI box points to robot-frame 3D (m); None if any invalid."""
-        cc = np.full((4, 3), np.nan)
+    def deproject_box(box_roi, depth_top_mm):
+        """Deproject 4 ROI box points at the top-face depth to robot-frame 3D (m).
+
+        One depth for all four: the corner pixels themselves lie on the block
+        edge and read the belt (see the module docstring)."""
+        d_m = depth_top_mm / 1000.0
+        cc = np.empty((4, 3))
         for k in range(4):
-            px = rx0 + int(round(box_roi[k][0]))
-            py = ry0 + int(round(box_roi[k][1]))
-            if px < 0 or py < 0 or px >= full_w or py >= full_h:
-                continue
-            d_mm = float(depth_mm[py, px])
-            if d_mm <= 0.0:
-                continue
-            d_m = d_mm / 1000.0
+            px = rx0 + float(box_roi[k][0])
+            py = ry0 + float(box_roi[k][1])
             cc[k] = ((px - cx) * d_m / fx, (py - cy) * d_m / fy, d_m)
-        if not np.all(np.isfinite(cc)):
-            return None
         ones = np.ones((4, 1))
         return (transform @ np.hstack([cc, ones]).T).T[:, :3]
 
@@ -196,32 +208,34 @@ def detect_objects(color_bgr: np.ndarray, depth_mm: np.ndarray,
         rrect = cv2.minAreaRect(cnt)
         box_px_roi = cv2.boxPoints(rrect)  # 4x2 float, ROI coords
 
-        # Deproject the full footprint corners (drives center, orientation; the
-        # height calibration relies on the full contour, so it is NOT eroded).
-        corners_robot_m = deproject_box(box_px_roi)
-        if corners_robot_m is None:
-            # C++ propagates NaN corners into a NaN center, which the final
-            # validation drops — requiring all four corners is equivalent.
-            continue
-
-        center_m = corners_robot_m.mean(axis=0)
-
-        # Mean object-top depth over the FULL contour (bbox crop, not full frame).
+        # Top-face depth: median over the FULL contour (bbox crop, not full
+        # frame). The median ignores the edge pixels that read the belt or
+        # values in between; the mean did not.
         c_mask = np.zeros((bh, bw), dtype=np.uint8)
         cv2.drawContours(c_mask, [cnt - (bx, by)], -1, 255, cv2.FILLED)
         depth_patch = depth_roi[by:by + bh, bx:bx + bw]
         valid = depth_patch[(c_mask == 255) & (depth_patch > 0)]
         if valid.size == 0:
             continue
-        mean_z_mm = float(valid.mean())
-        height_mm = params.conveyor_z_dist - mean_z_mm + HEIGHT_BIAS_MM
+        top_depth_mm = float(np.median(valid)) - params.top_depth_bias_mm
+        if top_depth_mm <= 0.0:
+            continue
+
+        # Footprint corners on the top face (drive center and orientation; the
+        # full contour, NOT eroded).
+        corners_robot_m = deproject_box(box_px_roi, top_depth_mm)
+        center_m = corners_robot_m.mean(axis=0)
+
+        # Height: world z of the top face above the belt surface.
+        top_z_mm = center_m[2] * 1000.0
+        height_mm = top_z_mm - params.belt_surface_z_mm
 
         orientation = compute_robust_orientation_2d(
             np.asarray(box_px_roi), corners_robot_m[:, :2])
 
         # Length/width from an ERODED footprint to shed the noisy depth border at
         # object edges (which otherwise inflates the measured size). Decoupled from
-        # height/position/orientation so the conveyor_z_dist calibration is intact.
+        # height/position/orientation, which use the full contour.
         dim_corners = corners_robot_m
         if params.erosion_px > 0:
             # Pad first so the erosion has a black border to eat into (the mask
@@ -234,9 +248,7 @@ def detect_objects(color_bgr: np.ndarray, depth_mm: np.ndarray,
             if econtours:
                 ebox = cv2.boxPoints(cv2.minAreaRect(max(econtours, key=cv2.contourArea)))
                 # padded coords -> bbox-crop -> ROI coords
-                ecorners = deproject_box(ebox + (bx - pad, by - pad))
-                if ecorners is not None:
-                    dim_corners = ecorners
+                dim_corners = deproject_box(ebox + (bx - pad, by - pad), top_depth_mm)
 
         # 3D edge lengths between robot-frame corners (mm), long side first.
         length_mm = float(np.linalg.norm(dim_corners[0] - dim_corners[1])) * 1000.0
@@ -261,7 +273,7 @@ def detect_objects(color_bgr: np.ndarray, depth_mm: np.ndarray,
 
         x_mm = center_m[0] * 1000.0 * params.x_scale + params.x_offset_mm
         y_mm = center_m[1] * 1000.0 * params.y_scale + params.y_offset_mm
-        z_mm = center_m[2] * 1000.0 + height_mm / 2.0
+        z_mm = top_z_mm - height_mm / 2.0          # mid-height, as S1 field 4 says
 
         if not (math.isfinite(x_mm) and math.isfinite(y_mm)
                 and math.isfinite(z_mm) and math.isfinite(orientation)):

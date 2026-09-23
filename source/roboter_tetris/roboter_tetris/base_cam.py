@@ -21,6 +21,7 @@ from modulo_components.lifecycle_component import LifecycleComponent
 import state_representation as sr
 from rcl_interfaces.msg import Parameter as RosParameter, ParameterType, ParameterValue
 from rcl_interfaces.srv import SetParameters
+from rclpy.qos import QoSProfile
 from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import Image, CameraInfo
 
@@ -94,7 +95,15 @@ class BaseCam(LifecycleComponent):
         self.add_parameter(sr.Parameter("roi_height", 580, sr.ParameterType.INT),
                            "ROI Höhe in px")
         self.add_parameter(sr.Parameter("conveyor_z_dist", 865.0, sr.ParameterType.DOUBLE),
-                           "Abstand Kamera→Fließband in mm")
+                           "Abstand Kamera→Fließband in mm; nur für die Trennung Band/Objekt "
+                           "(Tiefenfenster), nicht mehr für die Höhe")
+        self.add_parameter(sr.Parameter("belt_surface_z_mm", 53.6, sr.ParameterType.DOUBLE),
+                           "Höhe der Bandoberfläche in world in mm (angetastet, B17). Die "
+                           "Klotzhöhe ist z der Oberseite in world minus dieser Wert.")
+        self.add_parameter(sr.Parameter("top_depth_bias_mm", 11.5, sr.ParameterType.DOUBLE),
+                           "Die Kamera liest die Klotzoberseiten um diesen Wert zu tief (mm); er "
+                           "wird von der Oberseitentiefe abgezogen. Gemessen 23.09.2026 an 25- "
+                           "und 100-mm-Klötzen: 11,5 ± 1,6 mm (Nachtrag 13).")
         self.add_parameter(sr.Parameter("min_obj_height", 15.0, sr.ParameterType.DOUBLE),
                            "Mindesthöhe eines Objekts in mm")
         self.add_parameter(sr.Parameter("max_obj_height_mm", 150.0, sr.ParameterType.DOUBLE),
@@ -113,20 +122,24 @@ class BaseCam(LifecycleComponent):
                            "verrauschten Tiefen-Rand. 0 = aus. Höhe/Position bleiben unberührt.")
 
         # -- Extrinsic calibration camera→robot ----------------------------------
-        # The versioned source of truth and measurement notes live separately in
-        # Calibration/calibration.json. Keep these AICA runtime defaults
-        # aligned with that file; the UI parameters permit controlled fine-tuning.
-        self.add_parameter(sr.Parameter("cal_x", 0.6118, sr.ParameterType.DOUBLE),
-                           "Extrinsik: Translation x in m (Kamera→Roboter)")
-        self.add_parameter(sr.Parameter("cal_y", -0.7820, sr.ParameterType.DOUBLE),
+        # In world (= ur_base_link, the frame AICA controls in), not in the UR
+        # frame "base" (180° about z, Nachtrag 12 / K5). Interim values of
+        # 23.09.2026 (Nachtrag 13): tilt from a belt-plane fit in the depth image,
+        # yaw and x/y from five touch points with the robot, 25 and 100 mm blocks,
+        # residual <= 4 mm. Calibration/calibration.json still holds the
+        # predecessor's values (roll 176.26, pitch -8.27, yaw -12.94 in "base");
+        # the calibration project (C3) will replace these, that folder stays untouched.
+        self.add_parameter(sr.Parameter("cal_x", -0.7787, sr.ParameterType.DOUBLE),
+                           "Extrinsik: Translation x in m (Kamera→world)")
+        self.add_parameter(sr.Parameter("cal_y", 0.7934, sr.ParameterType.DOUBLE),
                            "Extrinsik: Translation y in m")
-        self.add_parameter(sr.Parameter("cal_z", 0.8902, sr.ParameterType.DOUBLE),
+        self.add_parameter(sr.Parameter("cal_z", 0.9163, sr.ParameterType.DOUBLE),
                            "Extrinsik: Translation z in m")
-        self.add_parameter(sr.Parameter("cal_roll", 176.26, sr.ParameterType.DOUBLE),
+        self.add_parameter(sr.Parameter("cal_roll", 179.46, sr.ParameterType.DOUBLE),
                            "Extrinsik: Roll in Grad")
-        self.add_parameter(sr.Parameter("cal_pitch", -8.27, sr.ParameterType.DOUBLE),
+        self.add_parameter(sr.Parameter("cal_pitch", 0.45, sr.ParameterType.DOUBLE),
                            "Extrinsik: Pitch in Grad")
-        self.add_parameter(sr.Parameter("cal_yaw", -12.94, sr.ParameterType.DOUBLE),
+        self.add_parameter(sr.Parameter("cal_yaw", 179.76, sr.ParameterType.DOUBLE),
                            "Extrinsik: Yaw in Grad")
 
         # -- Optional affine correction + search area (neutral defaults; the old "
@@ -145,36 +158,45 @@ class BaseCam(LifecycleComponent):
         self.add_parameter(sr.Parameter("search_area_y_max", 1.0e9, sr.ParameterType.DOUBLE),
                            "Suchbereich y-Max in mm (alte Config: 190)")
 
-        # -- Tracker parameters (defaults = C++ tracker.hpp) ----------------------
+        # -- Tracker parameters (C++ tracker.hpp, turned into world: the belt runs
+        #    from y = +1080 to -375, K5) ------------------------------------------
         self.add_parameter(sr.Parameter("track_max_match_distance_mm", 300.0, sr.ParameterType.DOUBLE),
                            "Tracker: max. Matching-Distanz in mm")
-        self.add_parameter(sr.Parameter("track_min_y_mm", -1080.0, sr.ParameterType.DOUBLE),
+        self.add_parameter(sr.Parameter("track_min_y_mm", -375.0, sr.ParameterType.DOUBLE),
                            "Tracker: Löschen wenn y darunter (Bandende)")
-        self.add_parameter(sr.Parameter("track_max_y_mm", 375.0, sr.ParameterType.DOUBLE),
+        self.add_parameter(sr.Parameter("track_max_y_mm", 1080.0, sr.ParameterType.DOUBLE),
                            "Tracker: Löschen wenn y darüber (Bandanfang)")
         self.add_parameter(sr.Parameter("track_max_missed_in_region", 3, sr.ParameterType.INT),
                            "Tracker: max. verpasste Frames in der Mess-Region")
-        self.add_parameter(sr.Parameter("track_velocity_region_y_min", -1000.0, sr.ParameterType.DOUBLE),
+        self.add_parameter(sr.Parameter("track_velocity_region_y_min", 500.0, sr.ParameterType.DOUBLE),
                            "Tracker: Mess-Region y-Min in mm")
-        self.add_parameter(sr.Parameter("track_velocity_region_y_max", -500.0, sr.ParameterType.DOUBLE),
+        self.add_parameter(sr.Parameter("track_velocity_region_y_max", 1000.0, sr.ParameterType.DOUBLE),
                            "Tracker: Mess-Region y-Max in mm")
         self.add_parameter(sr.Parameter("vel_filter_alpha", DEFAULT_VEL_FILTER_ALPHA, sr.ParameterType.DOUBLE),
                            "EMA-Tiefpass der Bandgeschwindigkeit (0-1; 0.3 = 30 % neu)")
 
         self.add_parameter(sr.Parameter("debug_enable", False, sr.ParameterType.BOOL),
                            "Debug-Bild erzeugen und publizieren")
-        self.add_parameter(sr.Parameter("camera_node", "", sr.ParameterType.STRING),
+        self.add_parameter(sr.Parameter("camera_node", "/realsense_camera", sr.ParameterType.STRING),
                            "Node-Name des RealSense-Blocks dieser Kamera (z. B. /realsense_camera_2). "
                            "Ist er gesetzt, erzwingt die Komponente dort global_time_enabled=true, "
                            "damit die Bildstempel in ROS-Zeit laufen. Leer = aus.")
 
         # -- Inputs (signals from the AICA RealSense block) -----------------------
+        # Queue depth 1: only the newest image counts. With modulo's default of 10
+        # the frames piled up while the step was busy, and the step worked on
+        # images about 0.4 s old (measured 23.09.2026, Nachtrag 13). add_input
+        # subscribes immediately, so the QoS set here applies; the default is
+        # restored for everything declared later (the outputs).
+        default_qos = self.get_qos()
+        self.set_qos(QoSProfile(depth=1))
         self._color_msg = Image()
         self.add_input("color_image", "_color_msg", Image)
         self._info_msg = CameraInfo()
         self.add_input("color_camera_info", "_info_msg", CameraInfo)
         self._depth_msg = Image()
         self.add_input("depth_image", "_depth_msg", Image)
+        self.set_qos(default_qos)
 
         # -- Outputs ---------------------------------------------------------------
         # std_msgs signals are plain Python values: list -> Float64MultiArray.
@@ -263,6 +285,8 @@ class BaseCam(LifecycleComponent):
                  int(self.get_parameter("roi_width").get_value()),
                  int(self.get_parameter("roi_height").get_value())),
             conveyor_z_dist=self.get_parameter("conveyor_z_dist").get_value(),
+            belt_surface_z_mm=self.get_parameter("belt_surface_z_mm").get_value(),
+            top_depth_bias_mm=self.get_parameter("top_depth_bias_mm").get_value(),
             min_obj_height=self.get_parameter("min_obj_height").get_value(),
             max_obj_height_mm=self.get_parameter("max_obj_height_mm").get_value(),
             z_offset=self.get_parameter("z_offset").get_value(),

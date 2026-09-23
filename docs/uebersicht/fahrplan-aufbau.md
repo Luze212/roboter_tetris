@@ -1,6 +1,6 @@
 # Fahrplan — Arbeit am Roboter mit Claude
 
-**Stand 22.09.2026.** Wie die Zeit am Aufbau aufgeteilt wird, wer was tut und
+**Stand 23.09.2026.** Wie die Zeit am Aufbau aufgeteilt wird, wer was tut und
 woran jeder Block als erledigt gilt. Die fachliche Reihenfolge und ihre Gründe
 stehen in `uebergabe.md` §6; dieses Dokument ist die **Arbeitsfassung** davon, mit
 Rollen, Dauer, Mitlese-Verfahren und Abbruchregeln.
@@ -11,39 +11,40 @@ Block wird sofort nach seinem Ende dokumentiert** — nicht gesammelt am Schluss
 
 ---
 
-## Stand nach Termin A (22.09.2026)
+## Stand nach Termin B (23.09.2026)
 
 | Block | Ergebnis |
 |---|---|
-| 0 | ✅ Paket wirksam, Kameras zugeordnet, Zeitdomäne beider Kameras in Ordnung (**B24 erledigt**) — Nachtrag 12 / K1 |
-| 1 | ✅ Datenpfad `base_cam` → `vectoring` → `priority_handler` → `data_tracker` läuft; `rate` am Block setzbar (K2, K4). **Rechner ist der Engpass** — Roboterkamera-Blöcke, `interface_streamer`, RViz bei Basiskamera-Messungen aus |
-| 6 (vorgezogen) | ❌ B6 zweiter Anlauf: Farbvariante scheitert am ungleich gefärbten Band, Kantenvariante an der Banddistanz unter dem Blob — K3 |
-| 2 | ⏸ **2 von ≥ 4 Punkten.** 180° zwischen `base` und `world` aus der TF belegt (K5). Die Kalibrierung ist die des Vorgängers; ihre **13° Gier sind falsch** (K6). Korrekturvorschlag steht, Prüfung an weiteren Punkten offen |
-| 3 | — nicht begonnen (Band darf laufen) |
+| 0, 1 | ✅ (22.09.) — Nachtrag 12 / K1, K2, K4 |
+| Rechenlast | ✅ Ursache gefunden: **alle Python-Komponenten teilen sich einen Prozess** (GIL), Bilder stauten sich in Warteschlangen der Tiefe 10. Rates gesenkt, Warteschlange Tiefe 1 → 7 Messungen/s, Alter 139 ms (Nachtrag 13 / L2) |
+| 2 | ✅ **B23 erledigt.** Kamera schaut senkrecht, Parallaxe in der Detektion korrigiert, neue Extrinsik als Standardwert; Position ≤ 6 mm auch für 100-mm-Klötze. Höhe 11,5 mm zu niedrig (L6) |
+| 3 | — Band ≈ 0,13 m/s per Stoppuhr (L7); Schätzer noch nicht gegen das laufende Band geprüft |
+| 6 | Vorbereitet: nur noch `robot_cam_2`, Banddistanz aus dem Median (L5) |
+
+**Entscheidungen des Tages:** Greifzone und Wartebereich **außerhalb des Bildes
+der Basiskamera** (L4); die Strecke dahinter überbrückt die Roboterkamera.
 
 ### Weiter am nächsten Termin
 
-1. **Vor dem Start von AICA:** Arm per Pendant freifahren (der Attractor fährt beim
-   Start auf die zuletzt gespeicherte Zielpose).
-2. **Nur eine `base_kamera`:** Nach den Abstürzen liefen zwei Instanzen (zwei
-   Publisher, doppelte IDs). Claude prüft die Publisher-Zahl; bei 2 Anwendung
-   stoppen bzw. Launcher neu starten.
-3. **`base_kamera` prüfen** (gehen beim Ersetzen des Blocks verloren):
-   `camera_node` = `/realsense_camera` (Zuordnung über Serial prüfen),
-   Tracker Y −375/1080, Mess-Region 500/1000, dazu die **korrigierte
-   Kalibrierung** Yaw 180,07 · X −0,6491 · Y 0,7476 (K6). **Anwendung speichern.**
-   `vectoring`: „Einschwing-Halbfenster“ = 5.
-4. **Block 2 fortsetzen:** 3–4 weitere Punkte (P3 …), verteilt längs und quer,
-   innerhalb des Bildes der Basiskamera (oberer Bildrand ≈ Richtung Roboter ist
-   die Grenze). Mit der korrigierten Kalibrierung ist jeder Punkt eine echte
-   Vorhersage. Ziel: Restfehler ≤ 10 mm; danach über den Höhenfehler (+12 mm)
-   entscheiden.
-5. Dann Block 3 (Band läuft), Block 4, Block 5.
+0. **Nach dem Build:** `base_kamera` neu einfügen (neue Standardwerte inkl.
+   `top_depth_bias_mm` 11,5) und die Höhe an einem 25- und einem 100-mm-Klotz
+   gegenprüfen.
+1. **Anwendung schlank halten:** keine unkonfigurierten Kamerablöcke, kein
+   `interface_streamer`, 3D-Ansicht minimiert; `vectoring`/`priority_handler`
+   20 Hz, `data_tracker` 2 Hz. Neue Standardwerte gelten nur für neu eingefügte
+   Blöcke.
+2. **Block 3** (Band läuft): Schätzung gegen 0,13 m/s, Einschwingen 3 → 0.
+3. **Block 6** mit `robot_cam_2` über einem ruhenden Klotz außerhalb des Bildes der
+   Basiskamera; Belichtungsautomatik der D435i vorher aus.
+4. **Vor Block 4/7 im Code:** `max_extrapolation_s` und die 0,5-s-Grenzen an den
+   gemessenen Horizont (bis 0,5 s) anpassen; Datenweg hinter dem Bild der
+   Basiskamera (Nachtrag 13 / L1); Greifzone neu
+   (etwa y 0,30 … −0,30, Bandende −0,375); `fake_objects.py` mit realer Rate und Latenz.
+5. Ablagepose einmal anfahren und prüfen, ob die Basiskamera den Greifer sieht.
 
-Rohdaten der Punkte: `architektur/bilder/2026-09-22-b23-punkte.json` —
-`b23_compare.py eval` darauf ausführen, neue Punkte mit `add` ergänzen.
-Ohne AICA liest Claude die Flanschpose über den Leseport 30013 der Steuerung
-(TCP + 215 mm in z, 180° nach `world`).
+Rohdaten: `architektur/bilder/2026-09-23-b23-punkte.json`. Werkzeuge: §3; neu in
+`signal_reader.py` ist die Auswertung des Signalalters bei jedem Vertragssignal.
+Mitlesen belastet den Rechner spürbar — **immer nur ein Leseprozess gleichzeitig.**
 
 ---
 
@@ -70,7 +71,10 @@ einem Satz, **was** sich bewegen wird und **wohin**. Erst dann das Go.
 1. **Eine Hand am Not-Aus**, solange eine eigene Komponente Zielposen ausgibt.
 2. **Erster Lauf jeder Stufe am echten Roboter mit gedrosselter Geschwindigkeit:**
    `max_linear_velocity` des IK-Controllers auf **0,10 m/s**. Erst wenn der Ablauf
-   stimmt, auf den Betriebswert 0,25 (Einrichtung §2).
+   stimmt, auf den Betriebswert 0,25 (Einrichtung §2). ⚠️ Das Band läuft mit ≈ 0,13 m/s
+   (Nachtrag 13 / L7) — gedrosselt lässt es sich **nicht** einholen. Gedrosselte
+   Läufe deshalb mit `fake_objects.py` und kleiner Geschwindigkeit, mit laufendem
+   Band erst mit ≥ 0,30 m/s.
 3. **Am echten Roboter nur mit dokumentiertem Arbeitsraum** (B10, nach
    `Safety/README.md`). Die Werte aus Einrichtung §9 gelten **nur** am virtuellen
    Roboter. → Block 5 kommt vor Block 7.
@@ -146,7 +150,7 @@ Jeder Block setzt die vorigen voraus, sofern nicht anders vermerkt.
 | **Nutzer** | Prüfen, ob `vectoring`, `priority_handler`, `data_tracker`, `object_follower`, `interface_streamer` in der Bibliothek erscheinen. Verdrahten: `base_cam` → `vectoring` → `priority_handler` → `data_tracker` → `interface_streamer`; `cartesian_state` → `priority_handler`. Greifer mit den neuen Ausgängen `motion_done`/`has_object`. |
 | **Claude** | `objects`, `tracks`, `target`, `not_pickable`, `world_state` mitlesen; Log des `priority_handler`; Übersichtsbild in RViz gemeinsam ansehen. Greifer: einmal schließen/öffnen, `motion_done` und `has_object` mitlesen. |
 | **Abnahme** | Jede Komponente läuft durch `configure`/`activate`. Ein ruhender Klotz erscheint in allen Signalen mit derselben ID. Greiferausgänge folgen der Bewegung. |
-| **Erwartet, kein Fehler** | Der `priority_handler` **wählt keinen Klotz**: Die Greifzone liegt als Platzhalter im Robotersystem (x −0,95…−0,68), die Basiskamera meldet mit alten Kalibrierwerten x ≈ +0,81 (B23). Die Auswahl wird in Block 4 mit `fake_objects.py` geprüft. |
+| **Erwartet, kein Fehler** | Der `priority_handler` **wählt keinen Klotz**: Die Greifzone liegt als Platzhalter im Robotersystem (x −0,95…−0,68), die Basiskamera meldet mit alten Kalibrierwerten x ≈ +0,81 (B23). Die Auswahl wird in Block 4 mit `fake_objects.py` geprüft. | *(Stand 22.09.; seit Nachtrag 13 liegt die Basiskamera im Robotersystem.)*
 
 ### Block 2 — B23 und B21 in einem Durchgang · 45 min · Band steht
 

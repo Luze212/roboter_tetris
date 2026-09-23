@@ -149,7 +149,7 @@ Kleine, risikoarme Änderungen an laufendem Code. Jede einzeln testbar.
 | **Ziel** | Ausgabe auf `[t, valid, x, y, z_band, orientation]` umstellen, SI-Einheiten |
 | **Änderung** | `valid`-Flag ergänzen; Distanz-Gate über neue Parameter `min_belt_distance_m` / `max_belt_distance_m` auf `z_band`; mm → m; Rate 100 Hz; **`debug_image` auf `publish_on_step=False`** (N5). ⚠️ Die Rückprojektion **nicht** korrigieren — das macht der Follower (N1) |
 | **Wichtig** | Bei `valid = 0` läuft `t` **weiter**. Nur so unterscheidet der Empfänger "Kamera arbeitet, sieht nichts" von "Kamera liefert nicht mehr". |
-| **Nicht ändern** | Die **Detektionskerne** `belt_candidate_mask` (Farbe) und `edge_candidate_mask` (Kanten) — sie sind das, was der A/B-Test aus B6 vergleicht. Ebenso die **Rückprojektion** (N1, der Follower korrigiert sie; sonst doppelt). ⚠️ **Korrektur 20.09.2026:** Hier stand zusätzlich `localize_largest_blob`. Diese Sperre ist **aufgehoben** — die gemeinsame Auswahl- und Geometriestufe *muss* geändert werden (`robot-cam-befunde.md` §9.7/§9.8), und weil sie für beide Varianten identisch wirkt, bleibt der A/B-Test aussagekräftig. |
+| **Nicht ändern** | *(Aufgehoben 23.09.2026, Nachtrag 13 / L5: nur noch `robot_cam_2`.)* Die **Detektionskerne** `belt_candidate_mask` (Farbe) und `edge_candidate_mask` (Kanten) — sie sind das, was der A/B-Test aus B6 vergleicht. Ebenso die **Rückprojektion** (N1, der Follower korrigiert sie; sonst doppelt). ⚠️ **Korrektur 20.09.2026:** Hier stand zusätzlich `localize_largest_blob`. Diese Sperre ist **aufgehoben** — die gemeinsame Auswahl- und Geometriestufe *muss* geändert werden (`robot-cam-befunde.md` §9.7/§9.8), und weil sie für beide Varianten identisch wirkt, bleibt der A/B-Test aussagekräftig. |
 | **Vorher lesen** | `docs/architektur/robot-cam-befunde.md` — begründet die Defaults und nennt die Fallstricke (Seitenflächen-Physik, Nah-Gate, RealSense-Konfiguration) |
 | **Dateien** | `roboter_tetris/robot_cam.py`, `robot_cam_2.py` + beide JSONs |
 | **Abnahme** | Beide Varianten liefern denselben Vertrag und sind gegeneinander austauschbar. |
@@ -307,11 +307,11 @@ Die größte Komponente. **Nicht am Stück bauen.**
 
 ## Phase 6 — Inbetriebnahme und Abstimmung
 
-**Reihenfolge am Aufbau: `uebersicht/uebergabe.md` §6** — dort Schritt für
-Schritt. Die Punkte selbst: `uebersicht/offene-punkte.md`.
+**Reihenfolge am Aufbau: `uebersicht/fahrplan-aufbau.md`.** Die Punkte selbst:
+`uebersicht/offene-punkte.md`.
 
 Kritischer Pfad: B13 (Uhrendrift, erledigt) → **B23** (Basiskamera und Roboter im
-selben System) → **B21** (Tracker misst über den ganzen Sichtbereich) → B19
+selben System, erledigt 23.09.2026) → **B21** (Tracker misst über den ganzen Sichtbereich) → B19
 (Greifzone) → B11 (Singularitäten) → B10 (Arbeitsraum) → B4 (Vorhaltzeit) → D22
 (Zeiten des Greifprozesses, trägt die Greifebene) → B18 (Toleranzen). Daneben für
 4c: B6 → B8 → B24. **B1 ist nicht mehr auf dem kritischen Pfad** — die

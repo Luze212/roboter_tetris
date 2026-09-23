@@ -4,8 +4,8 @@
 Grundlage für die Implementierung. Änderungen nur hier — und dann in
 `roboter_tetris/contracts.py` nachziehen, nie umgekehrt.
 
-Bezug: `entscheidungen.md` Themen 1–7 und Nachträge 3–11. **Stand 21.09.2026**,
-alle Signale in `contracts.py` umgesetzt.
+Bezug: `entscheidungen.md` Themen 1–7 und Nachträge 3–13. **Stand 23.09.2026**
+(S1: Semantik von `z` und `height`), alle Signale in `contracts.py` umgesetzt.
 
 ## Übersicht
 
@@ -71,11 +71,11 @@ alle Signale in `contracts.py` umgesetzt.
 | 1 | `color` | – | 0=Rot 1=Gelb 2=Grün 3=Blau 4=Weiß 5=Schwarz 6=Unbekannt |
 | 2 | `x` | m | world |
 | 3 | `y` | m | world |
-| 4 | `z` | m | world, **gemessen etwa halbe Blockhöhe über dem Band** — nicht die Oberkante, siehe unten |
+| 4 | `z` | m | world, **Klotzmitte** = Oberseite − halbe Höhe (seit 23.09.2026, siehe unten) |
 | 5 | `orientation` | rad | Längsachse, Bereich [0, π) |
 | 6 | `length` | m | |
 | 7 | `width` | m | |
-| 8 | `height` | m | |
+| 8 | `height` | m | z der Oberseite in world − Bandoberfläche (`belt_surface_z_mm`), Oberseitentiefe um `top_depth_bias_mm` korrigiert (Nachtrag 13 / L6) |
 
 **Länge:** `3 + 9·n`
 
@@ -102,20 +102,22 @@ nicht so allgemein, wie der Name nahelegt:
    Messregion durchquert hat, koppeln alle Tracks mit Geschwindigkeit null und
    stehen scheinbar still.
 
-### ⚠️ Zur Semantik von `z`
+### Zur Semantik von `z` und `height` (geändert 23.09.2026)
 
-`vision/detection.py` bildet `z = center_z + height/2`, wobei `center_z` aus den
-rückprojizierten Ecken der **Oberseite** stammt. **Am 14.09.2026 am Aufbau
-nachgemessen:** gemeldet wurden 103,1 mm, die unabhängige Rückrechnung über
-dieselben Boxecken ergab 53,1 mm — die Differenz ist exakt die halbe gemeldete
-Höhe. Das Feld ist damit **weder Oberkante noch Mittelpunkt**, sondern liegt eine
-halbe Höhe über der Ecken-Referenz. Weil diese Referenz praktisch auf der
-Bandoberfläche lag (53,1 gegen gemessene 53,6 mm, B17), ergibt sich in der Summe
-**`z ≈ Bandoberfläche + halbe Blockhöhe`** — für den 100-mm-Klotz 103,6 mm gegen
-gemessene 103,1. Eine einzelne Messung; der Befund gilt für diese Szene, nicht als
-Garantie. Regelungsrelevant ist es nicht — die
-Greifhöhe wird aus `belt_surface_z_m` und `height` gebildet, nicht aus `z`. **Vor
-jeder regelungsrelevanten Verwendung von `z` nachrechnen.**
+**Seit Nachtrag 13 / L6:** `vision/detection.py` rechnet die Ecken der Oberseite
+mit **einer** Tiefe um — dem Median der Tiefe über den Umriss, abzüglich
+`top_depth_bias_mm`. `x`/`y` sind damit die Mitte der Oberseite, `height` ist z
+der Oberseite in world minus `belt_surface_z_mm`, und `z` ist die **Klotzmitte**.
+Abgleich gegen den Roboter am 23.09.: Position ≤ 6 mm für 25- und 100-mm-Klötze.
+
+**Vorher** wurde jede Ecke mit der Tiefe ihres eigenen Pixels umgerechnet. Diese
+Pixel liegen an der Kante und lesen das Band — die Ecken lagen auf Bandhöhe
+(am 14.09. gemessen: 53,1 mm gegen Band 53,6 mm; damals als Eigenheit von `z`
+notiert, tatsächlich die Spur einer **Parallaxe** von 16 mm beim 100-mm-Klotz).
+`z` war „Ecken + halbe Höhe“ und `height` kam aus dem Mittelwert der Tiefe plus
+festem Zuschlag von 20 mm.
+
+Regelungsrelevant bleibt `height` (Greifhöhe, Greifbarkeit), nicht `z`.
 
 ### Geprüft und bewusst **nicht** aufgenommen: `square`
 

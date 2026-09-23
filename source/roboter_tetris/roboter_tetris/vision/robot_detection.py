@@ -16,8 +16,15 @@ Pipeline (pure numpy/cv2, no ROS imports, unit-testable with synthetic images):
    is therefore rejected — this is what disambiguates a white block from a belt
    glare spot.
 4. Largest qualifying blob -> ``minAreaRect`` -> center + orientation.
-5. Sample the belt distance just below the blob (valid depth) -> ``z``.
+5. Belt distance ``z`` = median of the valid depth over the frame
+   (:func:`belt_reference_mm`).
 6. Back-project the blob center with ``z`` -> metric x/y in the camera frame.
+
+Step 5 sampled the depth just below the blob until 23.09.2026. From close up that
+spot is shadow, the image border or the block itself: on 22.09. it read the top
+face (184 mm instead of 284 mm), a scale error of one third that passed as a
+valid measurement (Nachtrag 12 / K3). The median is robust as long as the belt
+fills most of the frame, which it does at any usable observation height.
 
 The color image and the depth image must share the same pixel grid (the aligned
 depth lives in the color frame); the component resizes the depth to the color
@@ -54,7 +61,7 @@ class RobotDetectionParams:
     min_contour_area: float = 500.0       # px
     morph_kernel_size: int = 15           # px, ellipse, morphology open
     use_depth_gate: bool = True           # reject belt reflections via depth
-    depth_search_radius_px: int = 2       # search window for a valid belt depth
+    depth_search_radius_px: int = 2       # unused since 23.09.2026 (belt = frame median)
     depth_average_frames: int = 5         # moving average window (1 = off)
 
     # -- Blob selection (see localize_largest_blob) -------------------------
@@ -74,7 +81,8 @@ class RobotDetectionParams:
 @dataclass
 class RobotDetection:
     """Result for one frame. ``z_band_mm`` is the camera->belt distance, not the
-    object distance. Pixel fields are full-frame; for the debug overlay."""
+    object distance. Pixel fields are full-frame; for the debug overlay --
+    ``belt_px`` is the principal point, since the belt distance is a frame median."""
 
     x_mm: float
     y_mm: float
@@ -105,20 +113,6 @@ class BeltDistanceFilter:
         return float(sum(self._values) / len(self._values))
 
 
-def _find_valid_depth_m(depth_mm: np.ndarray, px: int, py: int, radius: int) -> Optional[float]:
-    """Search a (2r+1) window around (px, py) for the first non-zero depth (mm),
-    returning meters."""
-    h, w = depth_mm.shape[:2]
-    for dy in range(-radius, radius + 1):
-        for dx in range(-radius, radius + 1):
-            sx = min(max(px + dx, 0), w - 1)
-            sy = min(max(py + dy, 0), h - 1)
-            d = float(depth_mm[sy, sx])
-            if d > 0.0:
-                return d / 1000.0
-    return None
-
-
 def belt_candidate_mask(color_bgr: np.ndarray, params: RobotDetectionParams) -> np.ndarray:
     """Block-candidate mask: everything that is NOT belt-green."""
     hsv = cv2.cvtColor(color_bgr, cv2.COLOR_BGR2HSV)
@@ -134,25 +128,24 @@ def belt_candidate_mask(color_bgr: np.ndarray, params: RobotDetectionParams) -> 
 
 
 def belt_reference_mm(depth_mm: np.ndarray) -> Optional[float]:
-    """Median of the valid depth, i.e. a robust pre-estimate of the camera->belt
-    distance (the belt dominates the frame).
-
-    Available *before* any blob has been chosen, which is what the expected-point
-    calculation in :func:`localize_largest_blob` needs -- the precise belt
-    distance is only sampled next to the selected blob, later in the pipeline.
-    """
+    """Median of the valid depth: the camera->belt distance (the belt dominates
+    the frame). Used for the near gate, the expected point and the
+    back-projection alike. A block top in view pulls it only slightly, as long
+    as the belt covers more than half of the valid pixels."""
     valid = depth_mm[depth_mm > 0]
     if not valid.size:
         return None
     return float(np.median(valid))
 
 
-def near_mask(depth_mm: np.ndarray) -> np.ndarray:
+def near_mask(depth_mm: np.ndarray, belt_ref: Optional[float] = None) -> np.ndarray:
     """Pixels that read as an object: invalid depth (too close / glossy) or
     clearly elevated above the belt. Belt and belt reflections read valid belt
-    depth and are excluded."""
+    depth and are excluded. ``belt_ref`` saves a second median when the caller
+    already has it."""
     near = depth_mm == 0
-    belt_ref = belt_reference_mm(depth_mm)
+    if belt_ref is None:
+        belt_ref = belt_reference_mm(depth_mm)
     if belt_ref is not None:
         near = near | (depth_mm < belt_ref - GATE_HEIGHT_MARGIN_MM)
     return near
@@ -213,11 +206,14 @@ def localize_largest_blob(candidate: np.ndarray, depth_mm: np.ndarray,
     if max_contour_area > 0.0 and max(areas) > max_contour_area:
         return None
 
-    near = near_mask(depth_mm) if use_depth_gate else None
+    # One median per frame: near gate, expected point and back-projection.
+    belt_ref_mm = belt_reference_mm(depth_mm)
+    if belt_ref_mm is None:
+        return None
+    near = near_mask(depth_mm, belt_ref_mm) if use_depth_gate else None
 
     # Expected image position of the block. The mm offset is converted with the
     # current belt distance, so the same parameter holds at any camera height.
-    belt_ref_mm = belt_reference_mm(depth_mm)
     if belt_ref_mm and (expect_offset_x_mm or expect_offset_y_mm):
         u_expect = cx + expect_offset_x_mm * fx / belt_ref_mm
         v_expect = cy + expect_offset_y_mm * fy / belt_ref_mm
@@ -258,14 +254,9 @@ def localize_largest_blob(candidate: np.ndarray, depth_mm: np.ndarray,
     if best is None:
         return None
 
-    # Filled blob pixels for centroid / bottom-edge belt sampling.
+    # Filled blob pixels (debug overlay).
     obj_mask = np.zeros(candidate.shape, dtype=np.uint8)
     cv2.drawContours(obj_mask, [best], 0, 255, cv2.FILLED)
-    ys, xs = np.nonzero(obj_mask)
-    if xs.size == 0:
-        return None
-    max_y = int(ys.max())
-    mean_x = int(round(float(xs.mean())))
 
     # Center + orientation from the oriented bounding box of the top face
     # (captured during selection, so minAreaRect runs once per contour).
@@ -273,13 +264,12 @@ def localize_largest_blob(candidate: np.ndarray, depth_mm: np.ndarray,
     ref_px = (int(round(rect_cx)), int(round(rect_cy)))
     orientation_rad = _normalize_orientation(angle)
 
-    # Belt distance: sample just below the blob (on the belt), where depth is valid.
+    # Belt distance: the frame median (see the module docstring, step 5).
+    # ``depth_search_radius_px`` is kept in the signature for the callers, unused.
     h, w = depth_mm.shape[:2]
-    belt_px = (min(max(mean_x, 0), w - 1), min(max(max_y + 1, 0), h - 1))
-    depth_m = _find_valid_depth_m(depth_mm, belt_px[0], belt_px[1], depth_search_radius_px)
-    if depth_m is None:
-        return None
-    z_band_mm = depth_m * 1000.0
+    belt_px = (min(max(int(round(cx)), 0), w - 1), min(max(int(round(cy)), 0), h - 1))
+    z_band_mm = belt_ref_mm
+    depth_m = z_band_mm / 1000.0
     if belt_filter is not None:
         z_band_mm = belt_filter.update(depth_average_frames, z_band_mm)
         depth_m = z_band_mm / 1000.0

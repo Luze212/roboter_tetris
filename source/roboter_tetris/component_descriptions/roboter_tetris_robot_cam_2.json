@@ -38,7 +38,7 @@
     },
     {
       "display_name": "Debug Image",
-      "description": "Visualisierung auf dem Farbbild: Farb-Canny-Kanten (cyan), Tiefenkanten (orange, wenn fusioniert), erkannte Kontur (grün), orientierte Box (gelb), Mittelpunkt + Orientierungslinie (rot), Band-Messpunkt (blau), verworfene Kandidaten (grau), Nah-Gate-Bereich (blau eingefärbt). Kopfzeile mit z_band/x/y/Winkel und Farb-Legende. Nur wenn Debug aktiviert.",
+      "description": "Visualisierung auf dem Farbbild: Farb-Canny-Kanten (cyan), Tiefenkanten (orange, wenn fusioniert), erkannte Kontur (grün), orientierte Box (gelb), Mittelpunkt + Orientierungslinie (rot), Bildmitte (blau; die Band-Distanz ist der Median über das Bild), verworfene Kandidaten (grau), Nah-Gate-Bereich (blau eingefärbt). Kopfzeile mit z_band/x/y/Winkel und Farb-Legende. Nur wenn Debug aktiviert.",
       "signal_name": "debug_image",
       "signal_type": "other",
       "custom_signal_type": "sensor_msgs::msg::Image"
@@ -115,7 +115,7 @@
     },
     {
       "display_name": "Tiefen-Suchradius (px)",
-      "description": "Suchradius um den Band-Messpunkt für einen gültigen Tiefenwert (überspringt Null-Pixel).",
+      "description": "Ohne Wirkung seit 23.09.2026: Die Band-Distanz ist jetzt der Median der gültigen Tiefe über das Bild, nicht mehr ein Messpunkt unter dem Blob (Nachtrag 12 / K3).",
       "parameter_name": "depth_search_radius_px",
       "parameter_type": "int",
       "default_value": "2",

@@ -374,8 +374,37 @@ def cmd_contract(node, args):
             new = sum(1 for a, b in zip(ts, ts[1:]) if b != a)
             span = msgs[-1][0] - msgs[0][0]
             print(f"  {len(msgs)/span:.1f} Nachr./s, davon {new/span:.1f}/s mit neuem t")
+            _summarise_age(msgs)
     if list_attr and msgs:
         _summarise_entries(args, [m for _, m in msgs], list_attr)
+
+
+def _summarise_age(msgs):
+    """Age of the signal's own timestamp t (image time for S1/S3/S4).
+
+    ``bei Ankunft``: receive time minus t for the first message with a new t --
+    the latency from the image to here. ``vor dem nächsten``: how old the
+    newest t is just before the next one arrives -- the horizon a consumer has
+    to extrapolate over (follower: max_extrapolation_s). Host and container
+    share the system clock, and the cameras stamp in it (B13/B24).
+    """
+    firsts = []
+    for recv, m in msgs:
+        if not firsts or m.t != firsts[-1][1]:
+            firsts.append((recv, m.t))
+    if len(firsts) < 3:
+        return
+    arrive = [r - t for r, t in firsts]
+    before = [r_next - t for (_, t), (r_next, _) in zip(firsts, firsts[1:])]
+    gaps = [b[1] - a[1] for a, b in zip(firsts, firsts[1:])]
+    q = lambda v, p: sorted(v)[min(int(p * len(v)), len(v) - 1)]
+    print(f"  Alter von t bei Ankunft   : Median {q(arrive, .5)*1000:6.0f}  "
+          f"95 % {q(arrive, .95)*1000:6.0f}  max {max(arrive)*1000:6.0f} ms")
+    print(f"  Alter vor dem nächsten t  : Median {q(before, .5)*1000:6.0f}  "
+          f"95 % {q(before, .95)*1000:6.0f}  max {max(before)*1000:6.0f} ms")
+    print(f"  Abstand neuer t           : Median {q(gaps, .5)*1000:6.0f}  "
+          f"95 % {q(gaps, .95)*1000:6.0f}  max {max(gaps)*1000:6.0f} ms  "
+          f"({sum(1 for g in gaps if g > 0.5)} Lücken > 0,5 s)")
 
 
 def _summarise_entries(args, msgs, list_attr):

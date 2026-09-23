@@ -95,19 +95,22 @@ def test_orientation_in_range():
     assert 0.0 <= res.orientation_rad < math.pi
 
 
-def test_belt_depth_search_skips_invalid():
-    # Invalid stripe right under the block; the search radius must still find a
-    # valid belt pixel nearby. Disable the gate so the elevated stripe doesn't
-    # interfere with this isolated belt-sampling check.
-    color, depth = _scene(block=(130, 80, 60, 60), belt_mm=1000.0)
-    depth[140:142, :] = 0.0  # invalid stripe just below the block bottom (y=140)
+def test_belt_distance_is_the_frame_median_not_the_spot_below_the_block():
+    """22.09.2026 (Nachtrag 12 / K3): from close up the spot just below the blob
+    is the block's shadow down to the image border, or the block itself. The
+    top face reads valid depth (650 of 1000 mm here, like 184 of 284 at the
+    setup) and the shadow below it reads 0. Sampling there returned the top
+    face or nothing; the frame median returns the belt."""
+    color, depth = _scene(block=(130, 80, 60, 60), belt_mm=1000.0, block_near=False)
+    depth[80:140, 130:190] = 650.0   # top face, valid depth, clearly near
+    depth[140:, 120:200] = 0.0       # shadow from the blob to the bottom edge
     fx, fy, cx, cy = _intrinsics()
     res = detect_object(color, depth, fx, fy, cx, cy,
-                        RobotDetectionParams(depth_search_radius_px=3,
-                                             use_depth_gate=False,
-                                             depth_average_frames=1))
+                        RobotDetectionParams(depth_average_frames=1))
     assert res is not None
     assert abs(res.z_band_mm - 1000.0) < 1e-6
+    # Block centre at pixel x 160 = cx: back-projected with the belt distance.
+    assert abs(res.x_mm) < 5.0
 
 
 def test_belt_filter_moving_average_converges():

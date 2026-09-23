@@ -91,10 +91,26 @@
     },
     {
       "display_name": "Fließband Z-Distanz (mm)",
-      "description": "Distanz von der Kamera zum Fließband in mm",
+      "description": "Distanz von der Kamera zum Fließband in mm. Nur noch für die Trennung Band/Objekt (Tiefenfenster), nicht mehr für die Höhe.",
       "parameter_name": "conveyor_z_dist",
       "parameter_type": "double",
       "default_value": "865.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Bandoberfläche Z in world (mm)",
+      "description": "Höhe der Bandoberfläche im Robotersystem world in mm (angetastet, B17). Die Klotzhöhe ist z der Oberseite in world minus dieser Wert - sie folgt damit aus der Kalibrierung, ohne festen Zuschlag.",
+      "parameter_name": "belt_surface_z_mm",
+      "parameter_type": "double",
+      "default_value": "53.6",
+      "dynamic": true
+    },
+    {
+      "display_name": "Tiefenversatz Klotzoberseite (mm)",
+      "description": "Die Kamera (L515) liest die Oberseiten der Klötze um diesen Wert zu tief, das Band nicht. Er wird von der Oberseitentiefe abgezogen und korrigiert damit Höhe und Position. Gemessen 23.09.2026 an 25- und 100-mm-Klötzen: 11,5 ± 1,6 mm (Nachtrag 13).",
+      "parameter_name": "top_depth_bias_mm",
+      "parameter_type": "double",
+      "default_value": "11.5",
       "dynamic": true
     },
     {
@@ -147,10 +163,10 @@
     },
     {
       "display_name": "Kalibrierung X (m)",
-      "description": "Extrinsik Kamera→Roboter: Translation x in m. Versionierte Quelle: Calibration/calibration.json; nach Neumontage neu kalibrieren.",
+      "description": "Extrinsik Kamera→world (= ur_base_link, nicht UR-Rahmen base): Translation x in m. Übergangswerte vom 23.09.2026 (Nachtrag 13): Neigung aus einer Bandebene im Tiefenbild, Rest aus fünf Antastpunkten, Restfehler ≤ 4 mm. Calibration/calibration.json enthält noch die Werte der Vorgängergruppe im Rahmen base. Nach Verschieben der Kamera neu bestimmen.",
       "parameter_name": "cal_x",
       "parameter_type": "double",
-      "default_value": "0.6118",
+      "default_value": "-0.7787",
       "dynamic": true
     },
     {
@@ -158,7 +174,7 @@
       "description": "Extrinsik: Translation y in m",
       "parameter_name": "cal_y",
       "parameter_type": "double",
-      "default_value": "-0.7820",
+      "default_value": "0.7934",
       "dynamic": true
     },
     {
@@ -166,7 +182,7 @@
       "description": "Extrinsik: Translation z in m",
       "parameter_name": "cal_z",
       "parameter_type": "double",
-      "default_value": "0.8902",
+      "default_value": "0.9163",
       "dynamic": true
     },
     {
@@ -174,7 +190,7 @@
       "description": "Extrinsik: Roll in Grad (Rotation ZYX: yaw·pitch·roll)",
       "parameter_name": "cal_roll",
       "parameter_type": "double",
-      "default_value": "176.26",
+      "default_value": "179.46",
       "dynamic": true
     },
     {
@@ -182,7 +198,7 @@
       "description": "Extrinsik: Pitch in Grad",
       "parameter_name": "cal_pitch",
       "parameter_type": "double",
-      "default_value": "-8.27",
+      "default_value": "0.45",
       "dynamic": true
     },
     {
@@ -190,7 +206,7 @@
       "description": "Extrinsik: Yaw in Grad",
       "parameter_name": "cal_yaw",
       "parameter_type": "double",
-      "default_value": "-12.94",
+      "default_value": "179.76",
       "dynamic": true
     },
     {
@@ -251,18 +267,18 @@
     },
     {
       "display_name": "Tracker: Y-Min (mm)",
-      "description": "Tracks unterhalb dieser y-Grenze werden gelöscht (Bandende)",
+      "description": "Tracks unterhalb dieser y-Grenze (world) werden gelöscht: Bandende, Rolle bei y ≈ -375 mm",
       "parameter_name": "track_min_y_mm",
       "parameter_type": "double",
-      "default_value": "-1080.0",
+      "default_value": "-375.0",
       "dynamic": true
     },
     {
       "display_name": "Tracker: Y-Max (mm)",
-      "description": "Tracks oberhalb dieser y-Grenze werden gelöscht (Bandanfang)",
+      "description": "Tracks oberhalb dieser y-Grenze (world) werden gelöscht: Bandanfang, Rolle bei y ≈ +1080 mm",
       "parameter_name": "track_max_y_mm",
       "parameter_type": "double",
-      "default_value": "375.0",
+      "default_value": "1080.0",
       "dynamic": true
     },
     {
@@ -278,7 +294,7 @@
       "description": "Vertrauenswürdige Region für Geschwindigkeitsmessung",
       "parameter_name": "track_velocity_region_y_min",
       "parameter_type": "double",
-      "default_value": "-1000.0",
+      "default_value": "500.0",
       "dynamic": true
     },
     {
@@ -286,7 +302,7 @@
       "description": "Vertrauenswürdige Region für Geschwindigkeitsmessung",
       "parameter_name": "track_velocity_region_y_max",
       "parameter_type": "double",
-      "default_value": "-500.0",
+      "default_value": "1000.0",
       "dynamic": true
     },
     {
@@ -310,7 +326,7 @@
       "description": "Node-Name des RealSense-Blocks dieser Kamera, z. B. /realsense_camera_2. Ist er gesetzt, erzwingt die Komponente dort rgb_camera.global_time_enabled und depth_module.global_time_enabled auf true. Ohne das stempelt die Kamera (bei der L515 per Default) in ihrer Hardwareuhr: fremde Epoche, Drift von rund 4 ms/s gegen die ROS-Zeit, und nach einigen Minuten bleibt der Stempel stehen - dann verwirft das Frame-Gating jedes Bild nach dem ersten und die Objektliste bleibt leer. Leerer String = Funktion aus.",
       "parameter_name": "camera_node",
       "parameter_type": "string",
-      "default_value": ""
+      "default_value": "/realsense_camera"
     }
   ]
 }

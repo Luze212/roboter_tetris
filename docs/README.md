@@ -3,9 +3,9 @@
 Wo was liegt und was verbindlich ist. Die Aufteilung folgt der Frage, **für wen**
 ein Dokument geschrieben ist.
 
-**Stand 21.09.2026:** Alle Komponenten sind gebaut und lokal getestet, in AICA ist
-noch keine gelaufen. Als Nächstes kommt die Inbetriebnahme am Aufbau
-(`uebersicht/uebergabe.md` §6).
+**Stand 23.09.2026:** Alle Komponenten sind gebaut und laufen in AICA; die
+Inbetriebnahme am Aufbau ist im Gang, B23 ist erledigt. Stand und Reihenfolge:
+`uebersicht/fahrplan-aufbau.md`.
 
 ---
 
@@ -81,7 +81,7 @@ Erkenntnis in fünf Dateien schreiben.
 | Die gemessenen Werte des Aufbaus (Bandhöhe, Greifhöhe, Ablagepose) | ebd. Abschnitt 8; Herleitung in `architektur/entscheidungen.md` Nachtrag 5 |
 | Warum Höhen Flansch- und nicht TCP-Maße sind | `architektur/entscheidungen.md` Nachtrag 5 / M8 |
 | **Wie das System aufgebaut ist und welche Parameter zusammenpassen müssen** | `uebersicht/systemgraph.md` |
-| **Was am Aufbau als Nächstes zu tun ist, in welcher Reihenfolge** | `uebersicht/uebergabe.md` §6 |
+| **Was am Aufbau als Nächstes zu tun ist, in welcher Reihenfolge** | `uebersicht/fahrplan-aufbau.md` („Stand nach Termin B“) |
 | **Die offiziellen Projektziele** | `architektur/entscheidungen.md` Nachtrag 6 / Z1; `uebersicht/projektkontext.md` §1 |
 | **Wie die Geschwindigkeit geschätzt wird** (Ziel 3) | ebd. Nachtrag 6 / Z2–Z4 |
 | Warum der Werkzeugversatz 0,235 m ist, nicht 0,215 | ebd. Nachtrag 6 / Z7 |
@@ -91,7 +91,10 @@ Erkenntnis in fünf Dateien schreiben.
 | Wie der `priority_handler` Anfahrweg und Greiferbreite rechnet | ebd. Nachtrag 7 / H1, H2 |
 | Was „Koordinate entlang der Bandrichtung“ in S4 genau heißt | ebd. Nachtrag 7 / H4; `contracts.along_belt` |
 | Warum S10 ein Feld `present` hat und wann Einträge verfallen | ebd. Nachtrag 7 / T1 |
-| Warum Basiskamera und Roboter das Band an verschiedenen Stellen sehen | ebd. Nachtrag 8 / F1; `uebersicht/offene-punkte.md` B23 |
+| Warum Basiskamera und Roboter das Band an verschiedenen Stellen sahen (180°) | ebd. Nachtrag 8 / F1, Nachtrag 12 / K5; `uebersicht/offene-punkte.md` B23 |
+| Woher die Kalibrierung der Basiskamera stammt, warum sie senkrecht schaut und was die Parallaxe war | ebd. Nachtrag 13 / L6 |
+| Warum `base_cam` nur ~7 Messungen/s schafft (ein Python-Prozess, Warteschlangen) | ebd. Nachtrag 13 / L2 |
+| Warum Greifzone und Wartebereich außerhalb des Bildes der Basiskamera liegen | ebd. Nachtrag 13 / L4 |
 | Wie der Follower startet (Abbruchpfad) und warum Arbeitsraum und Beobachtungspose keine Defaults haben | ebd. Nachtrag 8 / F3, F4 |
 | Wie `lead_time_s` eingemessen wird (B4) und was `outcome = 4` heißt | ebd. Nachtrag 9 / G7, G2 |
 | Wie die Roboterkamera wirkt und wie der Greifzyklus abläuft, warum die Freihöhe 0,49 m ist | ebd. Nachtrag 10 / J1–J8 |

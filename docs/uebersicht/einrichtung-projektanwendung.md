@@ -1,10 +1,16 @@
 # Einrichtung der Projektanwendung in AICA
 
-**Stand 21.09.2026** (angelegt 14.09.). Was beim Anlegen der AICA-Anwendung für
+**Stand 23.09.2026** (angelegt 14.09.). Was beim Anlegen der AICA-Anwendung für
 den On-the-fly-Pick gesetzt werden muss — und warum die Defaults nicht taugen.
 Verdrahtung der neuen Komponenten: §6; Werte für den virtuellen Roboter: §9;
-Reihenfolge am Aufbau: `uebergabe.md` §6; Kopplungen zwischen Parametern:
+Reihenfolge am Aufbau: `fahrplan-aufbau.md`; Kopplungen zwischen Parametern:
 `systemgraph.md`.
+
+> **Seit 23.09.2026 stehen die gemessenen Werte der Basiskamera als Standardwerte
+> im Paket** (Kalibrierung, Trackergrenzen, Messregion, `camera_node`,
+> Bandhöhe, Tiefenversatz; `entscheidungen.md` Nachtrag 13 / L6, L8). Sie gelten
+> nur für **neu eingefügte** Blöcke — ein bestehender Block behält seine
+> gespeicherten Werte.
 
 Grundlage: die Messungen am Aufbau vom 14.09.2026 und die Auswertung der
 Komponentenbeschreibungen im AICA-Image (`v2.0.5-jazzy`, core v5.0.0).
@@ -32,8 +38,10 @@ Komponentenbeschreibungen im AICA-Image (`v2.0.5-jazzy`, core v5.0.0).
 > diese sind nicht dabei). Sie lassen sich nur zur Laufzeit über den
 > ROS-Parameterdienst setzen und sind nach jedem Start der Anwendung wieder weg.
 > **Deshalb erzwingt `base_cam` sie selbst:** Parameter `camera_node` auf den
-> Node-Namen der Basiskamera setzen (z. B. `/realsense_camera_2`), dann erledigt
-> die Komponente es bei jeder Aktivierung. Leer lassen = Funktion aus.
+> Node-Namen der Basiskamera setzen, dann erledigt die Komponente es bei jeder
+> Aktivierung. Standardwert seit 23.09.2026: `/realsense_camera` (so heißt die
+> Basiskamera in der aktuellen Anwendung — über `serial_no` prüfen, s. u.).
+> Leer = Funktion aus.
 
 > ### ⚠️ Belichtungsautomatik der Roboterkamera abschalten
 >
@@ -96,8 +104,8 @@ Komponentenbeschreibungen im AICA-Image (`v2.0.5-jazzy`, core v5.0.0).
 |---|---|---|---|
 | `SignalPointAttractor` | `linear_gains` | `[1.0]` | **deutlich höher.** Bei K = 1 ist der Vorhalt `v_band/K` die volle Bandgeschwindigkeit (20 cm bei 0,2 m/s) und die Einschwingzeit `3/K` **3 Sekunden** — mehr, als ein Klotz für die Durchquerung der Greifzone braucht. Die Erreichbarkeitsrechnung (P1) kalkuliert mit K ≈ 5. |
 | `SignalPointAttractor` | `angular_gains` | `[1.0]` | darf abweichen; zu klein lässt das Handgelenk beim Absenken nachdrehen (F1) |
-| `SignalPointAttractor` | `max_linear_velocity` | 0,5 m/s | 2–3 × Bandgeschwindigkeit |
-| **`IKVelocityController`** | **`max_linear_velocity`** | **0,25 m/s** | **Die bindende Grenze.** Sie klemmt unabhängig vom Attractor. Wird nur der Attractor angehoben, bleibt die Anhebung wirkungslos. Bei 0,2 m/s Band wären 0,25 m/s nur das 1,25-fache — der Roboter könnte das Band nie einholen. |
+| `SignalPointAttractor` | `max_linear_velocity` | 0,5 m/s | 2–3 × Bandgeschwindigkeit — bei gemessenen **≈ 0,13 m/s** (Stoppuhr, Nachtrag 13 / L7) also 0,26–0,39 m/s |
+| **`IKVelocityController`** | **`max_linear_velocity`** | **0,25 m/s** | **Die bindende Grenze.** Sie klemmt unabhängig vom Attractor. Wird nur der Attractor angehoben, bleibt die Anhebung wirkungslos. Beim gemessenen Band (≈ 0,13 m/s) sind 0,25 m/s knapp das Doppelte; für das Folgen mit laufendem Band auf ≥ 0,30 m/s. ⚠️ Die Sicherheitsregel „erster Lauf mit 0,10 m/s“ (Fahrplan §2) holt ein 0,13-m/s-Band **nie** ein — gedrosselt nur mit `fake_objects.py` bei kleiner Geschwindigkeit fahren. |
 | `IKVelocityController` | `pinv_damping` | 0,0 | Reserve gegen explodierende Gelenkgeschwindigkeiten nahe Singularitäten (B11) |
 | `SignalPointAttractor` | `linear_precision` | 0,01 m | Schwelle für `is_in_range`; nur für stehende Ziele relevant (`WARTEN`, `ABLEGEN`) |
 
@@ -155,12 +163,19 @@ aber bei der Beurteilung der Geometrie zu wissen.
 > Duplikat lässt die Oberfläche bei jedem Klick ein weiteres Rate-Feld anlegen
 > (`entscheidungen.md` Nachtrag 12 / K2).
 
+> ⚠️ **Alle Python-Komponenten laufen in einem einzigen Prozess** und teilen sich
+> wegen der GIL praktisch einen Kern (Nachtrag 13 / L2). Jede weitere Komponente
+> und jede unnötig hohe `rate` kostet `base_cam` Messrate — gemessen 2,8 statt
+> 7,1 Messungen/s. **Nicht gebrauchte Blöcke aus der Anwendung nehmen**; auch
+> unkonfigurierte Kamerablöcke empfangen ihre Bilder.
+
 | Komponente | Rate | Anmerkung |
 |---|---|---|
-| `base_cam`, `robot_cam` | 10 Hz (Default), höher nur, wenn der Rechner es trägt; über 30 Hz sinnlos | Bei 10 Hz wird nur jedes dritte Kamerabild verarbeitet. ⚠️ Dann `settle_half_window` in `vectoring` auf **5** (zählt Messungen, Default 15 ist für 30 Hz). |
-| `vectoring`, `priority_handler`, `object_follower` | 100 Hz | |
-| `data_tracker` | 10 Hz | |
-| `interface_streamer` | 5 Hz | |
+| `base_cam`, `robot_cam_2` | 10 Hz (Default); über 30 Hz sinnlos | `base_cam` schafft damit ~7 Messungen/s (23.09.). Nur `robot_cam_2` in die Anwendung, nicht `robot_cam` (Nachtrag 13 / L5) |
+| `vectoring`, `priority_handler` | **20 Hz** | Mehr bringt nichts, solange < 10 Messungen/s ankommen. Einschwing-Halbfenster in `vectoring` = **5** (Standardwert seit 23.09.; zählt Messungen) |
+| `object_follower` | 100 Hz, bei Rechenzeitmangel 50 Hz | glatte Zielpose für den Attractor (Thema 2) |
+| `data_tracker` | 2 Hz | nur Anzeige |
+| `interface_streamer` | 5 Hz, nur bei Bedarf in der Anwendung | Bildverarbeitung, kostet Messrate |
 | `robotiq_gripper` | ereignisgetrieben | |
 
 **`debug_enable`** bei den Kamerakomponenten nur zur Inbetriebnahme einschalten —
@@ -170,25 +185,22 @@ Komponentenrate statt der Kamerarate verschickt.
 
 ### Kopplung, die leicht übersehen wird
 
-`track_velocity_region_y_min` / `_max` von `base_cam` sind **regelungsrelevant**
-und werden gemeinsam mit der Greifzone festgelegt (B19). Außerhalb der Region löscht der Tracker Tracks nicht bei ausbleibender Detektion,
-sondern erst an den Bandgrenzen. In der Greifzone soll ein verschwundenes Ziel aber
-innerhalb von drei Bildern auffallen.
-Die Greifzone muss deshalb innerhalb liegen.
+`track_velocity_region_y_min` / `_max` und `track_min_y_mm` / `track_max_y_mm` von
+`base_cam` liegen in `world` (Standardwerte seit 23.09.2026): Messregion
+**500 … 1000 mm**, Tracker-Grenzen **−375 … +1080 mm** = das Band von Rolle zu
+Rolle. Das Bild der Basiskamera deckt y ≈ 460 … 1030 mm ab.
+
+⚠️ **Geändert 23.09.2026 (Nachtrag 13 / L4):** Die Greifzone liegt **außerhalb**
+des Bildes der Basiskamera (etwa y 0,30 … −0,30), damit der Greifer nicht als
+Klotz erkannt wird. Die frühere Regel „Greifzone innerhalb der Messregion“ (N2)
+ist damit aufgegeben. Ihr Grund — ein verschwundenes Ziel in der Zone schnell zu
+bemerken — geht auf die Roboterkamera über; hinter dem Bild führt `base_cam` die
+Tracks nur rechnerisch weiter (offen: Nachtrag 13 / L1). Die Greifzone endet vor
+dem Bandende bei y = −0,375.
 
 > Früher kam ein zweiter Grund hinzu: Außerhalb der Region *rechnete* der Tracker
 > die Längsposition, statt sie zu messen. Das entfällt mit Umsetzungsplan 2.4
 > (Nachtrag 6 / Z4).
-
-Ist-Werte aus dem Teststand: Region `−1000 … −500` mm, Tracker-Grenzen
-`−1080 … +375` mm. Ein Klotz auf dem Band wurde am 14.09. bei
-**x = 814, y = −874 mm** gemessen.
-
-> ⚠️ **Diese Werte liegen im System der Basiskamera mit ihren alten
-> Kalibrierwerten, nicht im Robotersystem** (Nachtrag 8 / F1, B23). Der Roboter
-> selbst hat das Band bei x = −0,70 … −0,93 m angetastet. Region, Tracker-Grenzen
-> und Greifzone müssen am Ende im selben System liegen wie die Zielposen des
-> Followers — also erst nach C3 festlegen.
 
 ---
 
@@ -260,6 +272,11 @@ Nachtrag 5.
 | Arbeitsraum Z im Flanschmaß (Anhaltspunkt) | **0,310…0,585 m** | Vorgängerprojekt + 0,215 (B10) |
 | Bandrichtung | praktisch die **y-Achse** | M10 |
 | Bandebenheit | quer 0,39°, längs 0,01° | M9 |
+| Band von Rolle zu Rolle in `world` | y ≈ **+1,08 … −0,375 m** (~1,5 m) | Nachtrag 13 / L7 |
+| Bandgeschwindigkeit (Stoppuhr, nur Gegenprobe) | **≈ 0,13 m/s** | Nachtrag 13 / L7 |
+| **Extrinsik Basiskamera** (`cal_x`, `_y`, `_z`, `_roll`, `_pitch`, `_yaw`) | **−0,7787 · 0,7934 · 0,9163 · 179,46° · 0,45° · 179,76°** (in `world`) | Nachtrag 13 / L6, Standardwert; Übergang bis C3 |
+| `belt_surface_z_mm` / `top_depth_bias_mm` (`base_cam`) | **53,6 / 11,5** | B17 / Nachtrag 13 / L6, Standardwerte |
+| Bild der Basiskamera | y ≈ 0,46 … 1,03 m | Nachtrag 13 / L7 |
 
 Allgemeine Greifhöhe: `flansch_z_greifen = 53,6 + max(klotzhoehe/2, 15) + 235` [mm].
 Die Untergrenze 15 mm (`min_grip_height_m`, 5 mm Luft) schützt das Band bei flachen
@@ -303,7 +320,8 @@ bleibt es 0, meldet das Log den Grund (B24: Zeitdomäne, R4: anderer Klotz).
 
 **Für Stufe 4b zusätzlich:** `timeout_track_s` auf 10 s, damit der Roboter der
 ganzen Zone folgt (Nachtrag 9 / G4). Als Zielquelle `fake_objects.py` →
-`vectoring` → `priority_handler`; die Basiskamera bleibt bis B23 abgeklemmt.
+`vectoring` → `priority_handler`. Seit B23 erledigt ist (Nachtrag 13 / L6), darf
+danach auch die Basiskamera die Zielquelle sein.
 `err_laengs` in `follower_status` mitlesen: Am virtuellen Roboter sollte es mit
 `lead_time_s` = 1/K im Mittel null sein — nur wenn `linear_gains` des Attractors
 wirklich K ist.
@@ -325,5 +343,5 @@ Werte in Abschnitt 8.
 Aus AICA selbst nicht zu beantworten bleiben nur noch die Werte, die am Aufbau
 gemessen werden müssen — allen voran **B21** (misst der Tracker auch außerhalb der
 alten Region sauber?) und **C3** (Extrinsik der Basiskamera, läuft beim
-Kommilitonen). **B1** ist keine Voraussetzung mehr: Die Bandgeschwindigkeit wird
+Kommilitonen; bis dahin gilt die Übergangskalibrierung aus §8). **B1** ist keine Voraussetzung mehr: Die Bandgeschwindigkeit wird
 geschätzt, B1 prüft den Schätzer nur gegen (Nachtrag 6 / Z2).

@@ -1,8 +1,13 @@
 # Systemaufbau als AICA-Graph
 
-**Stand 21.09.2026 — alle Komponenten gebaut**, lokal getestet, in AICA noch
-nicht gelaufen. Grundlage: `architektur/entscheidungen.md` (Themen 1–7, Nachträge
-1–11), `architektur/datenvertraege.md` (S1–S10).
+**Stand 23.09.2026 — alle Komponenten gebaut** und in AICA geladen; Datenpfad bis
+`data_tracker` am Aufbau geprüft, Follower und Roboterkamera noch nicht gefahren.
+Grundlage: `architektur/entscheidungen.md` (Themen 1–7, Nachträge 1–13),
+`architektur/datenvertraege.md` (S1–S10).
+
+> Die Raten unten sind die am Aufbau gesetzten (Nachtrag 13 / L2): Alle
+> Python-Komponenten teilen sich einen Prozess, jede unnötig hohe Rate kostet
+> `base_cam` Messrate.
 
 Zeichen: `▣` eigene Komponente · `▢` AICA-Baustein.
 Signaltypen: **D** Datensignal (Zahlenfeld) · **B** Schaltsignal (Bool) ·
@@ -68,10 +73,10 @@ Blätter: Von ihnen führt keine Leitung zurück in den Regelpfad.
 | Komponente | Rate | Eingänge | Ausgänge | Logik ohne ROS | Stand |
 |---|---|---|---|---|---|
 | `base_cam` | Kamera | color, depth, info | `objects` (S1), `debug_image` | `vision/*` | läuft am Aufbau; S1 und Tracker-Eingriff 2.4 neu |
-| `robot_cam` / `robot_cam_2` | Kamera | color, depth, info | `object_position` (S2), `debug_image` | `vision/robot_detection*` | Auswahlkorrektur neu, am Aufbau offen (B6) |
-| `vectoring` | 100 Hz | `objects` | `tracks` (S3) | `track_estimation.py` | gebaut |
-| `priority_handler` | 100 Hz | `tracks`, `picked_id`, `robot_state` | `target` (S4), `not_pickable` (S5) | `target_selection.py` | gebaut, Greifzone auf Platzhaltern |
-| `data_tracker` | 10 Hz | `tracks`, `not_pickable`, `picked_id` | `world_state` (S10) | `world_bookkeeping.py` | gebaut |
+| `robot_cam_2` (`robot_cam` nicht mehr) | Kamera | color, depth, info | `object_position` (S2), `debug_image` | `vision/robot_detection*` | Banddistanz aus dem Bildmedian, am Aufbau offen (B6) |
+| `vectoring` | 20 Hz | `objects` | `tracks` (S3) | `track_estimation.py` | gebaut |
+| `priority_handler` | 20 Hz | `tracks`, `picked_id`, `robot_state` | `target` (S4), `not_pickable` (S5) | `target_selection.py` | gebaut, Greifzone auf Platzhaltern |
+| `data_tracker` | 2 Hz | `tracks`, `not_pickable`, `picked_id` | `world_state` (S10) | `world_bookkeeping.py` | gebaut |
 | `object_follower` | 100 Hz | `target`, `object_position`, `robot_state`, `gripper_motion_done`, `gripper_has_object` | `target_pose` (S6), `gripper_close`, `picked_id` (S7), `follower_status` (S8) | `follower_logic.py` | gebaut, alle vier Stufen |
 | `robotiq_gripper` | ereignisgetrieben | `gripper_close` | `motion_done`, `has_object` (S9) | `GripperMotionState` | läuft am Aufbau; zwei Ausgänge neu |
 | `interface_streamer` | 5 Hz | 2 × `debug_image`, `world_state`, `follower_status` | `interface_image` | `interface_layout.py` | gebaut |
@@ -119,11 +124,10 @@ Ergebnisse (`outcome`): 0 abgelegt · 1 Fehlgriff · 2 verloren · 3 Greifebene
 | S2 (Roboterkamera) | Kameraframe; der Follower rechnet über Ringpuffer und Hand-Auge (Flansch → Kamera) nach `world` |
 | Längskoordinate in S4 (Felder 12, 15) | Projektion auf die geschätzte Bandrichtung, `contracts.along_belt` |
 
-⚠️ **B23:** Die Basiskamera meldet mit ihren alten Kalibrierwerten Positionen, die
-nicht zu den Antastpunkten des Roboters passen (x ≈ +0,8 statt −0,8; Verdacht
-180° zwischen UR-`base` und `base_link`). **Bis das geklärt ist, darf die
-Basiskamera nicht an den Follower.** Testdaten (`fake_objects.py`) und
-Zonen-Platzhalter liegen im Robotersystem.
+✅ **B23 erledigt (23.09.2026, Nachtrag 13 / L6):** Basiskamera und Roboter
+rechnen im selben System `world`; Abweichung ≤ 6 mm auch für 100-mm-Klötze
+(Übergangskalibrierung bis C3). Greifzone und Wartebereich liegen außerhalb des
+Bildes der Basiskamera (L4).
 
 ---
 

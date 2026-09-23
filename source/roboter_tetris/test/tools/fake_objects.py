@@ -34,28 +34,27 @@ The scene model (`FakeBelt`) is free of ROS imports so it can be unit-tested.
 
 Defaults and where they come from
 ---------------------------------
-Everything measured at the setup is used; everything still open (B1, B19,
-B23) is a documented guess and a command-line option.
+Most defaults are from before the measurements of 22./23.09.2026 and still
+work as test values; where the setup is known now, it is noted.
 
 **All positions are in the robot frame** (`world` of the robot, Nachtrag 8 /
-F1), because the follower moves the robot there. The base camera's legacy
-calibration does not agree with it yet (B23): it reported a block at x = +0.814,
-where the robot touched the belt at x = -0.70 ... -0.93.
+F1), because the follower moves the robot there. Since 23.09.2026 the base
+camera reports in the same frame (B23 done, Nachtrag 13 / L6).
 
-* **Belt along y.** A hand-move "down the belt" on 15.09.2026 came out as
-  -275.5 mm in y against +32.7 mm in x (M10). The *sign* is B1 and open;
-  -y is a guess.
+* **Belt along -y.** Measured since: the belt runs from y = +1.08 to -0.375 m
+  (Nachtrag 13 / L7), so -y is right.
 * **Lateral position x = -0.816 m**, the middle of the belt surface the robot
   touched at x = -0.70 ... -0.93 (M9).
-* **Spawn/despawn at y = +0.60 / -0.80** -- a GUESS: a 1.4 m stretch around the
-  touched section (y = -0.20 ... +0.07). Where the belt starts and ends in the
-  robot frame is not measured yet.
-* **z = belt surface + height/2.** The belt surface is at z = 53.6 mm (B17).
-  base_cam reported 103.1 mm for a 100 mm block, and 0.0536 + 0.050 = 0.1036 m
-  matches that to within 0.5 mm -- so S1 field 4 is mid-height, not the top
-  edge (the contract documents this since 21.09.2026).
-* **Belt speed 0.1 m/s is a GUESS** -- B1 is open. The tracker discards
-  anything below 30 mm/s and reports 0, so stay above that.
+* **Spawn/despawn at y = +0.60 / -0.80** -- a test stretch. The real belt ends
+  at y = -0.375; the grasp zone lies outside the base camera image, about
+  y = 0.30 ... -0.30 (Nachtrag 13 / L4).
+* **z = belt surface + height/2**, the belt surface at z = 53.6 mm (B17) -- S1
+  field 4 is mid-height (contract, since 23.09.2026 also in `base_cam`).
+* **Belt speed 0.1 m/s** -- the stopwatch gives about 0.13 m/s (L7). The
+  tracker discards anything below 30 mm/s and reports 0, so stay above that.
+* **Rate 30 Hz, no latency** -- the real base camera delivers ~7 measurements/s,
+  each ~0.14 s old on arrival (Nachtrag 13 / L2). A realistic run needs a lower
+  ``--rate``; an option for the latency is still open.
 
 Two things a real belt does that matter for testing `vectoring`
 ----------------------------------------------------------------

@@ -1,4 +1,4 @@
-# Übergabe — Stand 21.09.2026
+# Übergabe — Stand 23.09.2026
 
 Dieses Dokument ist der Einstieg, wenn die Arbeit **auf einem anderen Rechner**
 fortgesetzt wird. Es fasst zusammen, was gilt, was gemessen ist und was als
@@ -27,23 +27,47 @@ Kommilitonen) und `vision/board.py`, das die Kalibrierung nutzt; `.init_wizard/`
 `CMakeLists.txt`.
 
 **Geändert werden dürfen** die Komponenten rund um Kameras und Greifer (Vorgabe
-vom 21.09.2026). In `vision/` bleiben trotzdem zwei Dinge unangetastet: die beiden
-Detektionskerne der Roboterkamera (sie vergleicht der A/B-Test aus B6) und die
-Rückprojektion (N1 — der Follower korrigiert sie, sonst doppelt).
+vom 21.09.2026). Seit 23.09.2026 wird nur noch `robot_cam_2` (Kanten) verfolgt;
+der A/B-Vergleich entfällt, die Banddistanz der Roboterkamera kommt aus dem
+Bildmedian (Nachtrag 13 / L5). Die Höhenkorrektur N1 der Roboterkamera bleibt im
+Follower — in `vision/` nicht doppelt korrigieren.
 
 ---
 
 ## 2. Wo das Projekt steht
 
-**Alle Komponenten sind gebaut** und lokal getestet — in AICA ist von den neuen
-noch keine gelaufen. Offen ist **Phase 6, die Inbetriebnahme am Aufbau** (§6).
-Wie die Teile zusammenhängen: `uebersicht/systemgraph.md`.
+**Alle Komponenten sind gebaut** und laufen in AICA. Die Inbetriebnahme am
+Aufbau ist im Gang — Stand und nächste Schritte: **`fahrplan-aufbau.md`**
+(„Stand nach Termin B“). Wie die Teile zusammenhängen: `uebersicht/systemgraph.md`.
 
 | | Komponente | Stand |
 |---|---|---|
-| ✅ läuft am Aufbau | `robotiq_gripper`, `base_cam`, Attractor → IK-Velocity-Controller | beide Komponenten seit 2.1–2.4 geändert, Änderungen am Aufbau nicht erprobt |
-| ✅ gebaut 20./21.09. | `contracts.py`, `vectoring`, `priority_handler`, `data_tracker`, `object_follower` (4a–4d), `interface_streamer`, `fake_objects.py` | lokal getestet: 259 Tests, 8 davon nur in der AICA-Testumgebung |
-| 🟡 gebaut, am Aufbau durchgefallen | `robot_cam` / `robot_cam_2` | Auswahlkorrektur seit 2.2, B6 offen |
+| ✅ läuft am Aufbau | `base_cam` (Übergangskalibrierung, B23 erledigt), `vectoring`, `priority_handler`, `data_tracker`, `robotiq_gripper`, Attractor → IK-Velocity-Controller | Datenpfad bis `data_tracker` geprüft (Nachtrag 12 / K4); Schätzung mit laufendem Band offen (Block 3) |
+| 🟡 gebaut, am Aufbau offen | `object_follower` (4a–4d), `interface_streamer`, `fake_objects.py` | Follower-Parameter an die gemessene Latenz anpassen, bevor er fährt (Nachtrag 13 / L1) |
+| 🟡 gebaut, am Aufbau durchgefallen | `robot_cam_2` (weiter verfolgt), `robot_cam` (nicht mehr) | Banddistanz-Korrektur seit 23.09., B6 offen |
+
+### ⚠️ Zuerst lesen: was sich am 22./23.09. verschoben hat
+
+Nachträge 12 und 13 in `architektur/entscheidungen.md`:
+
+- **`world` und der UR-Rahmen `base` sind um 180° gedreht** (K5). Alle Werte der
+  Vorgängergruppe (Kalibrierung, `pose.yaml`) liegen in `base`.
+- **Die Basiskamera schaut senkrecht aufs Band**; die Altkalibrierung war in
+  Neigung und Gier falsch. **Übergangskalibrierung** als Standardwert, Position
+  ≤ 6 mm auch für hohe Klötze (L6). Die Detektion rechnete die Ecken auf Bandhöhe
+  (Parallaxe) — behoben; die Höhe kommt jetzt aus der Kalibrierung, dazu
+  `top_depth_bias_mm` = 11,5.
+- **Alle Python-Komponenten teilen sich einen Prozess** (GIL). Nicht gebrauchte
+  Blöcke raus, Rates niedrig; Bild-Warteschlangen jetzt Tiefe 1 → ~7 Messungen/s,
+  139 ms Alter (L2).
+- **Greifzone und Wartebereich liegen außerhalb des Bildes der Basiskamera**
+  (L4) — sonst erkennt sie den Greifer als Klötze. Die Strecke dahinter
+  überbrückt die Roboterkamera.
+- **Band ≈ 0,13 m/s** (Stoppuhr), von y +1,08 bis −0,375 in `world` (L7).
+- **Offen vor dem ersten Folgen:** Deckel der Vorhersage und 0,5-s-Grenzen an die
+  gemessene Latenz, Datenweg hinter dem Bild der Basiskamera (L1).
+
+### Was sich am 21.09. verschoben hat
 
 ### ⚠️ Zuerst lesen: was sich am 21.09. verschoben hat
 
@@ -65,9 +89,8 @@ Fundstelle in `architektur/entscheidungen.md`:
   gewählt werden.
 - **Mit Klotz im Greifer wird nichts fallen gelassen** (Z12), auch nicht bei einem
   Abbruch.
-- **Basiskamera und Roboter sehen das Band an verschiedenen Stellen** (Nachtrag 8 /
-  F1, **B23**). Testdaten und Platzhalter liegen im Robotersystem; die
-  Basiskamera darf erst an den Follower, wenn das geklärt ist.
+- ~~Basiskamera und Roboter sehen das Band an verschiedenen Stellen~~ (F1,
+  **B23**) — erledigt 23.09.2026 (Nachtrag 13 / L6).
 - **Arbeitsraum und Beobachtungspose haben keine Defaults** (F3) — ohne sie lässt
   sich der Follower nicht konfigurieren. Vorschläge für den virtuellen Roboter:
   Einrichtung §9.
@@ -81,21 +104,20 @@ Fundstelle in `architektur/entscheidungen.md`:
 | Punkt | Warum |
 |---|---|
 | 🟡 **B21** — misst der Tracker außerhalb der alten Region sauber? | Voraussetzung für 2.4 und damit für eine nicht zirkuläre Geschwindigkeitsschätzung (Nachtrag 6 / Z4). |
-| 🔴 **C3** — Extrinsik der Basiskamera | Läuft als Projekt eines Kommilitonen. Die Basiskamera steht auf einem **beweglichen** Gestell, deshalb wird die Bestimmung automatisiert. |
-| 🔴 **B23** — Basiskamera und Roboter sehen das Band an verschiedenen Stellen | Roboter tastet das Band bei x ≈ −0,8 an, die Basiskamera meldet mit den alten Werten x ≈ +0,8. Verdacht: 180° zwischen UR-`base` (RTDE) und `base_link` (AICA). **Bis das geklärt ist, darf die Basiskamera nicht an den Follower.** Nachtrag 8 / F1. |
+| 🔴 **C3** — Extrinsik der Basiskamera | Läuft als Projekt eines Kommilitonen. Die Basiskamera steht auf einem **beweglichen** Gestell, deshalb wird die Bestimmung automatisiert. **Überbrückt** durch die Übergangskalibrierung (Nachtrag 13 / L6) — wird die Kamera bewegt, gilt sie nicht mehr. |
+| ✅ **B23** — Basiskamera und Roboter im selben System | Erledigt 23.09.2026: fünf Antastpunkte, Rest ≤ 6 mm (Nachtrag 13 / L6). |
+| 🟡 **Latenz im Follower** | `max_extrapolation_s` 0,2 s gegen gemessene bis 0,5 s — sonst läuft der Flansch still hinter dem Klotz her (Nachtrag 13 / L1). |
 
 > **B1 ist nicht mehr rot.** Die Bandgeschwindigkeit wird geschätzt; B1 ist nur
 > noch die Gegenprobe mit der Stoppuhr.
 
-### `robot_cam` — Auswahlkorrektur umgesetzt, am Aufbau offen
+### `robot_cam_2` — Banddistanz korrigiert, am Aufbau offen
 
-Beide Varianten scheiterten am 15.09. **nicht an der Erkennung, sondern an der
-Auswahl**: Die Farbvariante wählte einen bildfüllenden Blob aus Glanz plus Klotz,
-die Kantenvariante die Maschinenstruktur am Bildrand. Die drei Gegenmaßnahmen sind
-seit Phase 2.2 im gemeinsamen Kern umgesetzt: **Flächenobergrenze** (aktiv,
-Default 50 000 px), **ROI** und **Auswahl nach Erwartungspunkt** (beide per
-Default aus, weil ihre Werte an B8 hängen — am Debug-Bild in B6 Stufe 1 ablesen).
-Einzelheiten: `architektur/robot-cam-befunde.md` §9.
+Am 15.09. scheiterten beide Varianten an der **Auswahl**, am 22.09. an der
+**Banddistanz**: Sie wurde direkt unter dem Blob abgetastet und traf Schatten,
+Bildrand oder die Klotzoberseite (184 statt 284 mm, K3). Seit 23.09. ist sie der
+Median der Tiefe über das Bild (L5). Weiter nur mit der Kantenvariante; nächster
+Test Block 6. Einzelheiten: `architektur/robot-cam-befunde.md` §9.
 
 ---
 
@@ -117,13 +139,18 @@ Nachträge 4 und 5.
 | Ablagepose Flansch | x −316,49 · y +476,21 · z +419,71 mm |
 | Greiferöffnung | 127 mm |
 | Backenauflage | 20 mm hoch, 15 mm breit |
-| Bandrichtung | praktisch die y-Achse; Vorzeichen offen (B1) |
-| Band im Robotersystem (angetastet) | x −0,70 … −0,93 m, y −0,20 … +0,07 m |
+| Bandrichtung | praktisch die y-Achse; das Band läuft von y +1,08 nach −0,375 (L7) |
+| Band im Robotersystem (angetastet) | x −0,70 … −0,93 m, y −0,20 … +0,87 m |
+| Bandgeschwindigkeit (Stoppuhr) | ≈ 0,13 m/s |
+| Extrinsik Basiskamera (`world`) | −0,7787 · 0,7934 · 0,9163 · 179,46° · 0,45° · 179,76° |
+| Bild der Basiskamera | y ≈ 0,46 … 1,03 m |
 | Freihöhe Flansch (Transfer, Abbruch) | 0,49 m (J1) |
 
 Genauigkeit der Basiskamera bei ruhendem Klotz, 299 Messungen: Position
 σ = 0,2…0,6 mm, Höhe σ = 0,6 mm. Die Grundfläche streut dagegen über 26 mm —
 Grundflächenmaße gehören auf **geglättete** Werte, nie auf Einzelbilder.
+Absolut gegen den Roboter (23.09.): ≤ 6 mm, Höhe nach `top_depth_bias_mm` offen
+zu bestätigen.
 
 ---
 
@@ -146,6 +173,12 @@ nie über den Knotennamen: Basiskamera `f1370107` (L515), Roboterkamera
 **`global_time_enabled` und `enable_auto_exposure` exponiert der AICA-Block nicht.**
 Die Zeitdomäne erzwingt `base_cam` inzwischen selbst über den Parameter
 `camera_node`. Die Belichtung muss zur Laufzeit gesetzt werden.
+
+**Mitlesen belastet den Rechner.** Schon ein zusätzlicher Leseprozess drückt den
+500-Hz-Regelkreis zum Roboter (Nachtrag 13 / L3) — immer nur einer gleichzeitig.
+
+**Gespeicherte Blockparameter gehen vor.** Neue Standardwerte des Pakets gelten
+nur für neu eingefügte Blöcke.
 
 ---
 
@@ -217,7 +250,10 @@ System steht.
 Jede Stufe setzt die vorige voraus. Was gemessen wird, ersetzt einen
 dokumentierten Startwert; die Punkte stehen in `offene-punkte.md`.
 
-**1. Laden und Registrierung** — Branch bauen, Systemabbild im Launcher neu
+> **Stand 23.09.2026:** Stufe 1 und der Datenpfad aus Stufe 2 sind erledigt,
+> B23 ebenfalls. Was davon noch offen ist, führt `fahrplan-aufbau.md`.
+
+**1. Laden und Registrierung** ✅ — Branch bauen, Systemabbild im Launcher neu
 erzeugen (Einrichtung §1), Anwendung laden: macht der Nutzer. Dann prüfen, ob
 `vectoring`, `priority_handler`, `data_tracker`, `object_follower` und
 `interface_streamer` in der Bibliothek erscheinen und die geänderten
@@ -225,14 +261,11 @@ Bestandskomponenten ihre neuen Parameter und Ausgänge zeigen (`base_cam`:
 `camera_node`; `robot_cam`: Auswahlparameter; Greifer: `motion_done`,
 `has_object`).
 
-**2. Datenpfad bei stehendem Roboter** — `base_cam` → `vectoring` →
+**2. Datenpfad bei stehendem Roboter** ✅ (bis auf B21, B1-Vergleich) — `base_cam` → `vectoring` →
 `priority_handler` → `data_tracker` → `interface_streamer` verdrahten,
 `robot_state` an den `priority_handler`. Klötze auflegen und mitlesen: `tracks`,
 `target`, `world_state`, Wahl und Rückzug im Log, das Übersichtsbild.
-- **B23:** einen ruhenden Klotz mit der Basiskamera messen und mit dem Flansch
-  antasten — liegen beide Positionen beieinander? Wenn nicht: 180°-Verdacht prüfen,
-  C3 abwarten. **Solange B23 offen ist, bekommt der Follower keine
-  Basiskamera-Ziele.**
+- ~~**B23**~~ ✅ erledigt 23.09.2026 (Nachtrag 13 / L6).
 - **B21:** ruhender Klotz an mehreren y-Positionen über den ganzen Sichtbereich —
   trägt der Tracker-Eingriff 2.4?
 - **B1** nebenbei: Stoppuhr gegen die geschätzte Bandgeschwindigkeit.
@@ -255,9 +288,10 @@ Einrichtung §9.
 Debug-Bild ablesen), dann **B8** (Beobachtungshöhe, trägt `observe_z`) und D18.
 **B24:** stempelt die D435i in der Rechneruhr?
 
-**5. Greifzone** — **B19 + B11** (nach B23): Arm die Bandstrecke abfahren,
+**5. Greifzone** — **B19 + B11**: Arm die Bandstrecke abfahren,
 Gelenkgeschwindigkeiten mitlesen; die Werte ersetzen die Platzhalter `zone_*` im
-`priority_handler`, die Messregion von `base_cam` muss die Zone umschließen.
+`priority_handler`. Seit 23.09. liegt die Zone **außerhalb** des Bildes der
+Basiskamera (etwa y 0,30 … −0,30, Nachtrag 13 / L4).
 `is_zone_feasible` zeigt, ob die Zone lang genug ist. **B10:** Arbeitsraum nach
 `Safety/README.md` festlegen.
 

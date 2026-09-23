@@ -79,7 +79,8 @@ class RobotCam(LifecycleComponent):
             "(weißer Block bleibt). Zum reinen Farb-Test abschaltbar.")
         self.add_parameter(
             sr.Parameter("depth_search_radius_px", 2, sr.ParameterType.INT),
-            "Suchradius (px) um den Band-Messpunkt für einen gültigen Tiefenwert.")
+            "Ohne Wirkung seit 23.09.2026: Die Band-Distanz ist jetzt der Median der "
+            "gültigen Tiefe über das Bild, nicht mehr ein Messpunkt unter dem Blob.")
         self.add_parameter(
             sr.Parameter("depth_average_frames", 5, sr.ParameterType.INT),
             "Gleitender Mittelwert der Band-Distanz über die letzten N Frames "
@@ -339,7 +340,7 @@ class RobotCam(LifecycleComponent):
         #   - blue tint  = depth near-gate region (object / elevated above belt)
         #   - gray lines = block candidates that did NOT win (exposes belt-mask leaks)
         #   - green      = detected contour, yellow = oriented box,
-        #     red        = center + orientation line, blue dot = belt sample point
+        #     red        = center + orientation line, blue dot = principal point (belt = frame median)
         params = self._params()
         debug_img = color_bgr.copy()
 
@@ -368,7 +369,7 @@ class RobotCam(LifecycleComponent):
             ex = int(rx + 45 * math.cos(result.orientation_rad))
             ey = int(ry + 45 * math.sin(result.orientation_rad))
             cv2.line(debug_img, (rx, ry), (ex, ey), (0, 0, 255), 2)   # orientation
-            cv2.circle(debug_img, result.belt_px, 4, (255, 0, 0), -1)  # belt sample
+            cv2.circle(debug_img, result.belt_px, 4, (255, 0, 0), -1)  # principal point
             status = (f"z_band={result.z_band_mm:.0f}mm  x={result.x_mm:.0f}  "
                       f"y={result.y_mm:.0f}  ang={math.degrees(result.orientation_rad):.0f}deg")
         else:

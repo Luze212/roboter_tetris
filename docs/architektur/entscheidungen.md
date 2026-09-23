@@ -21,6 +21,8 @@ frühere Festlegung berührt; an der alten Stelle steht dann ein Verweis.
 | Nachtrag 9 | Bau `object_follower` 4b: G1–G9 |
 | Nachtrag 10 | Bau `object_follower` 4c/4d: J1 Freihöhe, J2 Absenkzeit, J3–J8 |
 | Nachtrag 11 | Bau `interface_streamer`: V1–V3 |
+| Nachtrag 12 | Inbetriebnahme am Aufbau (22.09.): K1–K6, u. a. 180° `base`/`world`, falsche Gier der Altkalibrierung |
+| **Nachtrag 13** | **Audit und Aufbau (23.09.):** L1 Audit, L2 Datenrate/Latenz, L3 Hardware-Takt, L4 Greifer im Bild, L5 Roboterkamera, L6 B23 abgeschlossen (Neigung, Parallaxe, neue Extrinsik), L7 Bandgeschwindigkeit, L8 Standardwerte |
 
 ⚠️ Namensgleichheit: **F1–F3 in Nachtrag 2** und **F1–F6 in Nachtrag 8** sind
 verschiedene Punkte — im Text immer mit Nachtragsnummer zitiert.
@@ -1274,6 +1276,9 @@ Klötzen rund 30 mm).
 
 ### N2 — Der Tracker koppelt die Längsposition außerhalb seiner Messregion
 
+> ⚠️ Die Folgerung „Greifzone innerhalb der Messregion“ ist mit Nachtrag 13 / L4
+> aufgegeben: Die Zone liegt außerhalb des Bildes der Basiskamera.
+
 `vision/tracker.py`, zwei Stellen:
 
 ```python
@@ -1501,6 +1506,10 @@ Mit laufenden Zeitstempeln arbeitet die Kette einwandfrei:
 die Boxecken ergibt 53,1 mm — also exakt `Eckenmittel + Höhe/2`. `datenvertraege.md`
 beschreibt das Feld unter S1 als „Oberkante des Blocks". Regelungsrelevant ist es
 nicht (die Greifhöhe kommt aus `belt_surface_z_m`), die Beschreibung ist aber falsch.
+
+> ⚠️ **Überholt durch Nachtrag 13 / L6:** Der Bias galt nur für diese Klotzhöhe (ein
+> 25-mm-Klotz kam auf +12 mm), und die Ecken lagen auf Bandhöhe (Parallaxe).
+> `HEIGHT_BIAS_MM` ist entfernt.
 
 Die **Höhe stimmt exakt** — und `HEIGHT_BIAS_MM` ist damit belegt, nicht willkürlich.
 Der vermessene Klotz ist **50 × 50 × 100 mm, hochkant stehend** (nachgereicht):
@@ -2333,6 +2342,9 @@ oder aus einem Test.
 
 ### F1 — Basiskamera und Roboter sehen das Band an verschiedenen Stellen
 
+> ✅ **Aufgeklärt:** 180° zwischen `base` und `world` (Nachtrag 12 / K5); erledigt
+> mit Nachtrag 13 / L6.
+
 **Befund.** Der Roboter hat die Bandoberfläche bei **x = −0,70 … −0,93 m**,
 y = −0,20 … +0,07 m angetastet (M9, aus `robot_state_broadcaster` — dasselbe System,
 in dem der IK-Controller regelt). Die Basiskamera meldete mit den alten
@@ -2875,3 +2887,168 @@ Vorhersage.
 **Sicherheit nach Absturz:** Startet AICA neu, fährt der Attractor auf die
 zuletzt gespeicherte Zielpose. Steht der Greifer dann auf einem Klotz, vorher
 per Pendant freifahren.
+
+---
+
+## Nachtrag 13 — Audit und Aufbau (23.09.2026)
+
+Ein Audit des Gesamtstands (L1), danach Messungen am Aufbau mit
+`test/tools/signal_reader.py`. Umgesetzt wurde nur, was der Nutzer freigegeben
+hat; gebaut hat der Nutzer.
+
+### L1 — Audit: drei Größen waren angenommen statt gemessen
+
+Code und Architektur tragen (Logik ohne ROS, Verträge, Sicherheitsgate,
+Geschwindigkeitsschätzung). Die Schwachstelle: drei Größen, die das Design
+bestimmen, stammten vom Schreibtisch — **Messrate und Latenz der Basiskamera**,
+**Lage der Greifzone zum Kamerabild** und die **Bandgeschwindigkeit**. Alle drei
+sind heute gemessen (L2, L4, L7). Offen aus dem Audit bleiben:
+
+- **Deckel der Vorhersage.** `max_extrapolation_s` = 0,2 s im Follower liegt unter
+  dem gemessenen Horizont (L2). Nachgerechnet mit dem Regelkreismodell aus
+  `test_follower_logic.py`: Der Flansch läuft dann bei 0,13 m/s still 10–60 mm
+  hinter dem Klotz her, `err_laengs` sieht es nicht (es misst gegen die gedeckelte
+  Vorhersage), bei 0,2 m/s löst das Sprung-Gate aus. Ebenso liegen
+  `target_timeout_s`, `STALE_TIMEOUT_S` (priority_handler) und `track_expiry_s`
+  bei 0,5 s, knapp über dem Messabstand. Tests und `fake_objects.py` bilden
+  30 Hz ohne Latenz ab.
+- **Strecke ohne Basiskamera.** Außerhalb ihres Bildes führt `base_cam` Tracks
+  mit ihrer eigenen, verrauschten EMA-Geschwindigkeit weiter (nur in y) und
+  publiziert sie in S1 ununterscheidbar von Messungen; `vectoring` nimmt sie als
+  Messungen. Genau dort wird gegriffen (L4). Vorschlag: S1 kennzeichnet
+  weitergeführte Einträge, `vectoring` extrapoliert selbst mit der gepoolten
+  Geschwindigkeit, Tracks verfallen am Zonenende statt nach 0,5 s.
+- **Greifzonen-Platzhalter** y −0,45 … +0,05 reicht über das Bandende (−0,375) hinaus.
+- **Startverhalten:** Der Attractor fährt beim Start auf die gespeicherte Zielpose.
+
+### L2 — Datenrate und Latenz der Basiskamera
+
+Gemessen als Alter des S1-Zeitstempels (Bildzeit) beim Empfang, je 40 s:
+
+| Stand | neue Messungen/s | Alter bei Ankunft (Median) | Alter vor der nächsten (Median / max) | längste Lücke |
+|---|---|---|---|---|
+| Ausgang (Roboterkameras unkonfiguriert in der Anwendung) | 5,1 | 450 ms | 643 / 1052 ms | 0,7 s |
+| mit `data_tracker`, Frame-Steuerung | 2,8 | 441 ms | 631 / 8310 ms | **7,9 s** |
+| A: `vectoring`/`priority_handler` 20 Hz, `data_tracker` 2 Hz | 7,1 | 409 ms | 528 / 796 ms | 0,43 s |
+| B: zusätzlich Warteschlange Tiefe 1 | 7,1 | **139 ms** | **266 / 506 ms** | 0,4 s |
+
+**Zwei Ursachen.** (1) AICA lädt **alle Python-Komponenten in einen Prozess**
+(`component_container_mt`, MultiThreadedExecutor). Wegen der GIL teilen sie sich
+praktisch einen Kern — der Rechner hatte 27 % frei, aber `base_cam` bekam keine
+Rechenzeit. Jede weitere Python-Komponente und jede unnötig hohe `rate` kostet
+Messrate. (2) `modulo` legt jeden Eingang mit **Warteschlange Tiefe 10** an; die
+Bilder stauten sich, `base_cam` rechnete auf rund 0,4 s alten Bildern. Die Kamera
+selbst liefert nach 46–51 ms (gemessen an `*_camera_info`).
+
+**Maßnahmen:** A in der Oberfläche; B im Code (`base_cam`, `robot_cam_2`:
+`set_qos(QoSProfile(depth=1))` vor den Bildeingängen, Voreinstellung danach
+zurück). Auch unkonfigurierte Blöcke abonnieren ihre Bilder — nicht gebrauchte
+Kamerakomponenten gehören **aus** der Anwendung.
+
+### L3 — Hardware-Takt und Abstürze
+
+Der Regelkreis zum Roboter (500 Hz, `event_engine` mit Kameratreibern und
+Tiefenausrichtung im selben Prozess) fiel zeitweise auf 72–440 Hz — ausgelöst
+schon durch zusätzliche Leseprozesse. Die Container vom 22.09. lebten 17–27 min,
+zweimal endeten sie ohne Stopp-Signal (16:25, 16:54); kein OOM. Mit dem reduzierten
+Aufbau trat kein Absturz mehr auf. **Hypothese: Überlast.** Das Thema ruht, solange
+es nicht wiederkommt. Beobachtet: Der Speicher der `event_engine` wächst mit jedem
+Neustart der Anwendung (390 → 630 MB). Außerdem meldet der UR-Treiber, dass die
+Werkskalibrierung des Roboters nicht zur Kinematik passt (Flanschposen aus AICA
+können um wenige mm von der Steuerung abweichen; bei P1 0,4 mm).
+
+### L4 — Der Greifer im Bild der Basiskamera
+
+Steht der Greifer tief über dem Band, erkennt `base_cam` die offenen Backen als
+zwei Klötze. Folgen bei stehendem Band: Bandgeschwindigkeit −140 … +40 mm/s,
+laufend neue IDs, **Geister-Tracks**, die mit der falschen Geschwindigkeit bis
+y ≈ −0,33 wanderten und zeitweise *final* waren — einer im Greifzonen-Platzhalter.
+
+**Entscheidung (Nutzer):** Greifzone und Wartebereich des Greifers liegen
+**außerhalb des Bildes der Basiskamera** (Bild endet bei y ≈ 0,46; Zone etwa
+y 0,30 … −0,30). Die Strecke zwischen Bildrand und Griff (0,16–0,76 m) überbrückt
+die **Roboterkamera** — der Verzicht auf sie (Z10) war nur vorläufig. Folgen: Die
+Zone ist mit rund 0,6 m knapp (Bedarf bei 0,13 m/s und heutigen Zeiten 0,55 m);
+die Ablagepose (y +0,476) liegt am Bildrand und ist zu prüfen; L1 „Strecke ohne
+Basiskamera“ bleibt als Zubringer nötig.
+
+### L5 — Roboterkamera: Kantenvariante, Banddistanz aus dem Median
+
+**Entscheidung (Nutzer):** Weiter nur mit `robot_cam_2` (Kanten). Die Farbvariante
+kommt nicht in die Anwendung (Rechenlast, K3). Damit entfällt der A/B-Vergleich,
+und die Regel „Rückprojektion in `vision/robot_detection*` bleibt“ ist aufgehoben.
+
+**Umgesetzt (K3, Folgerung 1):** Die Banddistanz ist der Median der gültigen
+Tiefe über das Bild (`belt_reference_mm`), nicht mehr ein Messpunkt unter dem
+Blob. Der Median wird einmal je Bild berechnet (vorher zweimal).
+`depth_search_radius_px` bleibt als Parameter ohne Wirkung. Am Aufbau noch
+nicht erprobt (Block 6).
+
+### L6 — B23 abgeschlossen: Neigung, Parallaxe, neue Extrinsik
+
+**P3** (flacher Klotz, x −0,93 / y 0,87, am Rand der Reichweite) war die erste
+echte Vorhersage der K6-Korrektur: **3,3 mm**. **P4** (100-mm-Klotz) lag
+**15,6 mm** daneben, **P5** (flacher Klotz an exakt derselben Stelle) 4,7 mm —
+die Kamera sah die 75 mm höhere Oberseite 16 mm versetzt.
+
+**Ursache 1 — Neigung.** Eine Ebene, angepasst an ein einzelnes Tiefenbild des
+Bandes (457 000 Punkte, Rest-σ 1,3 mm): Die Basiskamera schaut **auf 0,7° senkrecht**
+aufs Band. Die Altkalibrierung nahm 9,1° an (Roll 176,26, Pitch −8,27); mit ihr
+wäre das Band um 9,3° gekippt und reichte über das Bild von −1 bis 109 mm Höhe.
+Roll und Pitch waren so falsch wie der Yaw (K6).
+
+**Ursache 2 — Parallaxe in `base_cam`.** Die Ecken des `minAreaRect` wurden je mit
+der Tiefe ihres eigenen Pixels umgerechnet; diese Pixel liegen an der Kante und
+lesen das Band (bei allen fünf Punkten 860 mm, auch beim 100-mm-Klotz). Gemessen
+wurde der Umriss der Oberseite, aufs Band projiziert. Vorhergesagt für P4:
+16,3 mm in y — gemessen 16,2 mm. Die Höhe kam aus dem *Mittelwert* der Tiefe im
+Umriss, von den Kantenpixeln Richtung Band gezogen; `HEIGHT_BIAS_MM = 20` glich das
+nur für eine Klotzhöhe aus (M5: 100 mm richtig, 25-mm-Klotz +12 mm).
+
+**Umgesetzt in `vision/detection.py`:** Tiefe der Oberseite = **Median** über den
+Umriss; alle Ecken mit dieser Tiefe umgerechnet; **Höhe = z der Oberseite in
+`world` − `belt_surface_z_mm`** (neu, 53,6); `HEIGHT_BIAS_MM` entfällt; S1-z ist
+jetzt die Klotzmitte (vorher Ecken + halbe Höhe).
+
+**Neue Extrinsik** (Neigung aus der Bandebene, Yaw und x/y aus den fünf Punkten,
+z so, dass das Band bei 53,6 mm liegt): `cal_x` −0,7787 · `cal_y` 0,7934 ·
+`cal_z` 0,9163 · `cal_roll` 179,46 · `cal_pitch` 0,45 · `cal_yaw` 179,76. Rest
+über alle fünf Punkte ≤ 3,7 mm. Rohdaten:
+`architektur/bilder/2026-09-23-b23-punkte.json` (P1/P2-Kamerawerte darin mit der
+K5-Kalibrierung, P3–P5 mit K6 — für eine neue Auswertung zuerst umrechnen).
+
+**Gegenprobe nach dem Build** (Klötze von Hand an die P4/P5-Stelle gestellt):
+
+| | Position Kamera | Roboter | Abweichung | Höhe Kamera / echt |
+|---|---|---|---|---|
+| flach | −808,8 / 674,8 | −807,5 / 674,1 | 1,5 mm | 14,3 / 24,2 |
+| hoch | −812,7 / 676,1 | −807,5 / 674,1 | 5,6 mm | 87,3 / 100,4 |
+
+Die Position erfüllt B23 (≤ 10 mm; im Rest steckt der Aufstellfehler von Hand).
+Grundfläche jetzt 49 × 47 mm (echt 50 × 50). **Die Höhe ist um 11,5 ± 1,6 mm zu
+niedrig** — ein fester Versatz: Die L515 liest die Klotzoberseiten zu tief
+(Eindringen des LiDAR in den Kunststoff), das Band nicht. Vorschlag: Parameter
+`top_depth_bias_mm` = 11,5, von der Oberseitentiefe abgezogen — korrigiert Höhe
+und den kleinen Maßstabsfehler der Position. **Umgesetzt** (Standardwert 11,5);
+die Bestätigung am Aufbau steht nach dem nächsten Build aus.
+
+Die Werte sind eine **Übergangskalibrierung**; `Calibration/calibration.json`
+(Vorgängerwerte im Rahmen `base`) bleibt unberührt. Für das Kalibrierprojekt (C3):
+180° zwischen `base` und `world`, Kamera senkrecht, Parallaxe in der Detektion.
+
+### L7 — Bandgeschwindigkeit, Bandlage
+
+Stoppuhr (Nutzer, mäßig genau): 1 m in 7,7–8,0 s, ein Klotz 11,3 s über ~1,5 m
+Band → **v ≈ 0,13 m/s**. Nur Gegenprobe; maßgeblich ist die Schätzung (Z2).
+Das Band reicht in `world` von y ≈ +1,08 (Anfang) bis −0,375 (Ende) — genau die
+Trackergrenzen der Vorgängergruppe. Das Bild der Basiskamera deckt davon
+y ≈ 0,46 … 1,03 ab; die übrigen ~0,84 m (6,5 s) sieht sie nicht.
+
+### L8 — Standardwerte auf den Stand gebracht
+
+`base_cam`: Extrinsik (L6), Trackergrenzen −375 / 1080, Messregion 500 / 1000,
+`camera_node` `/realsense_camera`, `belt_surface_z_mm` 53,6,
+`top_depth_bias_mm` 11,5. `vectoring`:
+Einschwing-Halbfenster 5 (zählt Messungen; bei 5–7 Messungen/s ≈ 0,7–1 s).
+⚠️ **Gespeicherte Blockparameter gehen vor:** Neue Standardwerte gelten nur für
+neu eingefügte Blöcke. `rate` bleibt in der Oberfläche (K2).

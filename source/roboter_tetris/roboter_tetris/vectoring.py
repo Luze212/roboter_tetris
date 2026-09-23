@@ -26,8 +26,9 @@ class Vectoring(LifecycleComponent):
 
         # -- Parameters (operator-facing descriptions) ----------------------------
         self.add_parameter(
-            sr.Parameter("settle_half_window", 15, sr.ParameterType.INT),
-            "Messungen je Halbfenster des Einschwingtests (bei 30 Hz: 15 = 0,5 s). "
+            sr.Parameter("settle_half_window", 5, sr.ParameterType.INT),
+            "Messungen je Halbfenster des Einschwingtests - zählt Messungen, nicht Zeit. "
+            "Am Aufbau liefert base_cam 5-7 Messungen/s (Nachtrag 13): 5 = 0,7-1 s. "
             "Ein Klotz gilt als eingeschwungen, wenn die Geschwindigkeit beider "
             "Halbfenster übereinstimmt.")
         self.add_parameter(

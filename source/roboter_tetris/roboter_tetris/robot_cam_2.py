@@ -14,6 +14,7 @@ import numpy as np
 from cv_bridge import CvBridge
 from modulo_components.lifecycle_component import LifecycleComponent
 import state_representation as sr
+from rclpy.qos import QoSProfile
 from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import Image, CameraInfo
 
@@ -69,7 +70,8 @@ class RobotCam2(LifecycleComponent):
             "Zum reinen Kanten-Test abschaltbar.")
         self.add_parameter(
             sr.Parameter("depth_search_radius_px", 2, sr.ParameterType.INT),
-            "Suchradius (px) um den Band-Messpunkt für einen gültigen Tiefenwert.")
+            "Ohne Wirkung seit 23.09.2026: Die Band-Distanz ist jetzt der Median der "
+            "gültigen Tiefe über das Bild, nicht mehr ein Messpunkt unter dem Blob.")
         self.add_parameter(
             sr.Parameter("depth_average_frames", 5, sr.ParameterType.INT),
             "Gleitender Mittelwert der Band-Distanz über die letzten N Frames "
@@ -116,12 +118,18 @@ class RobotCam2(LifecycleComponent):
             "Debug-Bild erzeugen und publizieren (kostet Rechenzeit).")
 
         # -- Inputs (endeffector RealSense only) ----------------------------------
+        # Queue depth 1, as in base_cam: with modulo's default of 10 the step
+        # worked on piled-up images ~0.4 s old (Nachtrag 13). The default is
+        # restored for the outputs declared later.
+        default_qos = self.get_qos()
+        self.set_qos(QoSProfile(depth=1))
         self._color_msg = Image()
         self.add_input("color_image", "_color_msg", Image)
         self._info_msg = CameraInfo()
         self.add_input("color_camera_info", "_info_msg", CameraInfo)
         self._aligned_depth_msg = Image()
         self.add_input("aligned_depth_image", "_aligned_depth_msg", Image)
+        self.set_qos(default_qos)
 
         # -- Outputs ---------------------------------------------------------------
         # std_msgs signals are plain Python values: list -> Float64MultiArray.
@@ -323,7 +331,7 @@ class RobotCam2(LifecycleComponent):
         #   - orange      = depth-step edges (fused 2nd source, if enabled)
         #   - gray lines  = closed edge blobs that did NOT win
         #   - green       = detected contour, yellow = oriented box,
-        #     red         = center + orientation line, blue dot = belt sample point
+        #     red         = center + orientation line, blue dot = principal point (belt = frame median)
         params = self._params()
         debug_img = color_bgr.copy()
 

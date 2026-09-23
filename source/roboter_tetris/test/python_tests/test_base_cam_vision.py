@@ -104,15 +104,24 @@ def _intrinsics():
     return 300.0, 300.0, 160.0, 120.0  # fx, fy, cx, cy
 
 
+def _looking_down(height_m=0.865):
+    """Camera straight above the belt, belt surface at world z = 0: Rx(180°)
+    turns camera z (depth, down) into world -z."""
+    return build_cam_to_robot(0.0, 0.0, height_m, 180.0, 0.0, 0.0)
+
+
 def test_detection_finds_object_with_expected_height_and_color():
     color, depth = _synthetic_scene(obj_height_mm=50.0)
     fx, fy, cx, cy = _intrinsics()
-    params = DetectionParams(cam_to_robot=np.eye(4), erosion_px=0)
+    params = DetectionParams(cam_to_robot=_looking_down(), belt_surface_z_mm=0.0,
+                             erosion_px=0)
     detections, infos = detect_objects(color, depth, fx, fy, cx, cy, params)
     assert len(detections) == 1
     det = detections[0]
-    # Height: conveyor_z - mean_top_z + 20 bias = 50 + 20.
-    assert abs(det.height - 70.0) < 2.0
+    # Height: world z of the top face above the belt surface -- no bias.
+    assert abs(det.height - 50.0) < 1.0
+    # S1 field 4 is mid-height.
+    assert abs(det.z - 25.0) < 1.0
     assert det.color == COLOR_GREEN
     # Square footprint must be flagged (orientation freezing in the tracker).
     assert det.square
@@ -133,6 +142,49 @@ def test_detection_respects_min_area_and_border_rejection():
     params = DetectionParams(cam_to_robot=np.eye(4), roi=(0, 0, 130, 240))
     detections, _ = detect_objects(color, depth, fx, fy, cx, cy, params)
     assert detections == []
+
+
+def test_tall_block_off_centre_is_placed_at_its_top_face_not_on_the_belt():
+    """Nachtrag 13 (23.09.2026): the corner pixels of the rectangle sit on the
+    block edge and read the belt. Deprojected with their own depth, the top
+    outline landed on the belt along the viewing ray -- 16 mm off for a 100 mm
+    block at the setup. Here the ring around the block reads belt depth, as
+    the edge pixels of the real camera do."""
+    conveyor = 865.0
+    color, depth = _synthetic_scene(obj_height_mm=100.0, conveyor_z=conveyor,
+                                    size_px=40, center=(240, 180))
+    x0, y0 = 240 - 20, 180 - 20
+    depth[y0:y0 + 40, x0] = conveyor            # edge columns/rows read the belt
+    depth[y0:y0 + 40, x0 + 39] = conveyor
+    depth[y0, x0:x0 + 40] = conveyor
+    depth[y0 + 39, x0:x0 + 40] = conveyor
+    fx, fy, cx, cy = _intrinsics()
+    params = DetectionParams(cam_to_robot=_looking_down(conveyor / 1000.0),
+                             belt_surface_z_mm=0.0, erosion_px=0)
+    detections, _ = detect_objects(color, depth, fx, fy, cx, cy, params)
+    assert len(detections) == 1
+    det = detections[0]
+    top_depth = conveyor - 100.0
+    u_c, v_c = x0 + 19.5, y0 + 19.5              # centre of the 40 px block
+    expect_x = (u_c - cx) * top_depth / fx       # camera x = world x
+    expect_y = -(v_c - cy) * top_depth / fy      # Rx(180°) flips y
+    assert abs(det.x - expect_x) < 3.0, (det.x, expect_x)
+    assert abs(det.y - expect_y) < 3.0, (det.y, expect_y)
+    # On the belt the same pixel would be 13 % further out: 27 mm here.
+    assert abs(det.x - (u_c - cx) * conveyor / fx) > 20.0
+    assert abs(det.height - 100.0) < 1.0
+
+
+def test_top_depth_bias_raises_the_top_face_and_the_height():
+    """Nachtrag 13 / L6: the L515 reads block tops too deep; the bias takes it
+    off the top-face depth -- the height grows by exactly that much."""
+    color, depth = _synthetic_scene(obj_height_mm=50.0)
+    fx, fy, cx, cy = _intrinsics()
+    base = dict(cam_to_robot=_looking_down(), belt_surface_z_mm=0.0, erosion_px=0)
+    d0, _ = detect_objects(color, depth, fx, fy, cx, cy, DetectionParams(**base))
+    d1, _ = detect_objects(color, depth, fx, fy, cx, cy,
+                           DetectionParams(top_depth_bias_mm=11.5, **base))
+    assert abs((d1[0].height - d0[0].height) - 11.5) < 1e-6
 
 
 def test_detection_applies_transform_and_offsets():

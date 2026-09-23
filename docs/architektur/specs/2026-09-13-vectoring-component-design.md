@@ -3,7 +3,8 @@
 **Datum:** 2026-09-13, **überarbeitet 2026-09-21** (Nachtrag 6)
 **Paket:** `roboter_tetris` (AICA Package, UR10e)
 **Status:** ✅ **umgesetzt 21.09.2026**, lokal getestet (17 Tests gegen die
-Ground Truth aus `fake_objects.py`), in AICA noch nicht gelaufen.
+Ground Truth aus `fake_objects.py`), in AICA geladen, Datenpfad am 22.09. geprüft
+(Nachtrag 12 / K4); mit laufendem Band noch offen (Block 3).
 
 > **Diese Spec wird gelöscht**, sobald die Komponente am Aufbau gelaufen ist — dann
 > gemeinsam mit der Spec der Bestandskomponenten (Regel „Specs haben ein Ende").
@@ -98,7 +99,7 @@ zurück, was hineingesteckt wurde — und ein kippender Klotz erscheint glatt.
 
 | Name | Typ | Default | Bedeutung |
 |---|---|---|---|
-| `settle_half_window` | int | 15 | Messungen je Halbfenster des Einschwingkriteriums — bei 30 Hz eine halbe Sekunde |
+| `settle_half_window` | int | 5 (bis 23.09.: 15) | Messungen je Halbfenster des Einschwingkriteriums — bei 30 Hz wären 15 eine halbe Sekunde; am Aufbau kommen 5–7 Messungen/s (Nachtrag 13 / L2, L8) |
 | `settle_v_tolerance` | double | 0.010 | m/s — so weit dürfen die Geschwindigkeiten der beiden Halbfenster auseinanderliegen, damit sie als „konstant" gelten (D20) |
 | `outlier_distance_m` | double | 0.02 | Abstand zur Vorhersage, ab dem eine einzelne Messung verworfen wird (D21) |
 | `outlier_persist_frames` | int | 3 | so viele Ausreißer in Folge gelten als echte Lageänderung → Neustart |
