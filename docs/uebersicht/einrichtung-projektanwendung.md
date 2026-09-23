@@ -148,9 +148,16 @@ aber bei der Beurteilung der Geometrie zu wissen.
 
 ## 5. Eigene Komponenten
 
+> **`rate` am Block setzen.** Der Parameter ist von `LifecycleComponent` geerbt
+> (Default **10 Hz**) und wird nur beim Erzeugen gelesen — eine Änderung wirkt erst
+> nach Neuladen. Ohne Eintrag läuft jede eigene Komponente mit 10 Hz, auch der
+> Follower. ⚠️ **Nicht** zusätzlich in die `component_descriptions` eintragen: Das
+> Duplikat lässt die Oberfläche bei jedem Klick ein weiteres Rate-Feld anlegen
+> (`entscheidungen.md` Nachtrag 12 / K2).
+
 | Komponente | Rate | Anmerkung |
 |---|---|---|
-| `base_cam`, `robot_cam` | 100 Hz | Ist-Stand am Teststand: **10 Hz** — damit wird nur jedes dritte Kamerabild verarbeitet. |
+| `base_cam`, `robot_cam` | 10 Hz (Default), höher nur, wenn der Rechner es trägt; über 30 Hz sinnlos | Bei 10 Hz wird nur jedes dritte Kamerabild verarbeitet. ⚠️ Dann `settle_half_window` in `vectoring` auf **5** (zählt Messungen, Default 15 ist für 30 Hz). |
 | `vectoring`, `priority_handler`, `object_follower` | 100 Hz | |
 | `data_tracker` | 10 Hz | |
 | `interface_streamer` | 5 Hz | |

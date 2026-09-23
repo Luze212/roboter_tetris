@@ -2627,3 +2627,251 @@ Kamerakomponenten eingeschaltet sein (`debug_enable`).
 Uhr des Rechners liegt, bekommen den Zusatz „(veraltet)". Beim `world_state` ist
 das auch eine Diagnose: Er trägt die Bildzeit der Basiskamera — zeigt er dauerhaft
 „veraltet", obwohl Bilder kommen, laufen Kamera- und Rechneruhr auseinander (B13).
+
+---
+
+## Nachtrag 12 — Inbetriebnahme am Aufbau (22.09.2026)
+
+Messungen nach Fahrplan (`uebersicht/fahrplan-aufbau.md`), Werkzeug
+`test/tools/signal_reader.py`, ausschließlich lesend.
+
+### K1 — Block 0: Paket, Kameras, Zeitdomäne
+
+**Das neue Paket ist wirksam.** Nach Rebuild und Neuerzeugen des Systemabbilds
+liegen alle Komponentenbeschreibungen unter `/ws/install/roboter_tetris/`,
+`contracts` wird aus dem Image geladen, `base_cam` kennt `camera_node`. Geöffnet
+war die unveränderte Anwendung vom 15.09.2026.
+
+**Kamerazuordnung in dieser Anwendung** (über `serial_no`):
+
+| Knoten | Kamera | Profile Farbe / Tiefe |
+|---|---|---|
+| `/realsense_camera` | **Basiskamera** L515, `f1370107` | 1280×720×30 / 640×480×30 |
+| `/realsense_camera_2` | **Roboterkamera** D435i, `241122074842` | 848×480×30 / 848×480×30 |
+
+`camera_node` bei `base_kamera` steht auf `/realsense_camera` — passt.
+
+**Zeitdomäne (B12/B13/B24), je 120 s:**
+
+| Stream | Rate | Versatz ROS − Stempel | Drift |
+|---|---|---|---|
+| Basis Farbe | 29,2 Hz | +49 ms | −0,033 ms/s |
+| Basis Tiefe (aligned) | 29,2 Hz | +47 ms | −0,032 ms/s |
+| Roboter Farbe | 28,6 Hz | +44 ms | −0,002 ms/s |
+| Roboter Tiefe (aligned, 30 s) | 25,1 Hz | +43 ms | +0,027 ms/s |
+
+Beide Kameras stempeln in der Rechneruhr; kein Stempel eingefroren. **B24 ist
+damit erledigt**, B13 am neuen Stand bestätigt. Der konstante Versatz von rund
+45 ms ist die Laufzeit Belichtung → Ankunft, keine Uhrenabweichung.
+
+**Zwei Randbefunde, ohne Handlungsbedarf:**
+
+- Die aligned Tiefe der Roboterkamera kam mit **25 Hz** statt ~29 Hz (A6 hatte am
+  14.09. 29,7 Hz gemessen). Das Alignment läuft auf dem Rechner; wahrscheinlich
+  Last. Beobachten, sobald alle Komponenten laufen — `robot_cam` braucht Farbe
+  und Tiefe paarweise.
+- Die **Belichtungsautomatik der Roboterkamera ist wieder an** (`true`,
+  `exposure` 166). Wie in Einrichtung §1 beschrieben, geht die Laufzeiteinstellung
+  mit jedem Start verloren. Für Block 6 vorher abschalten.
+
+**Werkzeug:** Die RealSense-Treiber erscheinen in AICA **nicht** in der
+Knotenliste, ihre Parameterdienste sind aber erreichbar. Und ein
+`GetParameters`-Aufruf, der auch nur einen unbekannten Namen enthält, kommt
+**vollständig leer** zurück. `signal_reader.py` leitet die Knoten deshalb aus den
+Topics ab und fragt jeden Parameter einzeln.
+
+### K2 — Alle eigenen Komponenten laufen mit 10 Hz, nicht mit 100 Hz
+
+**Befund.** Jede eigene Komponente meldet `rate = 10.0` (am Aufbau abgefragt:
+`base_kamera`, `roboter_kamera`, `roboter_kamera_2_kanten`, `robotiq_gripper`).
+Ursache im Framework (`modulo_components/component_interface.py`, Z. 68–78):
+`rate` ist ein Parameter der Basisklasse mit **Default 10 Hz**. Er wird **einmal
+im Konstruktor** gelesen und legt den Schritt-Timer fest; eine Änderung zur
+Laufzeit wirkt nicht.
+
+**Folge.** Auch `vectoring`, `priority_handler` und `object_follower` laufen mit
+10 Hz, sofern `rate` in der Anwendung nicht gesetzt wird — Einrichtung §5 und die
+Specs setzen 100 Hz an. Beim Follower hieße das nur alle 100 ms eine neue
+Zielpose.
+
+**`rate` ist in der Oberfläche vorhanden — geerbt.** Alle unsere Beschreibungen
+erben von `modulo_components::LifecycleComponent`, und deren Beschreibung
+(`/ws/install/modulo_components/component_descriptions/modulo_lifecycle_component.json`)
+deklariert `rate` mit Default 10,0. Der Parameter muss also **in der AICA-
+Oberfläche am Block gesetzt** werden, nicht im Paket.
+
+⚠️ **Nicht in die eigenen Beschreibungen eintragen.** Am 22.09.2026 versucht:
+Ein zusätzlicher Eintrag `rate` in `component_descriptions/*.json` erzeugt ein
+Duplikat zum geerbten — die Oberfläche fügte daraufhin **bei jedem Klick auf den
+Block ein weiteres Rate-Feld** hinzu (acht nach kurzer Zeit). Zurückgenommen, die
+Beschreibungen sind wieder auf dem Commit-Stand. Merksatz: **Parameter der
+Basisklasse nie in der eigenen Beschreibung wiederholen.**
+
+**Zu setzen in der Anwendung** (Rate wirkt erst nach Neuladen des Blocks):
+`vectoring`, `priority_handler`, `object_follower` **100 Hz**; `base_cam`,
+`robot_cam*` nach Rechenleistung (10 Hz Ist-Stand, über 30 Hz sinnlos);
+`data_tracker` 10 Hz; `interface_streamer` 5 Hz.
+
+⚠️ **Kopplung:** `settle_half_window` in `vectoring` zählt **Messungen**, nicht
+Zeit; der Default 15 ist auf 30 Hz ausgelegt (0,5 s). Bei `base_cam` mit 10 Hz
+dauert ein Halbfenster 1,5 s, das Einschwingen also rund dreimal so lange. Läuft
+`base_cam` mit 10 Hz, gehört `settle_half_window` auf 5.
+
+### K3 — B6 Stufe 1, zweiter Anlauf: Erkennung ja, Banddistanz nein
+
+**Aufbau.** Stehender roter Referenzklotz (100 mm) mittig unter der
+Roboterkamera, Flansch bei z = 411 mm, Werkzeug lotrecht. Gemessen: Kamera →
+Band **284 mm**, Kamera → Klotzoberseite **184 mm**, der Klotz füllt rund
+160 × 165 px. Beide Varianten mit dem neuen Stand aus 2.2 (Defaults: Auswahl nach
+Fläche, keine ROI, `max_contour_area` 50 000). Ein Bildpaar aufgenommen und
+**offline mit dem unveränderten Code aus `vision/`** nachgerechnet
+(Bilder: `architektur/bilder/2026-09-22-robotcam-*.png`).
+
+| Variante | Ergebnis am Aufbau | Ursache (offline belegt) |
+|---|---|---|
+| `robot_cam` (Farbe) | `valid = 0` | Das Band ist **ungleichmäßig gefärbt**: links ausgewaschen (H 80, **S 22**, V 132), rechts türkis (H 90, S 95). 92 % des Bildes gelten als „nicht Band“ und verschmelzen zu einer Kontur über das ganze Bild. `max_contour_area` verwirft sie **richtig** — ohne die Sicherung wäre x 3,0 / y −6,2 mm herausgekommen: zufällig nahe am Klotz, weil die Bildmitte, nicht weil der Klotz. |
+| `robot_cam_2` (Kanten) | `valid = 0` | Der Klotz wird gefunden, aber mit dem Tiefenschatten zu einer Kontur bis zum unteren Bildrand verbunden. Die Banddistanz wird **direkt unter dem Blob** abgetastet — dort liegt Bildrand bzw. ungültige Tiefe → keine Banddistanz → `valid = 0`. |
+| `robot_cam_2` ohne Tiefenkanten | Klotz sauber bei Pixel (430, 271) | Die Abtastung unter dem Blob trifft jetzt die **Klotzoberseite**: `z_band` = 184 statt 284 mm — ein Maßstabsfehler von einem Drittel, der als gültige Messung durchginge. |
+
+**Die Belichtungsautomatik war hier nicht die Ursache.** Nach dem Abschalten
+(`exposure` 166) blieb das Band links bei S 22 — der Befund aus §9.3 gilt für
+Überbelichtung, hier ist die Bandoberfläche selbst an dieser Stelle hell und
+entsättigt.
+
+**Folgerungen:**
+
+1. **Die Banddistanz gehört nicht „direkt unter den Blob“.** Aus kurzer Distanz
+   ist diese Stelle Schatten, Bildrand oder Klotz. Der Median der gültigen Tiefe
+   über das Bild (`belt_reference_mm`, im Code schon vorhanden und stabil bei
+   284 mm) wäre robust. Das ist eine Änderung am gemeinsamen Kern in
+   `vision/robot_detection.py` — **Vorschlag, nicht umgesetzt**; die Regel aus dem
+   Projektkontext §4 („Rückprojektion bleibt“) muss dafür bewusst aufgehoben werden.
+2. **Die Farbvariante hat an diesem Band ein grundsätzliches Problem**, keine
+   Einstellungsfrage: Eine Maske „alles, was nicht Band ist“ scheitert, sobald das
+   Band stellenweise entsättigt ist. Der Klotz selbst ist mit S 227 eindeutig —
+   eine positive Klotzmaske wäre für Rot und Blau trivial, für Weiß aber nicht.
+   Das berührt den Detektionskern und damit den A/B-Vergleich (B6).
+3. **Die Kantenvariante ist der aussichtsreichere Kandidat.** Mit Folgerung 1
+   hätte sie den Klotz hier richtig gemessen.
+4. **B8:** 284 mm Kamera → Band ist nah; der Tiefenschatten des stehenden Klotzes
+   ist dort groß. Eine Messung aus größerer Höhe steht aus.
+
+### K4 — Block 1: Datenpfad läuft; der Rechner ist der Engpass
+
+**Nach dem zweiten Rebuild** (Beschreibungen wieder auf Commit-Stand, Blöcke neu
+angelegt) kommt die am Block gesetzte, geerbte `rate` an: `vectoring` und
+`priority_handler` 100 Hz, `data_tracker` 10 Hz, `interface_streamer` 5 Hz,
+`base_kamera` 10 Hz. **K2 ist damit gelöst** — über die Oberfläche, ohne
+Paketänderung.
+
+**Datenpfad bestanden.** Ein ruhender Klotz erscheint in `objects`, `tracks` und
+`world_state` mit derselben ID, ohne Vertragsfehler; in `tracks` Status 0 (bei
+stehendem Band ist die Geschwindigkeit sofort konstant — null), `n_pool = 1`,
+v = 0. Der `priority_handler` wählt erwartungsgemäß nichts (Zone im Robotersystem,
+Klotz im Kamerasystem bei x = +801, y = −886 mm; B23), `not_pickable` ist leer.
+Streuung in `objects` σ ≈ 0,4–0,5 mm, nach `vectoring` 0,04–0,07 mm.
+
+**Der eigentliche Befund: `base_cam` liefert nur ~3,3 neue Messungen/s.** Die
+Komponente läuft mit 10 Hz, bekommt aber nur in jedem dritten Schritt ein
+fertig verarbeitetes neues Bild. Der Rechner ist voll ausgelastet
+(Load-Average ~12; AICA-Event-Engine ~180 % CPU, Python-Komponenten ~140 %, RViz
+40 %); selbst die Kamera-Topics kommen im Container nur noch mit ~7 Hz an.
+Mitverursacher: **zwei aktive Roboterkamera-Komponenten** mit Bildverarbeitung
+und der `interface_streamer`, die in Block 1–3 nicht gebraucht werden.
+
+**Folgen:**
+- `settle_half_window` = 15 Messungen hieße bei 3,3 Hz **4,5 s je Halbfenster**,
+  ein Klotz würde erst nach ~9 s final. Bei 3,3 Hz gehört der Wert auf **5**
+  (1,5 s).
+- Bei 0,1 m/s Band bewegt sich ein Klotz zwischen zwei Messungen um ~30 mm.
+  Für die Schätzung (Ausgleichsgerade über viele Messungen) unkritisch, für die
+  Vorhersage im Follower relevant (`max_extrapolation_s`).
+- **Für Messungen mit der Basiskamera alles abschalten, was Bilder verarbeitet
+  und nicht gebraucht wird** — beide Roboterkamera-Blöcke, `interface_streamer`,
+  RViz.
+
+### K5 — B23 aufgeklärt: 180° aus der TF, aber die Kalibrierung ist die des Vorgängers
+
+**Die 180° sind belegt, nicht mehr vermutet.** Im laufenden System liefert
+`tf2_echo ur_base_link ur_base` eine Drehung um **exakt 180° um z, Verschiebung
+null**; `world` ist identisch mit `ur_base_link`. AICA regelt in `world`. Die
+Kamerakalibrierung rechnet dagegen in den UR-Rahmen `base` (Band bei x ≈ +0,65 m
+laut `T_robot_conveyor`) — daher das umgekehrte Vorzeichen aus F1.
+
+**Umrechnung** der vorhandenen Werte nach `world` (reine Drehung um z um 180°,
+`R' = Rz(180°)·R` ⇒ nur Yaw + 180°):
+
+| `base_kamera` | in `base` | in `world` |
+|---|---|---|
+| `cal_x` | 0,6118 | **−0,6118** |
+| `cal_y` | −0,7820 | **0,7820** |
+| `cal_yaw` | −12,94° | **167,06°** |
+| `track_min_y_mm` / `track_max_y_mm` | −1080 / 375 | **−375 / 1080** |
+| `track_velocity_region_y_min` / `_max` | −1000 / −500 | **500 / 1000** |
+
+`cal_z`, `cal_roll`, `cal_pitch` bleiben. Der Tracker nimmt keine Laufrichtung
+an (nur Intervalle, vorzeichenbehaftetes `vy`) — die gespiegelten Grenzen
+funktionieren ohne Codeänderung.
+
+**Aber: Die Kalibrierwerte sind nicht aktuell.** `Calibration/calibration.json`
+trägt den Status `validated` (22.08.2026), die Zahlen sind jedoch **identisch mit
+denen der Vorgängergruppe** (`UR10_Pick_ws/cameras/config_cam_static.yml`,
+Dateistand 29.03.2026). Der eigene Validierungsblock nennt
+**`position_rmse_mm` = 49,04** bei 5 Punkten und `rotation_rmse_deg` = 0,0 — der
+zweite Wert wirkt wie ein Platzhalter. 49 mm liegen weit über der Toleranz
+quer von ~17 mm (Z10). Dazu passt die Beobachtung am Aufbau, dass die Kamera
+„halbwegs gerade“ über dem Band hängt, während die Kalibrierung 13° Gier angibt;
+die Vorgängergruppe hatte selbst eine ältere Fassung mit Gier 0,0° und Pitch
+−0,5° (dort auskommentiert) und korrigierte zusätzlich `x_offset_mm = −35`.
+Die Basiskamera steht auf einem beweglichen Gestell — ob sie seit März an
+derselben Stelle hängt, ist unbekannt.
+
+**Folge:** Die Doku-Aussage „Legacy-Werte, nicht validiert“ (Projektkontext §9,
+C3) war in der Sache richtig, auch wenn die Datei inzwischen `validated` sagt.
+Block 2 schrumpft deshalb nicht auf eine Formalie: Die Antastpunkte
+quantifizieren den Fehler der **gedrehten Altkalibrierung** und zeigen, ob er
+eine Verdrehung (Gier) oder eine Verschiebung ist. Das Ergebnis geht als
+unabhängige Prüfung an das Kalibrierprojekt (C3); neu kalibriert wird hier nicht.
+
+### K6 — Block 2: Die 13° Gier der Kalibrierung sind der Fehler
+
+Zwei Antastpunkte, geschlossene Backen mittig auf der Oberseite eines roten
+Klotzes (Höhe laut Roboter 25 mm), Werkzeug lotrecht. Kamera mit der nach
+`world` gedrehten Altkalibrierung (K5). P2 wurde nach einem AICA-Absturz über
+die **reine Leseschnittstelle der UR-Steuerung (Port 30013)** gelesen: TCP der
+Steuerung + 215 mm in z, dann 180° nach `world` (P1 mit beiden Wegen: 324,0 mm
+über AICA, 323,6 mm über 30013 bei P2 — passt).
+
+| Punkt | Kamera x / y | Roboter x / y | Abweichung | h Kamera / Roboter |
+|---|---|---|---|---|
+| P1 | −800,7 / +885,7 | −855,4 / +804,8 | **97,6 mm** | 38,5 / 25,5 |
+| P2 | −677,0 / +677,2 | −690,3 / +632,1 | **47,0 mm** | 36,6 / 25,0 |
+
+Rohdaten: `architektur/bilder/2026-09-22-b23-punkte.json`.
+
+**Befund.** Die starre Ausgleichsrechnung Kamera → Roboter ergibt eine Drehung
+von **+13,01°** — spiegelbildlich zur Gier der Kalibrierung (−12,94°). Der
+Abstand P1–P2 stimmt in beiden Systemen auf 3,5 mm überein (242,4 gegen
+238,9 mm, Maßstab 0,986), es ist also im Wesentlichen eine **Verdrehung, kein
+Maßstabsfehler**. Das Kamerabild bestätigt es unabhängig: Die Bandkanten laufen
+dort **exakt senkrecht** (Pixel x ≈ 337 bzw. 1188 oben wie unten,
+`bilder/2026-09-22-basiskamera.png`) — die Kamera hängt gerade über dem Band, wie
+am Aufbau beobachtet. Die Höhe misst die Kamera um **+12 mm** zu groß.
+
+Mit zwei Paaren ist die Transformation exakt bestimmt; der Restfehler hat keine
+Aussage. **Deshalb als Hypothese, zu prüfen an einem dritten Punkt:**
+
+| `base_kamera` | gedrehte Altkalibrierung (K5) | korrigiert (Vorschlag) |
+|---|---|---|
+| `cal_yaw` | 167,06° | **180,07°** |
+| `cal_x` | −0,6118 | **−0,6491** |
+| `cal_y` | 0,7820 | **0,7476** |
+
+`cal_z`, Roll und Pitch unverändert — ob die +12 mm Höhenfehler aus z oder aus
+dem Pitch stammen, trennen zwei Punkte nicht. **Prüfung:** Werte setzen, Klotz an
+eine dritte Stelle, Kamera lesen, antasten. Die Abweichung dort ist eine echte
+Vorhersage.
+
+**Sicherheit nach Absturz:** Startet AICA neu, fährt der Attractor auf die
+zuletzt gespeicherte Zielpose. Steht der Greifer dann auf einem Klotz, vorher
+per Pendant freifahren.

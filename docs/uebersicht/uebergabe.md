@@ -210,6 +210,10 @@ System steht.
 
 ### Am Aufbau — in dieser Reihenfolge
 
+> **Arbeitsfassung mit Rollen, Dauer, Abnahme und Sicherheitsregeln:**
+> `fahrplan-aufbau.md`. Dort sind die Stufen unten zu Blöcken für die Termine
+> am Roboter zusammengefasst.
+
 Jede Stufe setzt die vorige voraus. Was gemessen wird, ersetzt einen
 dokumentierten Startwert; die Punkte stehen in `offene-punkte.md`.
 

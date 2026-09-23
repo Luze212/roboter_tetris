@@ -16,6 +16,7 @@ Was man liest, um das System zu verstehen, zu bedienen und einzurichten.
 | Dokument | Inhalt |
 |---|---|
 | `uebergabe.md` | **Einstieg beim Wechsel des Rechners:** Arbeitsregeln, Stand, gemessene Werte, nächste Schritte |
+| `fahrplan-aufbau.md` | **Arbeit am Roboter mit Claude:** Blöcke, Rollen, Dauer, Abnahme, Sicherheitsregeln, Aufteilung auf Termine |
 | `projektkontext.md` | Rahmen, Aufbau, Abgrenzungen, Arbeitsweise. **Einstieg für jede Sitzung.** |
 | `systemgraph.md` | **Der Systemaufbau:** AICA-Graph, Komponenten mit Ein- und Ausgängen, Ablauf eines Griffs, Bezugssysteme, Kopplungen zwischen Parametern |
 | `offene-punkte.md` | Arbeitsliste A/B/C/D — was noch zu messen, abzulesen oder festzulegen ist |
