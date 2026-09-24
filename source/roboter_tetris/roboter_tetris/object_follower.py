@@ -9,6 +9,7 @@ the ``SignalPointAttractor`` (S6).
 
 import math
 from dataclasses import fields
+from numbers import Real
 
 from modulo_components.lifecycle_component import LifecycleComponent
 from modulo_core.encoded_state import EncodedState
@@ -193,6 +194,12 @@ class ObjectFollower(LifecycleComponent):
             return False
         value = parameter.get_value()
         if isinstance(value, bool):
+            return True
+        # ``add_input`` and ``add_output`` create AICA topic parameters as
+        # strings (for example ``robot_state = "/.../cartesian_state"``).
+        # They are transport configuration, not FollowerParams; only the
+        # component's numeric parameters belong to the checks below.
+        if not isinstance(value, Real):
             return True
         if not math.isfinite(value):
             self.get_logger().warn(f"{name} must be finite")

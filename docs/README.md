@@ -15,6 +15,9 @@ Was man liest, um das System zu verstehen, zu bedienen und einzurichten.
 
 | Dokument | Inhalt |
 |---|---|
+| `codex-einstieg.md` | Codex-Einstieg: Abgleich der externen Übergabe mit dem lokalen Stand vom 23.09.; Arbeitsregeln in `AGENTS.md` im Projektroot |
+| `codex-systemtest-1-verdrahtung-l14.md` | Schrittweise Anschlussliste für `Codex_Systemtest_1`: bestehende/neue Leitungen, Start-/Lifecycle-Ereignisse, L14-Parameter und synthetischer Erstlauf |
+| `2026-09-23-aica-codex-systemtest-1-pruefung.md` | Lesende Bestandsprüfung der gespeicherten AICA-Anwendung und des installierten Pakets vom 23.09.2026 |
 | `uebergabe.md` | **Einstieg beim Wechsel des Rechners:** Arbeitsregeln, Stand, gemessene Werte, nächste Schritte |
 | `fahrplan-aufbau.md` | **Arbeit am Roboter mit Claude:** Blöcke, Rollen, Dauer, Abnahme, Sicherheitsregeln, Aufteilung auf Termine |
 | `projektkontext.md` | Rahmen, Aufbau, Abgrenzungen, Arbeitsweise. **Einstieg für jede Sitzung.** |
@@ -39,6 +42,7 @@ Das Warum hinter den Entscheidungen und die verbindlichen Schnittstellen.
 
 | Dokument | Warum abgelegt |
 |---|---|
+| `2026-09-23-externe-uebergabe-fue-robotertetris.md` | Vollständige externe Übergabe für Codex; teilweise durch Nachtrag 13 / L9–L14 überholt, Einordnung in `uebersicht/codex-einstieg.md` |
 | `2026-09-05-konzeptreview-komponentenplan.md` | Die ursprüngliche Analyse mit 61 Befunden. Alle sind in den Themen 1–7 abgearbeitet; das Dokument wird nur noch über Befundnummern zitiert. |
 | `Komponentenplan Robotetris.docx` | Der unveränderte Originalstand des Komponentenplans |
 | `2026-06-01-robotiq-gripper-component-design.md` | Beschreibt eine fertig gebaute, laufende Komponente. Liegt in `.gitignore`, fehlt also auf einem frisch gepullten Rechner |
