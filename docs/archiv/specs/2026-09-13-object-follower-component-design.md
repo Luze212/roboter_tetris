@@ -7,10 +7,17 @@ noch nicht gelaufen). Logik in `follower_logic.py` (ohne ROS), Schale in
 `object_follower.py`. Beim Bau entschieden: `entscheidungen.md` **Nachtrag 8** (4a),
 **9** (4b), **10** (4c, 4d).
 
+> ⚠️ **Stufe 4c (Roboterkamera) seit 24.09.2026 entfernt** (`entscheidungen.md`
+> Nachtrag 13 / L22): kein Eingang `object_position`, keine Gewichte, keine
+> Hand-Auge-Parameter, `follower_status` ohne `w_wirksam`. Die Abschnitte zu 4c
+> unten sind Geschichte. Greifablauf, Vorhersage, Gate und ausgerichtetes Greifen
+> (Modus 2) sind unverändert.
+
 > ⚠️ **Seit 23.09.2026 geänderte Standardwerte** (`entscheidungen.md` Nachtrag 13):
-> `max_extrapolation_s` 0,2 → **0,6**, `target_timeout_s` 0,5 → **1,0** (L10);
+> `max_extrapolation_s` 0,2 → 0,6 (L10) → **1,0**, `target_timeout_s` 0,5 → 1,0 → **1,5** (L23);
 > Hand-Auge `handeye_*` neu eingemessen — **0,0783 / −0,0326 / 0,0720 m,
-> 4,26 / 0,08 / 90,95°** statt C1 (L11); `min_grip_height_m` 0,015 → **0,021** (L14).
+> 4,26 / 0,08 / 90,95°** statt C1 (L11); `min_grip_height_m` 0,015 → **0,021** (L14) → **0,016**
+> mit `ws_z_min` 0,3036 (L26); `use_block_orientation` seit L26 Standard **an**.
 > Der Arbeitsraum `ws_*` ist festgelegt (B10, `Safety/workspace_bounds.json`),
 > Vorschläge für `observe_*`: Einrichtung §9. Die Tabellen unten zeigen den Stand
 > beim Bau.
@@ -173,20 +180,21 @@ leicht abweicht; eine Strecke müsste man dafür neu einmessen. Wird später der
 
 | Name | Typ | Default | Bedeutung |
 |---|---|---|---|
-| `min_grip_height_m` | double | 0.015 | untere Grenze der Greifhöhe — halbe Auflagenhöhe 10 mm + **5 mm Luft**, solange die 245 mm Flansch → Backenspitze (±5 mm) nicht beim ersten Testgriff bestätigt sind (B15, Nachtrag 6 / Z7) |
-| `descend_speed_mps` | double | 0.15 | Sinkgeschwindigkeit — gekoppelt an `t_descend_s` des `priority_handler` (Nachtrag 10 / J2; vorher 0,05) |
+| `min_grip_height_m` | double | 0.015 (0.021 seit L14, **0.016** seit L26) | untere Grenze der Greifhöhe — halbe Auflagenhöhe 10 mm + **5 mm Luft**, solange die 245 mm Flansch → Backenspitze (±5 mm) nicht beim ersten Testgriff bestätigt sind (B15, Nachtrag 6 / Z7) |
+| `descend_speed_mps` | double | 0.15 (seit L24 0.25) | Sinkgeschwindigkeit — gekoppelt an `t_descend_s` des `priority_handler` (Nachtrag 10 / J2; vorher 0,05) |
 | `lift_clearance_m` | double | 0.10 | Höhe, ab der das Mitfahren endet |
 | `tol_along_m` / `tol_across_m` / `tol_z_m` / `tol_yaw_rad` | double | 0.005 / 0.005 / 0.01 / 0.05 (D3) | **vier getrennte** Freigabetoleranzen, **in Bandkoordinaten** wie `err_laengs`/`err_quer` (J4). Der Gierwinkel gehört zwingend dazu: Im Modus 2 kann der Roboter positionsmäßig stehen, während das Handgelenk noch dreht. |
 | `stable_cycles` | int | 10 | wie lange die Toleranz gehalten werden muss (V aus dem Plan) |
-| `use_block_orientation` | bool | false | Modus 2 (beliebige Lage) statt Modus 1 (gerade aufgelegt) |
+| `use_block_orientation` | bool | false (**true** seit L26) | Modus 2 (beliebige Lage) statt Modus 1 (gerade aufgelegt) |
 | `orientation_quality_min` | double | 0.7 | Mindestgüte (S4 Feld 16), ab der der Klotzwinkel im Modus 2 verwendet wird; darunter Bandrichtung (D11, Nachtrag 6 / Z13) |
+| `max_yaw_deviation_deg` | double | 50.0 | **seit L25:** größte Drehung aus der Grundstellung (Bandrichtung) im Modus 2; Winkel modulo 90°, Hysterese zwischen 45° und diesem Wert. Erlaubt [45, 90) |
 
 **Sicherheit**
 
 | Name | Typ | Bedeutung |
 |---|---|---|
 | `ws_x_min` … `ws_z_max` | double | Arbeitsraum (B10) — **nicht** die Greifzone. **Pflicht**; Default seit 24.09.2026 = `Safety/workspace_bounds.json` (Nachtrag 13 / L15, vorher kein Default nach Nachtrag 8 / F3) |
-| `max_target_jump_m` | double | Sprungerkennung im Sicherheitsgate (D15), vorläufig 0,05 |
+| `max_target_jump_m` | double | Sprungerkennung im Sicherheitsgate (D15 — am 24.09.2026 aus der Liste gestrichen, Wert bleibt), vorläufig 0,05 |
 | `robot_state_max_age_s` | double | 0,2 — älter gilt die Flanschpose als unbekannt, keine neue Zielpose (F4) |
 | `pose_tolerance_m` | double | 0,01 — „angekommen" für stehende Ziele; ersetzt `is_in_range` des Attractors, das kein Signal ist (F4) |
 
@@ -351,6 +359,17 @@ gierwinkel = gripper_yaw_offset_deg + ( use_block_orientation
 `ori_quality` ist S4 Feld 16. Ist die Orientierung eines Klotzes unbrauchbar —
 verrauscht, teilverdeckt, halb außerhalb der ROI —, greift der Roboter auch im
 Modus 2 entlang der Bandrichtung (Nachtrag 6 / Z13).
+
+> ⚠️ **Geändert 24.09.2026 (Nachtrag 13 / L25):** Im Modus 2 zählt der Klotzwinkel
+> **modulo 90°** gegen die Bandrichtung — ein Rechteck wird über die nähere Seite
+> gegriffen, die Drehung aus der Grundstellung ist höchstens ±45°. Bis
+> `max_yaw_deviation_deg` (50°) bleibt die zuletzt gewählte Seite (Hysterese):
+>
+> ```
+> abweichung = (block_orientierung − atan2(vy, vx)) mod 90°  ∈ [−45°, 45°)
+>              bzw. ±90° daneben, falls näher an der vorigen und |·| ≤ max_yaw_deviation_deg
+> gierwinkel = gripper_yaw_offset_deg + atan2(vy, vx) + abweichung
+> ```
 
 `atan2(vy, vx)` ist die Richtung der geschätzten Bandgeschwindigkeit aus S4 — im
 Modus 1 richtet sich der Greifer also an der **gemessenen** Laufrichtung aus, nicht

@@ -8,6 +8,10 @@ gerendertes Beispielbild), in AICA noch nicht gelaufen. Text und Zusammensetzung
 `entscheidungen.md` **Nachtrag 11** (ASCII-Text, Ankunftszeit der Debug-Bilder,
 Markierung veralteter Daten).
 
+> ⚠️ **Seit 24.09.2026 ohne Roboterkamera** (`entscheidungen.md` Nachtrag 13 / L22):
+> Eingang `robot_debug_image` entfernt, das Bild der Basiskamera nimmt die volle
+> Breite ein, die Statuszeile zeigt kein `w` mehr.
+
 > **Diese Spec wird gelöscht**, sobald die Komponente am Aufbau gelaufen ist.
 
 > **Vorrang.** Normativ sind `docs/architektur/entscheidungen.md` und
@@ -45,7 +49,7 @@ stört, wird die Rate weiter gesenkt, bevor irgendetwas anderes angefasst wird.
 | Python-Datei | `roboter_tetris/interface_streamer.py` |
 | Registrierung | `roboter_tetris::InterfaceStreamer = roboter_tetris.interface_streamer:InterfaceStreamer` |
 | UI-Anzeigename | `Interface Streamer` |
-| Rate | 5 Hz |
+| Rate | 5 Hz (am Aufbau 10 Hz für den Vortrag, Nachtrag 13 / L24) |
 
 ## Schnittstellen
 

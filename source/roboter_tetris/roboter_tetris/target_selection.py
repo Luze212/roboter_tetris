@@ -40,21 +40,30 @@ class SelectorParams:
     zone_y_min: float = -0.32
     zone_y_max: float = 0.445
     #: Binding speed limit of the approach: the lower of attractor and IK
-    #: controller (A1). 0.30 since 24.09.2026: the IK controller runs at 0.30
-    #: for the belt (setup guide §2, Nachtrag 13 / L18). Throttled runs: set lower.
-    attractor_v_max_mps: float = 0.30
+    #: controller (A1). 0.5 since 24.09.2026: both run at 0.5 (setup guide §2,
+    #: Nachtrag 13 / L24). Throttled runs: set lower.
+    attractor_v_max_mps: float = 0.5
     #: Attractor gain K; settling takes about 3/K (setup guide: K ~ 5).
     attractor_gain: float = 5.0
+    #: Settling of the follower from arriving to the grasp release (tolerances
+    #: held for stable_cycles) -- not in 3/K. Without it the reachability was
+    #: optimistic (L23). Measured 24.09.2026: FOLGEN 0.23-0.33 s; 0.4 s with
+    #: 3/K models the way back from the place pose correctly (2.6-2.7 s, L24).
+    t_settle_s: float = 0.4
     #: (observe_z - grip height) / descend_speed_mps of the follower, plus
-    #: settling (Nachtrag 10 / J2). Was 2.0 for observe_z 0.60; with 0.45 since
-    #: L14/L15: 0.11...0.14 m / 0.15 m/s + settling -> 1.2, measured ~1.0 s at
-    #: the robot on 24.09.2026 (Nachtrag 13 / L18).
-    t_descend_s: float = 1.2
-    t_grasp_s: float = 1.0
+    #: settling (Nachtrag 10 / J2). 0.11...0.14 m / 0.25 m/s + settling -> 0.9,
+    #: measured 0.78-0.93 s at the robot (Nachtrag 13 / L24).
+    t_descend_s: float = 0.9
+    #: Measured 0.63-0.83 s from closing to has_object (L24).
+    t_grasp_s: float = 0.8
     t_lift_s: float = 0.5
     grasp_time_margin: float = 1.2
-    reach_safety_factor: float = 1.5
-    min_graspable_height_m: float = 0.030
+    #: 1.0 since L24: below it blocks are chosen that are missed at the grasp
+    #: plane (factor 0.6: 3 of 11 too late; ratio 0.91 still failed).
+    reach_safety_factor: float = 1.0
+    #: Flat 25-mm blocks (measured 23.8 mm) are graspable: the follower grips
+    #: them at its lower limit, closed jaws 11 mm above the belt (L24).
+    min_graspable_height_m: float = 0.020
     max_gripper_opening_m: float = 0.127
     gripper_margin_m: float = 0.010
 
@@ -145,14 +154,16 @@ def approach_point(frame: BeltFrame, track: TrackEntry) -> Tuple[float, float]:
 
 def t_needed(params: SelectorParams, frame: BeltFrame, track: TrackEntry,
              flange_xy: Tuple[float, float]) -> float:
-    """Approach time: travel plus attractor settling (3/K).
+    """Time until the grasp can begin: travel, attractor settling (3/K) and
+    the follower's settling until the grasp release (``t_settle_s``, L23).
 
     Horizontal distance only (Nachtrag 7 / H1): the flange approaches at
     observation height and does not change height before ABSENKEN.
     """
     ax, ay = approach_point(frame, track)
     distance = math.hypot(ax - flange_xy[0], ay - flange_xy[1])
-    return distance / params.attractor_v_max_mps + 3.0 / params.attractor_gain
+    return (distance / params.attractor_v_max_mps + 3.0 / params.attractor_gain
+            + params.t_settle_s)
 
 
 class Selection(NamedTuple):

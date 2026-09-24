@@ -7,10 +7,10 @@ converts messages and publishes.
 The text is ASCII on purpose: OpenCV's built-in Hershey fonts have no umlauts,
 no degree sign and no Greek letters -- "laengs", "Grad", "dv".
 
-    +-----------------------+-----------------------+
-    |  base camera debug    |  robot camera debug   |
-    +-----------------------+-----------------------+
-    |  follower: state, target, w, errors           |
+    +-----------------------------------------------+
+    |  base camera debug                            |
+    +-----------------------------------------------+
+    |  follower: state, target, errors              |
     |  belt: pooled velocity, direction, count      |
     +-----------------------------------------------+
     |  one row per block from world_state           |
@@ -66,8 +66,8 @@ def status_lines(status: Optional[FollowerStatus], world: Optional[WorldStateMsg
         state = FOLLOWER_STATES.get(int(status.state), f"? ({status.state:.0f})")
         target = f"{status.target_id:.0f}" if status.target_id else "-"
         suffix = "   (veraltet)" if follower_stale else ""
-        rows.append(Row(f"Zustand: {state}   Ziel: {target}   "
-                        f"w: {status.w_effective:.2f}{suffix}", warning=follower_stale))
+        rows.append(Row(f"Zustand: {state}   Ziel: {target}{suffix}",
+                        warning=follower_stale))
         rows.append(Row(f"Abweichung  laengs {status.err_long * 1000:+.1f} mm   "
                         f"quer {status.err_lat * 1000:+.1f} mm   "
                         f"z {status.err_z * 1000:+.1f} mm"))
@@ -151,16 +151,14 @@ def fit_image(image: Optional[np.ndarray], width: int, height: int,
     return area
 
 
-def compose(base_image: Optional[np.ndarray], robot_image: Optional[np.ndarray],
-            status: Sequence[Row], objects: Sequence[Row], width: int,
-            image_height: int, show_list: bool) -> np.ndarray:
-    """The whole panel; its size depends only on the parameters."""
+def compose(base_image: Optional[np.ndarray], status: Sequence[Row],
+            objects: Sequence[Row], width: int, image_height: int,
+            show_list: bool) -> np.ndarray:
+    """The whole panel; its size depends only on the parameters. The base
+    camera takes the full width since the robot camera image went (L22)."""
     canvas = np.full((panel_height(image_height, show_list), width, 3), BACKGROUND,
                      dtype=np.uint8)
-    half = width // 2
-    canvas[:image_height, :half] = fit_image(base_image, half, image_height, "Basiskamera")
-    canvas[:image_height, half:] = fit_image(robot_image, width - half, image_height,
-                                             "Roboterkamera")
+    canvas[:image_height, :] = fit_image(base_image, width, image_height, "Basiskamera")
     y = image_height + LINE_HEIGHT
     rows = list(status) + (list(objects)[:LIST_ROWS] if show_list else [])
     for index, row in enumerate(rows):

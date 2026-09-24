@@ -143,9 +143,9 @@ def default_blocks() -> List[FakeBlock]:
     The sizes are chosen to exercise the graspability check in
     `priority_handler`: the 100 mm block is the reference and the only one that
     can topple, the wide one approaches the 127 mm gripper opening (B16), and
-    the 25 mm cube is **deliberately below** the ~30 mm graspability limit
-    (B15 with 5 mm air, Nachtrag 6 / Z7) -- a negative case: it must never be
-    selected.
+    the small 15 mm high block is **deliberately below** the 20 mm
+    graspability limit (B15, Nachtrag 13 / L24; was a 25 mm cube below the old
+    30 mm limit) -- a negative case: it must never be selected.
     """
     return [
         FakeBlock(id=1, color=COLOR_RED, length=0.050, width=0.050,
@@ -153,7 +153,7 @@ def default_blocks() -> List[FakeBlock]:
         FakeBlock(id=2, color=COLOR_BLUE, length=0.076, width=0.050,
                   height=0.050, spawn_t=4.0, orientation=0.6),
         FakeBlock(id=3, color=COLOR_WHITE, length=0.025, width=0.025,
-                  height=0.025, spawn_t=8.0, orientation=1.2),
+                  height=0.015, spawn_t=8.0, orientation=1.2),
     ]
 
 

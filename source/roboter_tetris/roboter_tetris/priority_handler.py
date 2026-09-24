@@ -25,7 +25,7 @@ WARN_LOG_PERIOD_S = 2.0
 _ZONE = ("zone_x_min", "zone_x_max", "zone_y_min", "zone_y_max")
 _POSITIVE = ("attractor_v_max_mps", "attractor_gain", "grasp_time_margin",
              "reach_safety_factor", "max_gripper_opening_m")
-_NON_NEGATIVE = ("t_descend_s", "t_grasp_s", "t_lift_s",
+_NON_NEGATIVE = ("t_settle_s", "t_descend_s", "t_grasp_s", "t_lift_s",
                  "min_graspable_height_m", "gripper_margin_m")
 
 
@@ -55,6 +55,11 @@ class PriorityHandler(LifecycleComponent):
             "Verstärkung K des Signal Point Attractors, wie dort eingestellt. Das "
             "Einschwingen dauert etwa 3/K.")
         self.add_parameter(
+            sr.Parameter("t_settle_s", d.t_settle_s, sr.ParameterType.DOUBLE),
+            "Einschwingen des Followers bis zur Greif-Freigabe (s), zusätzlich zu 3/K. "
+            "Gemessen 0,23-0,33 s; mit 0,4 trifft die Rechnung den Rückweg von der "
+            "Ablagepose (Nachtrag 13 / L23, L24).")
+        self.add_parameter(
             sr.Parameter("t_descend_s", d.t_descend_s, sr.ParameterType.DOUBLE),
             "Dauer des Absenkens (s): (observe_z - Greifhöhe) / descend_speed_mps des "
             "Followers plus Einschwingen. Legt mit Greifen und Heben die Greifebene fest. (D22)")
@@ -71,11 +76,12 @@ class PriorityHandler(LifecycleComponent):
         self.add_parameter(
             sr.Parameter("reach_safety_factor", d.reach_safety_factor, sr.ParameterType.DOUBLE),
             "Ein Klotz ist erreichbar, wenn die Zeit bis zur Greifebene das "
-            "so-Vielfache der Anfahrzeit beträgt.")
+            "so-Vielfache der Anfahrzeit beträgt. Unter 1,0 werden Klötze gewählt, "
+            "die an der Greifebene verloren gehen (Nachtrag 13 / L24).")
         self.add_parameter(
             sr.Parameter("min_graspable_height_m", d.min_graspable_height_m, sr.ParameterType.DOUBLE),
-            "Flachere Klötze werden nicht gewählt (m) — doppelte min_grip_height_m "
-            "des Followers. (B15)")
+            "Flachere Klötze werden nicht gewählt (m). 0,02: flache 25-mm-Klötze greift "
+            "der Follower an seiner Untergrenze min_grip_height_m (B15, Nachtrag 13 / L24).")
         self.add_parameter(
             sr.Parameter("max_gripper_opening_m", d.max_gripper_opening_m, sr.ParameterType.DOUBLE),
             "Backenabstand bei offenem Greifer (m), gemessen 0,127. (B16)")

@@ -1,8 +1,18 @@
 # Entscheidungsprotokoll Robotetris
 
-Laufendes Protokoll der Architekturentscheidungen. Entsteht Thema für Thema und
-ist die Grundlage für die Aktualisierung des Word-Dokuments und den
-Umsetzungsplan.
+Protokoll der Architekturentscheidungen, Thema für Thema und in Nachträgen
+fortgeschrieben — vom Konzept (05.09.2026) bis zum finalen Build (24.09.2026).
+
+**Endstand in Kürze.** Die Kette `base_cam` → `vectoring` → `priority_handler` →
+`object_follower` → Signal Point Attractor → IK Velocity Controller greift Klötze
+im Lauf und legt sie ab; gegriffen wird allein mit der Basiskamera (L22). Die
+Bandgeschwindigkeit wird geschätzt (−127,9 mm/s, L9, L10), die Erreichbarkeit mit
+gemessenen Prozesszeiten gerechnet (L24), gedrehte Klötze im Winkel gegriffen
+(höchstens ±45°, L25), flache ab 20 mm (L24, L26). Alle Parameter der eigenen
+Komponenten sind Standardwert im Paket; von Hand gesetzt werden nur die
+AICA-Bausteine, Raten und die UR-Nutzlast (L26). Die Basiskamera läuft mit einer
+Übergangskalibrierung (L6). Wo ein Eintrag unten einen damals ungeklärten Punkt
+nennt, steht sein Ausgang dabei.
 
 **Lesereihenfolge:** Die Themen legen die Architektur fest, die Nachträge
 korrigieren und ergänzen sie. **Ein neuerer Nachtrag geht vor**, wo er eine
@@ -22,9 +32,9 @@ frühere Festlegung berührt; an der alten Stelle steht dann ein Verweis.
 | Nachtrag 10 | Bau `object_follower` 4c/4d: J1 Freihöhe, J2 Absenkzeit, J3–J8 |
 | Nachtrag 11 | Bau `interface_streamer`: V1–V3 |
 | Nachtrag 12 | Inbetriebnahme am Aufbau (22.09.): K1–K6, u. a. 180° `base`/`world`, falsche Gier der Altkalibrierung |
-| **Nachtrag 13** | **Audit und Aufbau (23.09.):** L1 Audit, L2 Datenrate/Latenz, L3 Hardware-Takt, L4 Greifer im Bild, L5 Roboterkamera, L6 B23 abgeschlossen (Neigung, Parallaxe, neue Extrinsik), L7 Bandgeschwindigkeit, L8 Standardwerte, L9 Block 3 und Pool-Mindestgeschwindigkeit, L10 Weiterführung hinter dem Bild, L11 Roboterkamera und Hand-Auge, L12 Nah-Gate ohne fehlende Tiefe, L13 Erkennung der Roboterkamera, L14 Arbeitsraum und Greifzone, L15 Standardwerte für Arbeitsraum und Beobachtungspose (24.09.), L16 Kameras 15 Bilder/s, Infrarot aus (24.09.), L17 Follower ohne Signale, Fake-Zeitstempel (24.09.), L18 Block 7 gedrosselt bestanden (24.09.), **L19 erste echte Griffe im Lauf** (24.09.), L20 Schutzstopp am Bandrand: Nutzlast und Beschleunigung (24.09.), L21 Greifzone = Arbeitsraum, Bildausschnitt der Basiskamera (24.09.) |
+| **Nachtrag 13** | **Audit und Aufbau (23./24.09.):** L1 Audit, L2 Datenrate/Latenz, L3 Hardware-Takt, L4 Greifer im Bild, L5 Roboterkamera, L6 B23 abgeschlossen (Neigung, Parallaxe, neue Extrinsik), L7 Bandgeschwindigkeit, L8 Standardwerte, L9 Block 3 und Pool-Mindestgeschwindigkeit, L10 Weiterführung hinter dem Bild, L11 Roboterkamera und Hand-Auge, L12 Nah-Gate ohne fehlende Tiefe, L13 Erkennung der Roboterkamera, L14 Arbeitsraum und Greifzone, L15 Standardwerte für Arbeitsraum und Beobachtungspose (24.09.), L16 Kameras 15 Bilder/s, Infrarot aus (24.09.), L17 Follower ohne Signale, Fake-Zeitstempel (24.09.), L18 Block 7 gedrosselt bestanden (24.09.), **L19 erste echte Griffe im Lauf** (24.09.), L20 Schutzstopp am Bandrand: Nutzlast und Beschleunigung (24.09.), L21 Greifzone = Arbeitsraum, Bildausschnitt der Basiskamera (24.09.), **L22 Roboterkamera nicht mehr eingebunden** (24.09.), L23 Vorhersagedeckel und pessimistische Erreichbarkeit (24.09.), **L24 Tempo ausgereizt, flache Klötze greifbar** (24.09.), L25 Modus 2 höchstens ±45° aus der Grundstellung (24.09.), **L26 finaler Build** (24.09.) |
 
-⚠️ Namensgleichheit: **F1–F3 in Nachtrag 2** und **F1–F6 in Nachtrag 8** sind
+Namensgleichheit: **F1–F3 in Nachtrag 2** und **F1–F6 in Nachtrag 8** sind
 verschiedene Punkte — im Text immer mit Nachtragsnummer zitiert.
 
 Bezug: `docs/archiv/2026-09-05-konzeptreview-komponentenplan.md` (Befundnummern
@@ -34,7 +44,7 @@ in eckigen Klammern verweisen dorthin).
 
 ## Thema 1 — Bewegungsarchitektur
 
-**Status:** entschieden, mit offenen Verifikationspunkten
+**Status:** entschieden; die Verifikationspunkte sind geklärt (siehe unten)
 **Löst Befunde:** O5, O3, O4, O6 (teilweise auch S4/R1)
 
 ### Ausgangslage
@@ -89,7 +99,7 @@ Damit sind zwei Varianten ohne Codeänderung austauschbar:
 
 | Variante | `lead_offset_m` | `base_frame` verdrahtet | Status |
 |---|---|---|---|
-| **A — Vorhalt** | `v_band / K` ⚠️ jetzt als Zeit `lead_time_s` (Nachtrag 6 / Z6) | nein | **Primärweg**, funktioniert sicher |
+| **A — Vorhalt** | `v_band / K` jetzt als Zeit `lead_time_s` (Nachtrag 6 / Z6) | nein | **Primärweg**, funktioniert sicher |
 | **C — bewegter Bezugsrahmen** | `0.0` | ja | Ausbaustufe, zu verifizieren |
 
 Variante B (Twist direkt aus der Komponente) wurde verworfen: zu viel
@@ -146,21 +156,21 @@ diese Regel führt. Begründete Vermutung, kein Beweis.
    Vorhalt achsabhängig und bei schräger Bandrichtung zur Matrixrechnung.
    Der Winkel-Gain darf abweichen.
 
-### Offene Verifikationspunkte
+### Verifikationspunkte
 
-| ID | Punkt | Wo |
+| ID | Punkt | Ergebnis |
 |---|---|---|
-| V1 | Werte von `linear gain`, `angular gain`, `max linear velocity`, `max angular velocity`, `linear precision threshold` ablesen | AICA Studio |
-| V2 | Signaltyp von `attractor`-Eingang und `frame_to_signal.pose` (`cartesian_state` vs. `cartesian_pose`) | AICA Studio |
-| V3 | Lässt sich an `base_frame` ein Signal anschließen (nicht nur statischer Frame)? | AICA Studio |
-| V4 | Fünf-Minuten-Test Option C: Roboter still, mitbewegter Bezugsrahmen, fester Attractor → bewegt sich der Roboter? | Labor |
-| V5 | Bandgeschwindigkeit messen (base_cam `vy` + Stoppuhr-Gegenprobe) | Labor |
+| V1 | Werte von `linear gain`, `angular gain`, `max linear velocity`, `max angular velocity`, `linear precision threshold` ablesen | abgelesen (A1); Betriebswerte in `einrichtung-projektanwendung.md` §2 |
+| V2 | Signaltyp von `attractor`-Eingang und `frame_to_signal.pose` | `cartesian_pose` (A2) |
+| V3 | Lässt sich an `base_frame` ein Signal anschließen? | ja, Typ `cartesian_pose` — trägt keine Geschwindigkeit |
+| V4 | Option C: mitbewegter Bezugsrahmen am Attractor | nicht verfolgt; Option A erreicht rund 1 mm Längsfehler (L18, L26) |
+| V5 | Bandgeschwindigkeit messen | geschätzt −127,9 mm/s, per Stoppuhr 125–133 mm/s (L9, L10) |
 
 ---
 
 ## Thema 2 — Zeit & Latenz
 
-**Status:** entschieden, mit einem blockierenden Test (B13)
+**Status:** entschieden; der Test B13 ist geklärt (`global_time_enabled`, Einrichtung §1)
 **Löst Befunde:** S4, R1, teilweise O10
 
 ### Zeitquelle: der Header-Stempel, nicht `get_clock().now()`
@@ -230,7 +240,7 @@ Lösung: Der `object_follower` führt einen Ringpuffer `(t, TCP-Pose)` aus dem
 für 1 s bei 100 Hz.
 
 Begründung gegen `tf2`-Lookup: keine Abhängigkeit davon, dass der
-`robot_state_broadcaster` TF publiziert (offen, A5), und die Transformation
+`robot_state_broadcaster` TF publiziert (damals ungeklärt; A5: er tut es), und die Transformation
 bleibt aus der Bildverarbeitungskomponente heraus — entspricht der Vorgabe,
 `base_cam`/`robot_cam` rechenarm zu halten.
 
@@ -255,8 +265,9 @@ Komponentenplan.
   Quellen um einige mm ab, springt die Zielpose sonst bei jedem Aussetzer hin
   und her und der Attractor erzeugt Geschwindigkeitsspitzen.
 - Für die **Greif-Freigabe** gilt eine strengere Regel als fürs Folgen → Thema 6.
-- Offen (D9): Darf ein Griff komplett ohne `robot_cam` durchlaufen? Hängt an der
-  Güte der Basiskamera-Extrinsik, also erst nach der Kalibrierung entscheidbar.
+- D9: Darf ein Griff komplett ohne `robot_cam` durchlaufen? **Ja** — mit der
+  Übergangskalibrierung erreicht die Basiskamera allein rund 1 mm Längsfehler; die
+  Roboterkamera ist nicht eingebunden (Nachtrag 6 / Z10, Nachtrag 13 / L22).
 
 ### Risiko: Uhrendrift RealSense ↔ ROS (blockierend, Test B13)
 
@@ -336,7 +347,7 @@ und der Greifpunkt auf der Flanschachse liegt. Eine Drehung des Handgelenks um
 die Hochachse ändert den Versatz nicht. Erst bei gekipptem Greifer würde daraus
 eine echte Posenverkettung.
 
-Wert: **0,235 m**, Flansch → Griffpunkt (Auflagenmitte), gemessen. ⚠️ Hier stand
+Wert: **0,235 m**, Flansch → Griffpunkt (Auflagenmitte), gemessen. Hier stand
 „aus dem Vorgängerprojekt auslesen (C8)" und der Parameter hieß `tool_offset_z_m`.
 Beides war falsch und hätte bei flachen Klötzen einen Crash ins Band erzeugt —
 Herleitung und Umbenennung in Nachtrag 6 / Z7.
@@ -371,7 +382,7 @@ Richtung nur bei der langen Vorhersage fürs Abfangen, und dort korrigiert die
 Roboterkamera anschließend nach.
 
 → ~~Richtung und Geschwindigkeit fallen aus einem normalen Testlauf ab.~~
-⚠️ **Überholt durch Nachtrag 6 / Z2:** Ziel 3 verlangt ein Verfahren zur
+**Überholt durch Nachtrag 6 / Z2:** Ziel 3 verlangt ein Verfahren zur
 Geschwindigkeitsschätzung. Richtung und Geschwindigkeit werden deshalb **zur
 Laufzeit aus den Bilddaten geschätzt** — je Objekt und gepoolt über die finalen
 Klötze eines Durchlaufs. Die Genauigkeitsrechnung oben bleibt gültig und stützt
@@ -447,7 +458,7 @@ Zwei Details:
    Diagnose und Anzeige. Der Zyklus ist damit aufgelöst, **ohne Komponenten
    zusammenzulegen** — die Aufteilung aus dem Plan bleibt erhalten.
 2. ~~**`vectoring` schrumpft drastisch**, weil Bandrichtung und -geschwindigkeit
-   seit Thema 3 Konstanten sind.~~ ⚠️ **Überholt durch Nachtrag 6 / Z2:**
+   seit Thema 3 Konstanten sind.~~ **Überholt durch Nachtrag 6 / Z2:**
    `vectoring` ist die Komponente, die die Geschwindigkeit **schätzt**.
 
 Es bleiben **acht Komponenten**, genau wie im Plan. Geändert haben sich nur
@@ -463,7 +474,7 @@ wird aus Fitten ein Mitteln:
 | Querposition glätten | laufender Mittelwert je ID (konstant, da kein Querversatz auf dem Band) |
 | Orientierung glätten | dito |
 | Längsposition + Zeitpunkt | Messungen auf die Bandgerade projizieren, Phase mitteln |
-| ~~Plausibilität~~ | ⚠️ ersetzt durch Geschwindigkeitsschätzung und Einschwingen (Nachtrag 6 / Z2, Z3) |
+| ~~Plausibilität~~ | ersetzt durch Geschwindigkeitsschätzung und Einschwingen (Nachtrag 6 / Z2, Z3) |
 | Verfall | ausbleibende IDs nach kurzer Frist vergessen |
 
 Genauigkeitsgewinn: bei ~3 mm Rauschen je Bild und 30 Bildern bleiben quer
@@ -474,7 +485,7 @@ Genauigkeitsgewinn: bei ~3 mm Rauschen je Bild und 30 Bildern bleiben quer
 Fensterlänge der Mittelung.
 
 ~~**Neu hinzugekommen:** der Plausibilitätstest — das Signal für „Block ist
-heruntergefallen oder hängengeblieben".~~ ⚠️ **Entfallen (Nachtrag 6 / Z3):**
+heruntergefallen oder hängengeblieben".~~ **Entfallen (Nachtrag 6 / Z3):**
 Die Annahme war falsch. Klötze bewegen sich frei mit dem Band, festhängende gibt
 es nicht; sie können nur beim Aufsetzen umkippen. An die Stelle des Tests tritt
 das **Einschwingen**: Status 3, bis die Geschwindigkeit konstant gemessen ist,
@@ -628,7 +639,7 @@ bleiben für die UI.
 - Ziel-ID aus `tracks` verschwunden (Thema 2: bei `base_cam` das richtige Kriterium, nicht das Messungsalter)
 - unplausibler Sprung der Regelabweichung (Fehldetektion, ID-Verwechslung)
 
-> ⚠️ **Korrigiert (Nachtrag 6 / Z12).** Hier stand „aus jedem Zustand" und für
+> **Korrigiert (Nachtrag 6 / Z12).** Hier stand „aus jedem Zustand" und für
 > `ABBRUCH` pauschal „Greifer öffnen". Nach einem gelungenen Griff hebt der Roboter
 > den Klotz vom Band; die Basiskamera verliert ihn dort zwangsläufig, die ID
 > verschwindet, das Ziel wird zurückgezogen — und der Follower hätte **jeden
@@ -721,7 +732,7 @@ Welche Abmessung quer zur Backenrichtung liegt, folgt aus Blockorientierung und
 kommandiertem Gierwinkel — gilt damit in beiden Orientierungsmodi. Verhindert
 die frustrierendste Fehlerart: sauber anfahren, greifen, passt nicht.
 
-> ⚠️ **Geändert beim Bau (Nachtrag 7 / H2):** Geprüft wird die **Diagonale**. Den
+> **Geändert beim Bau (Nachtrag 7 / H2):** Geprüft wird die **Diagonale**. Den
 > Gierwinkel entscheidet der Follower; der `priority_handler` kennt ihn nicht.
 
 ### Beobachtungspose: senkrecht
@@ -782,7 +793,7 @@ die Orientierung ohnehin beliebig.
 > gegen andere Ursachen (Rauschen, Teilverdeckung, Objekt am ROI-Rand), nicht gegen
 > Quadrate. Geprüft und verworfen wurde, das Merkmal `square` in S1 aufzunehmen;
 > Begründung in `datenvertraege.md` unter S1, Hintergrund in
-> `vorgaengerprojekt-abgleich.md` §7.
+> `archiv/vorgaengerprojekt-abgleich.md` §7.
 
 **Winkelwahl:** Orientierung liegt in [0, π), der Greifer ist 180°-symmetrisch —
 es gibt immer zwei gleichwertige Handgelenkstellungen. Regel: **die nähere zur
@@ -799,7 +810,7 @@ gefährlich.
 — er kompensiert den Nachlauf bei **bewegtem** Ziel. Bliebe er stehen, parkte der
 Roboter dauerhaft einige Zentimeter neben Beobachtungs- und Ablageposition.
 
-> ✅ **Seit Nachtrag 6 / Z6 automatisch erfüllt.** Der Vorhalt ist jetzt
+> **Seit Nachtrag 6 / Z6 automatisch erfüllt.** Der Vorhalt ist jetzt
 > `v · lead_time_s`; ein stehendes Ziel hat `v = 0`, der Vorhalt wird von selbst
 > null. Der Sonderfall im Code — und damit die Stelle, an der ein Fehler still
 > bliebe — entfällt.
@@ -900,7 +911,7 @@ abdeckt.
 Umsetzung: Rechteck-Clamp auf die Zielpose. Voraussetzung bleibt B10 —
 `Safety/workspace_bounds.json` steht weiterhin auf `placeholder_not_yet_defined`
 mit lauter `null`, und laut eigenem README darf daraus nichts übernommen werden.
-> ✅ **B10 festgelegt 23.09.2026** (Nachtrag 13 / L14), `status: defined`.
+> **B10 festgelegt 23.09.2026** (Nachtrag 13 / L14), `status: defined`.
 
 ### Singularitäten
 
@@ -970,14 +981,14 @@ dort.
 `robot_cam` liefert "das Objekt am nächsten zum Bildzentrum", ohne Prüfung, ob das
 auch das Zielobjekt ist.
 
-> ⚠️ **Die Prämisse stimmt nicht (gemessen 15.09.2026).** Der Code wählt die
+> **Die Prämisse stimmt nicht (gemessen 15.09.2026).** Der Code wählt die
 > **flächengrößte** qualifizierte Kontur (`localize_largest_blob`), nicht die
 > bildzentrumsnächste. Am Aufbau führt das dazu, dass die Farbvariante den
 > bildfüllenden Blob und die Kantenvariante die Maschinenstruktur am Bildrand
 > wählt — in beiden Fällen nicht den Klotz. `max_korrektur_m` fängt das nicht ab,
 > weil der gemeldete Versatz klein aussehen kann. Gegenmaßnahmen (Auswahl nach
 > Nähe zum Erwartungspunkt, ROI, Flächenobergrenze):
-> `robot-cam-befunde.md` §9.7/§9.8 — **seit Phase 2.2 umgesetzt**, gemeinsam für
+> `archiv/robot-cam-befunde.md` §9.7/§9.8 — **seit Phase 2.2 umgesetzt**, gemeinsam für
 > beide Varianten. Bei 2–3 Blöcken kann ein zweiter ins Bild geraten.
 
 Lösung fällt aus der Formulierung in Thema 6 ab: Die Korrektur
@@ -1002,7 +1013,7 @@ Frame-Festlegung, B3 durch `v_band` im Kopf, B5 weil das Predicate
 "new object base" durch das gegatete `objects`-Signal ersetzt ist, D4 durch die
 Verfallsregel, D5 durch die Eigentümerschaft, G3 als Ausbaustufe, I3 durch die
 Signal-statt-Predicate-Regel, O13 durch die Klärung zur Ablage, R6 durch das
-benannte Feld `z_band`). Die folgenden fünf waren tatsächlich offen.
+benannte Feld `z_band`). Die folgenden fünf waren tatsächlich ungeklärt.
 
 ### P1 — Erreichbarkeitskriterium im `priority_handler`
 
@@ -1043,7 +1054,7 @@ Abbruchkriterium. Sonst würde ein fast erfolgreicher Griff abgebrochen, sobald 
 Block beim Greifen die Zonengrenze überschreitet. Die Greifzone ist enger als der
 Sicherheitsraum; der Roboter darf dem Block ein Stück darüber hinaus folgen.
 
-> ⚠️ **Ergänzt durch Nachtrag 6 / Z11 (Greifebene).** Das bleibt für einen
+> **Ergänzt durch Nachtrag 6 / Z11 (Greifebene).** Das bleibt für einen
 > **laufenden** Griff gültig. Hinzu kommt eine Grenze für den **Beginn**: Hat der
 > Block die Greifebene überschritten, bevor abgesenkt wurde, bricht der Follower
 > ab (`outcome = 3`). Der `priority_handler` zieht das Ziel dann über `picked_id`
@@ -1210,8 +1221,8 @@ angefasst wird.
 ## Nachtrag 3 — Kritische Durchsicht gegen den Code (14.09.2026)
 
 Prüfung des Gesamtplans gegen den tatsächlichen Stand von `roboter_tetris/vision/`,
-mit den Erkenntnissen aus `vorgaengerprojekt-abgleich.md` und
-`robot-cam-befunde.md`. Ergebnis: zwei Messfehler erster Ordnung, zwei
+mit den Erkenntnissen aus `archiv/vorgaengerprojekt-abgleich.md` und
+`archiv/robot-cam-befunde.md`. Ergebnis: zwei Messfehler erster Ordnung, zwei
 Planwidersprüche, eine Lastfalle. Alle fünf sind entschieden.
 
 ### N1 — `robot_cam` misst seitlich höhenabhängig falsch
@@ -1249,7 +1260,7 @@ nicht abgefangen.
 
 > Passt zum Fehlerbild der Vorgängergruppe: fester `MANUELLER_X_OFFSET = -0.03`
 > plus zwei nie eingestellte Faktoren für eine positionsabhängige „Rand-Korrektur"
-> (`vorgaengerprojekt-abgleich.md` §5). Kein Beweis — deren Kette war eine andere.
+> (`archiv/vorgaengerprojekt-abgleich.md` §5). Kein Beweis — deren Kette war eine andere.
 
 **Entscheidung: Korrektur im `object_follower`**, unmittelbar bei der Umrechnung
 der Messung in Weltkoordinaten:
@@ -1277,7 +1288,7 @@ Klötzen rund 30 mm).
 
 ### N2 — Der Tracker koppelt die Längsposition außerhalb seiner Messregion
 
-> ⚠️ Die Folgerung „Greifzone innerhalb der Messregion“ ist mit Nachtrag 13 / L4
+> Die Folgerung „Greifzone innerhalb der Messregion“ ist mit Nachtrag 13 / L4
 > aufgegeben: Die Zone liegt außerhalb des Bildes der Basiskamera.
 
 `vision/tracker.py`, zwei Stellen:
@@ -1319,7 +1330,7 @@ Das ist **reine Konfiguration**: beides sind vorhandene AICA-Parameter von
 Kriterium.**
 
 > ~~Der ursprüngliche Zweck der Messregion ist für uns ohnehin entfallen.~~
-> ⚠️ **Überholt durch Nachtrag 6 / Z4:** Mit Ziel 3 ist die
+> **Überholt durch Nachtrag 6 / Z4:** Mit Ziel 3 ist die
 > Geschwindigkeitsschätzung zurück — und damit der Grund, warum das Koppeln
 > schadet. Entschieden ist deshalb: **Der Tracker verwendet überall die gemessene
 > Längsposition**, gekoppelt wird nur noch bei verpassten Bildern (Zweig 1 der
@@ -1445,7 +1456,7 @@ Ist-Stand annahm — `base_cam` verarbeitete also nur jedes dritte Kamerabild.
 
 | | Basiskamera | Roboterkamera |
 |---|---|---|
-| Epoche des Stempels | 1155960174 (**Jahr 2006**) | ROS-Zeit ✓ |
+| Epoche des Stempels | 1155960174 (**Jahr 2006**) | ROS-Zeit (richtig) |
 | Drift | **+4,05 ms/s**, linear über 270 s | keine |
 | danach | Stempel **bleibt ganz stehen** (151 Bilder, 1 Zeitstempel) | 181 Bilder, 181 Zeitstempel |
 
@@ -1501,14 +1512,14 @@ Mit laufenden Zeitstempeln arbeitet die Kette einwandfrei:
   **x = 814, y = −874 mm** — innerhalb der Tracker-Grenzen und innerhalb der
   Messregion
 
-**Zwei offene Zahlenfragen** aus derselben Messung:
+**Zwei Zahlenfragen** aus derselben Messung (geklärt in Nachtrag 13 / L6):
 
 `z` ist **nicht die Oberkante**. Gemeldet wurde 103,1 mm, die Rückrechnung über
 die Boxecken ergibt 53,1 mm — also exakt `Eckenmittel + Höhe/2`. `datenvertraege.md`
 beschreibt das Feld unter S1 als „Oberkante des Blocks". Regelungsrelevant ist es
 nicht (die Greifhöhe kommt aus `belt_surface_z_m`), die Beschreibung ist aber falsch.
 
-> ⚠️ **Überholt durch Nachtrag 13 / L6:** Der Bias galt nur für diese Klotzhöhe (ein
+> **Überholt durch Nachtrag 13 / L6:** Der Bias galt nur für diese Klotzhöhe (ein
 > 25-mm-Klotz kam auf +12 mm), und die Ecken lagen auf Bandhöhe (Parallaxe).
 > `HEIGHT_BIAS_MM` ist entfernt.
 
@@ -1523,7 +1534,7 @@ geometrisch erwartet                865 − 100      = 765 mm
   HEIGHT_BIAS_MM = 20 kompensiert genau das
 ```
 
-Die Gegenprobe aus `robot-cam-befunde.md` §1 reproduziert sich damit. **Der Bias
+Die Gegenprobe aus `archiv/robot-cam-befunde.md` §1 reproduziert sich damit. **Der Bias
 ist eine gemessene Korrektur der Tiefenkamera, kein Fudge-Faktor** — und er hängt
 genau deshalb an `conveyor_z_dist`, wie bei B7/B17 vermerkt.
 
@@ -1612,10 +1623,10 @@ Port 30011, rein lesend — `rtde_control` wurde bewusst nicht verwendet):
 konfigurierter Werkzeugversatz Flansch → TCP
   x =   0,00 mm     y =   0,00 mm     z = 215,00 mm
   Rotationsvektor = 0 / 0 / 0
-→ tool_offset_z_m = 0,215      ⚠️ FALSCH für den Follower, siehe unten
+→ tool_offset_z_m = 0,215      FALSCH für den Follower, siehe unten
 ```
 
-> ⚠️ **Korrektur (Nachtrag 6 / Z7).** Die 215 mm sind der **konfigurierte TCP der
+> **Korrektur (Nachtrag 6 / Z7).** Die 215 mm sind der **konfigurierte TCP der
 > UR-Steuerung** und dienen nur der Umrechnung fremder TCP-Werte (M8). Die
 > Zielpose des Followers braucht den Abstand **Flansch → Griffpunkt = 0,235 m**; der
 > Parameter heißt dafür jetzt `flange_to_grip_point_m`. Mit 0,215 wäre die
@@ -1683,11 +1694,12 @@ Die 30 mm Differenz sind plausibel: Die Backenauflagen sind 20 mm hoch (B15),
 ein TCP in Auflagenmitte statt an der Spitze liegt in dieser Größenordnung höher.
 Die Vorgängergruppe hat den TCP offenbar auf ihren Griffpunkt gelegt.
 
-⚠️ **Die 245 mm sind mit ±5 mm behaftet.** Das Greifergehäuse zwischen Flansch
+**Die 245 mm sind mit ±5 mm behaftet.** Das Greifergehäuse zwischen Flansch
 und Greifer hat denselben Durchmesser wie der Flansch; die Flanschebene ist von
 außen nicht sicher anzulegen, gemessen wurde bis zum ersten sichtbaren silbernen
 Bauteil des Roboters. Der Fehler ist **systematisch** — er verschiebt alle Höhen
-gemeinsam und fällt beim ersten Testgriff als konstanter Versatz auf.
+gemeinsam und fällt beim ersten Testgriff als konstanter Versatz auf. *(Beim ersten Griff
+bestätigt, Nachtrag 13 / L19.)*
 
 **Kein Beleg aus dem Vorgängerprojekt.** Der Gedanke, die Arbeitsraumuntergrenze
 `Z = 0,095` aus `Robot/pose.yaml` stütze den einen oder anderen Wert, ist falsch:
@@ -1736,9 +1748,9 @@ und +32,7 mm in x, wobei die x-Komponente aus dem seitlichen Versetzen von Hand
 stammt und nicht als Bandrichtung zu lesen ist.
 
 Das stützt die Annahme aus `datenvertraege.md` S1, dass `v_band_gemessen` als
-**y-Komponente** geführt wird und nicht als Betrag. Es ersetzt **B1 nicht** —
-Betrag und Vorzeichen der Bandgeschwindigkeit bleiben offen, dafür muss das
-Band laufen.
+**y-Komponente** geführt wird und nicht als Betrag. Betrag und Vorzeichen der
+Bandgeschwindigkeit ließen sich erst bei laufendem Band bestimmen: −127,9 mm/s
+(Nachtrag 13 / L9).
 
 ### M11 — B9: Ablagepose
 
@@ -1767,7 +1779,7 @@ keine Nähe zur Schultersingularität. Die Ablagepose ist unkritisch. Das ersetz
 **B11 nicht**, denn dort geht es um die Bahn entlang des Bandes, nicht um diese
 eine Stellung.
 
-⚠️ **Rohdaten-Vorbehalt.** Bei dieser letzten Mitschrift war die Streuung über
+**Rohdaten-Vorbehalt.** Bei dieser letzten Mitschrift war die Streuung über
 alle 200 Nachrichten exakt null, während sie bei P1–P3 bei 0,01–0,03 mm lag.
 Nachrichten kamen also weiter an, trugen aber identische Werte — ein Hinweis
 darauf, dass der Treiber zu diesem Zeitpunkt keine frischen RTDE-Daten mehr
@@ -1781,7 +1793,7 @@ Pose dennoch **einmal bei laufendem Programm gegengelesen** werden.
 `D13` (Ablagepose) ist mit M11 bestimmt. `D12` (Transferhöhe über dem Band)
 ergibt sich als Bandhöhe + höchster erwarteter Klotz + Luft, also
 53,6 + 100 + Reserve — mit dem Referenzklotz rund **200 mm** Unterkante, in
-Flanschmaß **200 + 245 = 445 mm** (⚠️ vergaß den gehaltenen Klotz, korrigiert auf
+Flanschmaß **200 + 245 = 445 mm** (vergaß den gehaltenen Klotz, korrigiert auf
 0,49 m in Nachtrag 10 / J1). Der Wert ist erst verbindlich, wenn die
 größte auftretende Klotzhöhe festgelegt ist.
 
@@ -1804,8 +1816,8 @@ Missverständnis über die Klotzphysik (Z3) zutage.
 
 | Nr. | Ziel | Umsetzung |
 |---|---|---|
-| 1 | Ansteuerung des UR10e mit AICA | ✅ läuft am Aufbau |
-| 2 | Entwicklung eines schnellen Kalibrierungsverfahrens | Kommilitone, eigenes Projekt (`Calibration/*`). **Wir sind Abnehmer**; offen ist nur die Übergabeform (C6). |
+| 1 | Ansteuerung des UR10e mit AICA | läuft am Aufbau |
+| 2 | Entwicklung eines schnellen Kalibrierungsverfahrens | Kommilitone, eigenes Projekt (`Calibration/*`). **Wir sind Abnehmer**; die Werte gehen als AICA-Parameter an `base_cam`. |
 | 3 | Verfahren zur **Geschwindigkeitsschätzung** und Positionsberechnung der Gegenstände | `base_cam` (Position), `vectoring` (Geschwindigkeit) — Z2 bis Z5 |
 | 4 | Algorithmus zur **Priorisierung** und zur **Bahnplanung** für das kontrollierte Greifen | `priority_handler`; Bahnplanung über die AICA-Bausteine (Z8) |
 
@@ -1852,7 +1864,8 @@ Geschwindigkeit mit, und das sieht nur eine unabhängige Messung.
 
 **Phase 3.1 lässt sich ohne Messung bauen** und gegen die Ground Truth aus
 `fake_objects.py` prüfen. Ob die Schätzung am realen Band trägt, hängt über den
-Tracker-Eingriff (Z4) an **B21**.
+Tracker-Eingriff (Z4) an **B21**. *(Am Band bestätigt: −127,9 mm/s gegen 125–133 mm/s
+per Stoppuhr, Nachtrag 13 / L9, L10.)*
 
 **Durchlauf** = eine Aktivierung der Komponente. Beim Aktivieren wird der Pool
 geleert. Solange er leer ist, gibt es **keinen** Schätzwert — das wird im Vertrag
@@ -1926,11 +1939,13 @@ einem Bild fehlt. **Zweig 2 bleibt unverändert** — das Aufweiten der Region a
 das ganze Band hat N2 zu Recht verworfen, weil dann Tracks am Bildrand ständig
 neue IDs bekommen und der Ziel-Lock verloren geht.
 
-⚠️ **Am Aufbau zu prüfen (B21):** Der Kommentar im übernommenen Code begründet das
+**Am Aufbau zu prüfen (B21):** Der Kommentar im übernommenen Code begründet das
 Koppeln mit *„outside the trusted region the measured y is unreliable"*. Das
 stammt aus dem Aufbau der Vorgängergruppe und ist für unseren nicht gemessen — M5
 hat die Streuung nur bei y = −874 mm bestimmt, also innerhalb der Region. Prüfung
 wie M5: ein ruhender Klotz an mehreren y-Positionen über den ganzen Sichtbereich.
+*(Ausgang: Die Messregion umfasst seit Nachtrag 13 / L10 das ganze Band; Schätzung und
+Griffe bestätigen die Messung im ganzen Bild.)*
 
 ### Z5 — Abwurf nur am Bandende, und berechenbar
 
@@ -1999,8 +2014,10 @@ Klotz gezeigt.
 - **Luft in `min_greifhoehe` von 2 auf 5 mm** → `min_grip_height_m = 0,015`
   (halbe Auflagenhöhe 10 mm + 5 mm), `min_graspable_height_m ≈ 0,030`. Grund: Die
   bisherigen 2 mm Luft waren kleiner als die ±5 mm Unsicherheit der 245-mm-Messung.
-  ⚠️ **Folge:** Klötze unter rund 30 mm Höhe gelten als nicht greifbar, bis die
+  **Folge:** Klötze unter rund 30 mm Höhe gelten als nicht greifbar, bis die
   245 mm beim ersten Testgriff bestätigt sind. Danach kann die Luft wieder sinken.
+  *(Bestätigt in L19; die Untergrenze steht seit L26 bei 16 mm, flache Klötze ab 20 mm
+  sind greifbar.)*
 
 ### Z8 — Bahnplanung über die AICA-Bausteine
 
@@ -2058,7 +2075,7 @@ Verfahren, das 99 % der verfügbaren Messungen verwirft, ist nicht zu verteidige
 Kaltstart geprüft und unkritisch: Der erste Klotz eines Durchlaufs ist nach rund
 1,3 s final, bei 0,1 m/s nach 13 cm von rund 1,45 m Bahn im Bild.
 
-### Z10 — Greifen ohne Roboterkamera vorerst erlaubt (21.09.2026)
+### Z10 — Greifen ohne Roboterkamera erlaubt (21.09.2026)
 
 Im Umsetzungsplan hing der erste vollständige Greifzyklus (4d) an 4c, und 4c an
 **B6** — der Punkt, an dem die Roboterkamera am 15.09.2026 durchgefallen ist.
@@ -2070,11 +2087,12 @@ wird zur Verbesserung, parallel dazu. `require_robot_cam_for_grasp` bleibt
 **`false`** — sieht die Roboterkamera nichts, greift der Roboter auf Grundlage der
 Basiskamera-Vorhersage.
 
-**Vorerst:** Ob im Endbetrieb eine Bestätigung durch die Roboterkamera Pflicht wird
-(D9/D10), wird entschieden, sobald sie am Aufbau funktioniert.
+**Ausgang:** Die Roboterkamera wird nicht eingebunden (Nachtrag 13 / L22); eine
+Bestätigung durch sie entfällt, der Parameter ist entfernt.
 
 **Risiko:** Die Genauigkeit hängt dann an der Basiskamera-Extrinsik C3 — vom
-Kommilitonen, derzeit ungeprüfte Altwerte. Liegt sie quer um mehr als rund 17 mm
+Kommilitonen, damals ungeprüfte Altwerte (seit Nachtrag 13 / L6 eine gemessene
+Übergangskalibrierung, höchstens 6 mm Abweichung). Liegt sie quer um mehr als rund 17 mm
 daneben, geht ein Griff am 50-mm-Klotz vorbei. Das ergibt einen Fehlgriff
 (`has_object` bleibt aus → `outcome = 1`), keinen Crash: Die Greifhöhe schützt das
 Band unabhängig davon.
@@ -2101,7 +2119,7 @@ fährt der Roboter beim Heben noch mit dem Band mit.
 hängt an der Bandgeschwindigkeit, und die wird geschätzt. Eine feste Position wäre
 bei anderer Geschwindigkeit falsch; messbar sind dagegen die Zeiten des
 Greifprozesses (Stufe 4d). Mit den Startwerten 1,0 + 1,0 + 0,5 s und Faktor 1,2
-liegt die Ebene bei 0,1 m/s **0,30 m** vor dem Zonenende. (⚠️ `t_descend_s` jetzt
+liegt die Ebene bei 0,1 m/s **0,30 m** vor dem Zonenende. (`t_descend_s` jetzt
 2,0 s, gekoppelt an Beobachtungshöhe und Sinkgeschwindigkeit — damit 0,42 m;
 Nachtrag 10 / J2.)
 
@@ -2187,7 +2205,9 @@ Jeder gelungene Griff wäre so verloren gegangen.
 beim Absenken oder Greifen für die Basiskamera, verschwindet die ID **vor**
 `has_object` — dann bricht der Griff ab, und die Vorhersage kann das wegen des
 Deckels von 0,2 s nicht überbrücken. Ob das eintritt, hängt an der Lage der
-Basiskamera zur Greifzone und zeigt sich in Stufe 4d.
+Basiskamera zur Greifzone und zeigt sich in Stufe 4d. *(Ausgang: tritt nicht auf — die
+Greifzone liegt hinter dem Bild der Basiskamera, dort führt `vectoring` weiter, und
+der Deckel liegt bei 1,0 s; Nachtrag 13 / L4, L10, L23.)*
 
 ### Z13 — Die Orientierungsgüte reist im Vertrag mit (21.09.2026)
 
@@ -2343,13 +2363,13 @@ oder aus einem Test.
 
 ### F1 — Basiskamera und Roboter sehen das Band an verschiedenen Stellen
 
-> ✅ **Aufgeklärt:** 180° zwischen `base` und `world` (Nachtrag 12 / K5); erledigt
+> **Aufgeklärt:** 180° zwischen `base` und `world` (Nachtrag 12 / K5); erledigt
 > mit Nachtrag 13 / L6.
 
 **Befund.** Der Roboter hat die Bandoberfläche bei **x = −0,70 … −0,93 m**,
 y = −0,20 … +0,07 m angetastet (M9, aus `robot_state_broadcaster` — dasselbe System,
 in dem der IK-Controller regelt). Die Basiskamera meldete mit den alten
-Kalibrierwerten (C3 offen) einen Klotz bei **x = +0,814**, y = −0,874 (M4). Das
+Kalibrierwerten (vor der Kalibrierung) einen Klotz bei **x = +0,814**, y = −0,874 (M4). Das
 Vorzeichen von x widerspricht sich. Die Beträge passen auffällig gut zusammen: Die
 Mitte der Antastpunkte liegt bei x = −0,816. Das spricht für eine Drehung um 180° um
 die Hochachse zwischen beiden Systemen, wie zwischen den UR-Rahmen `base` und
@@ -2358,7 +2378,7 @@ Vorgängergruppe (x −0,05…1,05, y −0,8…0,3, B10) schließt in unserem Sy
 aus, um 180° gedreht enthält es Band und Ablagepose. **Das ist eine Vermutung,
 keine Messung.** Eine Erklärung läge nahe: Die Vorgängergruppe las ihre Posen über
 RTDE, also im UR-Rahmen `base`; AICA arbeitet in `base_link`, und beide sind im
-UR-URDF um 180° um z gedreht (`vorgaengerprojekt-abgleich.md`, Falle 5b).
+UR-URDF um 180° um z gedreht (`archiv/vorgaengerprojekt-abgleich.md`, Falle 5b).
 
 **Folge.** Bisher lagen die Zonen-Platzhalter im `priority_handler` und die
 Geometrie von `fake_objects` im System der Basiskamera. Am virtuellen Roboter wäre
@@ -2369,7 +2389,7 @@ stammt dagegen aus dem Robotersystem.
 **Entscheidung:** Testdaten und Platzhalter liegen im **Robotersystem**:
 `fake_objects` mit Bandmitte x = −0,816 und Klötzen von y = +0,60 nach −0,80, die
 Zonen-Platzhalter bei x −0,95…−0,68, y −0,45…+0,05. Die Mitte ist gemessen, die
-Längsausdehnung geschätzt. Neu als offener Punkt **B23**: Die Basiskamera darf erst
+Längsausdehnung geschätzt. Neu als Prüfpunkt **B23** (erledigt in Nachtrag 13 / L6): Die Basiskamera darf erst
 an den Follower, wenn ihre Positionen die Antastpunkte treffen.
 
 ### F2 — Die Ablagepose kommt erst mit Stufe 4d
@@ -2382,7 +2402,7 @@ Inbetriebnahme-Schalter und `has_object` in `WARTEN` als Auslöser (flackert bei
 
 ### F3 — Arbeitsraum und Beobachtungspose haben keine Defaults
 
-> ⚠️ **Überholt durch Nachtrag 13 / L15 (24.09.2026):** Seit der Festlegung von B10
+> **Überholt durch Nachtrag 13 / L15 (24.09.2026):** Seit der Festlegung von B10
 > sind beide als Standardwert eingetragen. Pflichtparameter bleiben sie: leer →
 > `configure` scheitert.
 
@@ -2390,7 +2410,7 @@ Inbetriebnahme-Schalter und `has_object` in `WARTEN` als Auslöser (flackert bei
 **Pflichtparameter** (`default_value: null`). Fehlt einer, schlägt `on_configure`
 mit einer Meldung fehl, die alle fehlenden nennt. Grund für den Arbeitsraum ist die
 Regel in `Safety/README.md`: Werte erst mit dokumentierter Festlegung übernehmen.
-Die Beobachtungspose ist offen (B8). Für den virtuellen Roboter stehen Vorschläge in
+Die Beobachtungspose war noch nicht festgelegt (B8; festgelegt in Nachtrag 13 / L14, L15). Für den virtuellen Roboter stehen Vorschläge in
 der Einrichtung (§9); sie gelten nur dort.
 
 Dazu wird jede Parameteränderung zur Laufzeit als ganzer Satz geprüft: Beobachtungs-
@@ -2440,8 +2460,8 @@ dann zur neuen Pose. Das ist der sichere Weg für eine große Verschiebung.
 ## Nachtrag 9 — Beim Bau des `object_follower`, Stufe 4b (21.09.2026)
 
 Keine dieser Festlegungen brauchte eine Rückfrage; sie folgen aus bestehenden
-Entscheidungen oder aus einer Lücke der Spec. Offene Werte haben dokumentierte
-Startwerte und werden am Aufbau erhoben.
+Entscheidungen oder aus einer Lücke der Spec. Nicht gemessene Werte hatten
+dokumentierte Startwerte; eingemessen wurden sie am Aufbau (Nachtrag 13).
 
 ### G1 — Gefolgt wird auf Beobachtungshöhe; der Werkzeugversatz wirkt erst beim Absenken
 
@@ -2523,9 +2543,12 @@ In 4b wirkt er nur auf die Handgelenkstellung, gegriffen wird erst in 4d.
 
 ## Nachtrag 10 — Beim Bau des `object_follower`, Stufen 4c und 4d (21.09.2026)
 
+> **Stufe 4c ist seit 24.09.2026 entfernt** (Nachtrag 13 / L22). Die
+> Entscheidungen zu 4c (J3 u. a.) bleiben als Geschichte stehen.
+
 Keine Rückfrage nötig: Die Punkte folgen aus Thema 6/7, den Nachträgen 2, 3 und 6
-oder aus Lücken der Spec. Offene Werte haben dokumentierte Startwerte und werden
-am Aufbau erhoben.
+oder aus Lücken der Spec. Nicht gemessene Werte hatten dokumentierte Startwerte;
+eingemessen wurden sie am Aufbau (Nachtrag 13).
 
 ### J1 — Die Freihöhe vergaß den gehaltenen Klotz
 
@@ -2612,10 +2635,11 @@ halb geschlossene Backen am Klotz nach oben.
 ### J8 — Ablagepose und Roboterkamera als Pflicht
 
 - Ablagepose als Default aus **B9** (x −0,316, y +0,476, z 0,420 m, Gier 94,2°),
-  Gegenprobe bei laufendem Programm offen. `configure` prüft, dass sie im
+  im Betrieb bestätigt (Nachtrag 13 / L19). `configure` prüft, dass sie im
   Arbeitsraum liegt.
 - `require_robot_cam_for_grasp` (D9/D10): wenn gesetzt, beginnt `ABSENKEN` nur
-  bei voll eingeblendeter, frischer Roboterkamera. Vorerst **aus** (Z10).
+  bei voll eingeblendeter, frischer Roboterkamera. Stand **aus** (Z10); mit
+  Nachtrag 13 / L22 entfernt.
 
 ---
 
@@ -2649,7 +2673,7 @@ das auch eine Diagnose: Er trägt die Bildzeit der Basiskamera — zeigt er daue
 
 ## Nachtrag 12 — Inbetriebnahme am Aufbau (22.09.2026)
 
-Messungen nach Fahrplan (`uebersicht/fahrplan-aufbau.md`), Werkzeug
+Messungen nach Fahrplan (`archiv/fahrplan-aufbau.md`), Werkzeug
 `test/tools/signal_reader.py`, ausschließlich lesend.
 
 ### K1 — Block 0: Paket, Kameras, Zeitdomäne
@@ -2717,7 +2741,7 @@ erben von `modulo_components::LifecycleComponent`, und deren Beschreibung
 deklariert `rate` mit Default 10,0. Der Parameter muss also **in der AICA-
 Oberfläche am Block gesetzt** werden, nicht im Paket.
 
-⚠️ **Nicht in die eigenen Beschreibungen eintragen.** Am 22.09.2026 versucht:
+**Nicht in die eigenen Beschreibungen eintragen.** Am 22.09.2026 versucht:
 Ein zusätzlicher Eintrag `rate` in `component_descriptions/*.json` erzeugt ein
 Duplikat zum geerbten — die Oberfläche fügte daraufhin **bei jedem Klick auf den
 Block ein weiteres Rate-Feld** hinzu (acht nach kurzer Zeit). Zurückgenommen, die
@@ -2729,7 +2753,7 @@ Basisklasse nie in der eigenen Beschreibung wiederholen.**
 `robot_cam*` nach Rechenleistung (10 Hz Ist-Stand, über 30 Hz sinnlos);
 `data_tracker` 10 Hz; `interface_streamer` 5 Hz.
 
-⚠️ **Kopplung:** `settle_half_window` in `vectoring` zählt **Messungen**, nicht
+**Kopplung:** `settle_half_window` in `vectoring` zählt **Messungen**, nicht
 Zeit; der Default 15 ist auf 30 Hz ausgelegt (0,5 s). Bei `base_cam` mit 10 Hz
 dauert ein Halbfenster 1,5 s, das Einschwingen also rund dreimal so lange. Läuft
 `base_cam` mit 10 Hz, gehört `settle_half_window` auf 5.
@@ -2771,7 +2795,7 @@ entsättigt.
 3. **Die Kantenvariante ist der aussichtsreichere Kandidat.** Mit Folgerung 1
    hätte sie den Klotz hier richtig gemessen.
 4. **B8:** 284 mm Kamera → Band ist nah; der Tiefenschatten des stehenden Klotzes
-   ist dort groß. Eine Messung aus größerer Höhe steht aus.
+   ist dort groß. *(Mit Nachtrag 13 / L22 hinfällig.)*
 
 ### K4 — Block 1: Datenpfad läuft; der Rechner ist der Engpass
 
@@ -2895,7 +2919,7 @@ per Pendant freifahren.
 
 ---
 
-## Nachtrag 13 — Audit und Aufbau (23.09.2026)
+## Nachtrag 13 — Audit und Aufbau (23./24.09.2026)
 
 Ein Audit des Gesamtstands (L1), danach Messungen am Aufbau mit
 `test/tools/signal_reader.py`. Umgesetzt wurde nur, was der Nutzer freigegeben
@@ -2907,7 +2931,7 @@ Code und Architektur tragen (Logik ohne ROS, Verträge, Sicherheitsgate,
 Geschwindigkeitsschätzung). Die Schwachstelle: drei Größen, die das Design
 bestimmen, stammten vom Schreibtisch — **Messrate und Latenz der Basiskamera**,
 **Lage der Greifzone zum Kamerabild** und die **Bandgeschwindigkeit**. Alle drei
-sind heute gemessen (L2, L4, L7). Offen aus dem Audit bleiben:
+sind heute gemessen (L2, L4, L7). Aus dem Audit folgten außerdem diese Punkte (Ausgang jeweils angegeben):
 
 - **Deckel der Vorhersage.** `max_extrapolation_s` = 0,2 s im Follower liegt unter
   dem gemessenen Horizont (L2). Nachgerechnet mit dem Regelkreismodell aus
@@ -2922,9 +2946,10 @@ sind heute gemessen (L2, L4, L7). Offen aus dem Audit bleiben:
   publiziert sie in S1 ununterscheidbar von Messungen; `vectoring` nimmt sie als
   Messungen. Genau dort wird gegriffen (L4). Vorschlag: S1 kennzeichnet
   weitergeführte Einträge, `vectoring` extrapoliert selbst mit der gepoolten
-  Geschwindigkeit, Tracks verfallen am Zonenende statt nach 0,5 s.
+  Geschwindigkeit, Tracks verfallen am Zonenende statt nach 0,5 s. *(Umgesetzt: L10;
+  Deckel und Zeitgrenzen: L23.)*
 - **Greifzonen-Platzhalter** y −0,45 … +0,05 reicht über das Bandende (−0,375) hinaus. *(Behoben: L14.)*
-- **Startverhalten:** Der Attractor fährt beim Start auf die gespeicherte Zielpose.
+- **Startverhalten:** Der Attractor fährt beim Start auf die gespeicherte Zielpose. *(Regel: vor dem Start den Arm freifahren, Einrichtung §6.)*
 
 ### L2 — Datenrate und Latenz der Basiskamera
 
@@ -2978,6 +3003,8 @@ die Ablagepose (y +0,476) liegt am Bildrand und ist zu prüfen; L1 „Strecke oh
 Basiskamera“ bleibt als Zubringer nötig.
 
 ### L5 — Roboterkamera: Kantenvariante, Banddistanz aus dem Median
+
+> Überholt durch L22 (24.09.): Die Roboterkamera ist nicht mehr eingebunden.
 
 **Entscheidung (Nutzer):** Weiter nur mit `robot_cam_2` (Kanten). Die Farbvariante
 kommt nicht in die Anwendung (Rechenlast, K3). Damit entfällt der A/B-Vergleich,
@@ -3035,7 +3062,8 @@ niedrig** — ein fester Versatz: Die L515 liest die Klotzoberseiten zu tief
 (Eindringen des LiDAR in den Kunststoff), das Band nicht. Vorschlag: Parameter
 `top_depth_bias_mm` = 11,5, von der Oberseitentiefe abgezogen — korrigiert Höhe
 und den kleinen Maßstabsfehler der Position. **Umgesetzt** (Standardwert 11,5);
-die Bestätigung am Aufbau steht nach dem nächsten Build aus.
+nach dem Build bestätigt (Höhe flach 23,8 mm bei echt 24,2; Greifhöhen der ersten
+Griffe, L19).
 
 Die Werte sind eine **Übergangskalibrierung**; `Calibration/calibration.json`
 (Vorgängerwerte im Rahmen `base`) bleibt unberührt. Für das Kalibrierprojekt (C3):
@@ -3055,7 +3083,7 @@ y ≈ 0,46 … 1,03 ab; die übrigen ~0,84 m (6,5 s) sieht sie nicht.
 `camera_node` `/realsense_camera`, `belt_surface_z_mm` 53,6,
 `top_depth_bias_mm` 11,5. `vectoring`:
 Einschwing-Halbfenster 5 (zählt Messungen; bei 5–7 Messungen/s ≈ 0,7–1 s).
-⚠️ **Von Hand gesetzte Blockparameter gehen vor.** Neue Standardwerte übernimmt
+**Von Hand gesetzte Blockparameter gehen vor.** Neue Standardwerte übernimmt
 nach dem Build auch ein bestehender Block, wo der Parameter auf dem Standardwert
 steht (korrigiert 24.09.2026, Nutzer; vorher hieß es „nur neu eingefügte Blöcke“).
 `rate` bleibt in der Oberfläche (K2).
@@ -3087,10 +3115,11 @@ y ≈ 0,55–0,61, die Messregion erst bei 0,50: Die Klötze verlassen das Bild 
 *in* der Region und werden nach drei Fehlbildern gelöscht. Hinter dem Bild kommt
 nichts an — die Greifzone (L4) sieht nie ein Ziel. Das bestätigt L1 („Strecke
 ohne Basiskamera“) am echten Band; die Weiterführung gehört in `vectoring`, mit
-der gepoolten Geschwindigkeit. Offen.
+der gepoolten Geschwindigkeit. *(Umgesetzt: L10.)*
 
 **Befund 3 — Einschwingen knapp.** Ein Klotz ist nur ~3,5 s im Bild; der
-stehende hohe Klotz wurde darin nicht final. Ursache noch nicht untersucht.
+stehende hohe Klotz wurde darin nicht final. *(Mit der Messregion über das ganze Band
+und der Weiterführung in L10 werden die Klötze nach rund 1 s final.)*
 
 ### L10 — Hinter dem Bild führt `vectoring` weiter (umgesetzt)
 
@@ -3139,11 +3168,13 @@ Status 4 bis in die Greifzone, die Position stimmt dort (Antasten).
   Keine doppelten IDs, keine Übergabe nötig.
 - `predict_max_s` = 8 s reicht ~0,12 m über das Bandende (−0,375) hinaus;
   unkritisch, die Greifzone endet vorher.
-- Offen: Genauigkeit der Vorhersage in der Greifzone. Nach der Rechnung klein
-  (Pool-Streuung < 0,5 mm/s × ≤ 6 s ≈ 3 mm, dazu B23 ≤ 6 mm); direkt messen lässt
-  sie sich erst mit der Roboterkamera (Block 6) oder beim ersten Griff.
+- Genauigkeit der Vorhersage in der Greifzone: nach der Rechnung klein
+  (Pool-Streuung < 0,5 mm/s × ≤ 6 s ≈ 3 mm, dazu B23 ≤ 6 mm); die ersten Griffe
+  bestätigten rund 1 mm Längsfehler (L19).
 
 ### L11 — Block 6: Roboterkamera misst, die Hand-Auge-Kalibrierung war falsch
+
+> Seit L22 (24.09.) nicht mehr im Follower: Die Hand-Auge-Werte unten bleiben als Referenz.
 
 **Messung.** `robot_cam_2` über einem 100-mm-Klotz hinter dem Bild der
 Basiskamera (Flansch z 624 mm): `valid = 1`, Streuung < 1 mm, Banddistanz
@@ -3172,7 +3203,7 @@ x 93,7 / Roll 2,0°) — beide Sätze sagen im gemessenen Höhenbereich auf ~2 m
 voraus. Neue Standardwerte `handeye_*` im Follower; Test mit der echten
 Prüfansicht. Rohdaten: `architektur/bilder/2026-09-23-handauge-ansichten.json`.
 
-**Drei Befunde an `robot_cam_2` selbst (offen, B6):**
+**Drei Befunde an `robot_cam_2` selbst (B6; die Kamera ist seit L22 nicht eingebunden):**
 
 1. **Glanzstreifen als Klotz.** Auf dem Band liegt ein heller Reflexstreifen ohne
    gültige Tiefe; das Nah-Gate zählt fehlende Tiefe als „nah“ und nahm den Streifen,
@@ -3208,10 +3239,13 @@ der gemeldeten Mitte zur offline ausgeschnittenen Oberseite, ~0,6 mm/px):
 | F4 (Werkzeug ~20° gekippt) | 22 px | 22 px |
 | F5 (Klotz am oberen Bildrand) | 44 px, falsch | keine Erkennung |
 
-Der Glanzstreifen ist damit gelöst. Offen bleiben 14–17 mm Versatz in F2/F4 —
-vermutlich Seitenfläche oder Schatten im Umriss (L11, Befund 2) — und die Rate.
+Der Glanzstreifen ist damit gelöst. Es blieben 14–17 mm Versatz in F2/F4 —
+vermutlich Seitenfläche oder Schatten im Umriss (L11, Befund 2) — und die Rate;
+nicht weiter verfolgt, weil die Roboterkamera nicht eingebunden wird (L22).
 
 ### L13 — Roboterkamera nach dem Build: Hand-Auge bestätigt, Erkennung nicht
+
+> Folge: L22 (24.09.) — die Roboterkamera wird nicht mehr eingebunden.
 
 Gegenprobe an einer neuen Pose über dem angetasteten flachen Klotz: offline
 ausgeschnittene Oberseite mit der neuen Hand-Auge-Kalibrierung **3,3 mm** vom
@@ -3227,9 +3261,9 @@ meldete die Mitte **32 mm** daneben (62 px). Offline an allen sechs Rohbildern:
 
 Beim flachen Klotz trennt die Tiefe kaum (Oberseite 23 mm über dem Band), und die
 Kanten schließen sich oft nicht. Die positive Klotzfarbe trägt für Rot und Blau;
-Weiß ist offen (K3). **Entscheidung:** Die Roboterkamera wird vorerst nicht weiter
+für Weiß reicht sie nicht (K3). **Entscheidung:** Die Roboterkamera wird nicht weiter
 repariert; der erste Griff läuft mit der Basiskamera allein (Gewichte 0, Z10). Ein
-neuer Erkennungskern entsteht am Schreibtisch mit den gesicherten Rohbildern.
+neuer Erkennungskern entfiel, als die Basiskamera allein genügte (L22).
 
 ### L14 — Arbeitsraum (B10), Greifzone (B19), Greifhöhe
 
@@ -3244,7 +3278,7 @@ Bereich), **z min 0,3086** (geschlossene Backenspitze 10 mm über dem Band:
   Follower nie dorthin (Zone, Klemmung beim Anfahren); nur der Transfer auf
   Freihöhe führt hinein. Festgehalten in `Safety/workspace_bounds.json`
   (`status: defined`).
-- **Greifzone** (`priority_handler`, Standardwert; ⚠️ seit 24.09. = Arbeitsraum, L21): x −0,95 … −0,68,
+- **Greifzone** (`priority_handler`, Standardwert; seit 24.09. = Arbeitsraum, L21): x −0,95 … −0,68,
   **y +0,40 … −0,22** — 5 cm unter dem Arbeitsraumrand fürs Anfahren, 10 cm über dem
   Bandende fürs Mitfahren nach dem Greifen.
 - **`min_grip_height_m` 0,015 → 0,021:** Sonst läge die Greifhöhe flacher Klötze
@@ -3291,7 +3325,7 @@ Entlastet wurde deshalb an den Kameratreibern (`event_engine`, dort läuft auch 
   `848x480x15`. Gemessen über `camera_info`: 15,0 / 15,0 Bilder/s. `base_cam`
   liefert unverändert **8,6 Messungen/s**, Alter bei Ankunft Median 161 ms, vor der
   nächsten Median 263 ms / 95 % 357 ms — sie war nicht durch die Kamerarate
-  begrenzt. ⚠️ `ros2 topic hz` auf Bild-Topics misst sich selbst (4–7/s); Raten
+  begrenzt. `ros2 topic hz` auf Bild-Topics misst sich selbst (4–7/s); Raten
   über die kleinen `camera_info`-Topics messen.
 - **Infrarotbilder der Roboterkamera aus:** Der D435i-Treiber publizierte
   `infra1`/`infra2` und richtete die Tiefe zusätzlich auf `infra1` aus. Der
@@ -3301,7 +3335,7 @@ Entlastet wurde deshalb an den Kameratreibern (`event_engine`, dort läuft auch 
   Aktivierung über den neuen Parameter `camera_node` (Standard
   `/realsense_camera_2`) ab — wie `base_cam` `global_time_enabled` erzwingt.
   `robot_cam` hat das nicht (nicht in der Anwendung, L5).
-  ⚠️ **Nach dem Build hängte sich damit die Anwendung auf:** Die Roboterkamera
+  **Nach dem Build hängte sich damit die Anwendung auf:** Die Roboterkamera
   antwortete nicht mehr auf Parameteranfragen, die ausgerichtete Tiefe blieb aus,
   und nach dem Neustart luden Greifer und `data_tracker` nicht mehr, und AICA ließ
   sich nicht mehr beenden. Mit geleertem `camera_node` lief alles wieder.
@@ -3377,10 +3411,10 @@ Wächter hätte den Fake beim Verlassen des erwarteten Quaders beendet (löste n
    Rechner ist zeitweise voll (Warteschlange 5–13 bei 8 Threads), `event_engine`
    wächst (430 → 705 MB). Mitlesen jetzt ohne die 500-Hz-Flanschpose.
 
-**Offen:** Kontrolllauf `lead_time_s` 0,24; Ablegen (nur mit echtem Klotz im Greifer), IK auf Betriebswert mit
-`descend_speed_mps` 0,15 und `t_descend_s` 1,2 zurück, dann Basiskamera und echtes
-Band. Beobachtung: Der `priority_handler` wählte Klotz 2 mit 1,06 s Restzeit — die
-Einschwingzeit des Followers (~1,5 s) steckt nicht in der Erreichbarkeit.
+**Weiter:** Kontrolllauf `lead_time_s` 0,24, Ablegen mit echtem Klotz, IK auf
+Betriebswert, dann Basiskamera und echtes Band — erfolgt in L19–L21. Beobachtung:
+Der `priority_handler` wählte Klotz 2 mit 1,06 s Restzeit — die Einschwingzeit des
+Followers steckte nicht in der Erreichbarkeit (behoben in L23, eingemessen in L24).
 
 ### L19 — Erste echte Griffe im Lauf: zwei von zwei (24.09.2026)
 
@@ -3457,8 +3491,8 @@ an den Seiten. Ausgewertet an zwei Einzelbildern (Band steht) mit der Erkennung 
   (x −0,95 … −0,68) — der `priority_handler` wählte ihn nie.
 - **Ein flach liegender 25-mm-Klotz** liegt roh nur 11–15 mm über dem Band (Unterschätzung
   der Oberkante, L6) und fällt unter `min_obj_height` 15 mm — mal erkannt, mal nicht.
-  Greifbar ist er ohnehin nicht (< 30 mm). Offen: `min_obj_height` 10, vorher am leeren
-  Band auf Falschmeldungen prüfen.
+  Greifbar war er mit der damaligen Grenze nicht (< 30 mm). *(Gelöst in L24: erkannt
+  über `min_contour_area` 1000, greifbar ab 20 mm.)*
 
 **Entscheidung (Nutzer):** Die Greifzone bekommt keinen eigenen Sicherheitsabstand mehr —
 der steckt schon in den abgefahrenen Werten. **Zone x −1,0 … −0,53, y −0,32 … +0,445**
@@ -3468,7 +3502,307 @@ auf Höhe einer 100-mm-Oberkante, damit ein Klotz mit Mitte bei −1,0 ganz im A
 liegt). Klötze jenseits von x −1,0 sind nicht erreichbar und fallen jetzt heraus; der
 kleinere Ausschnitt spart Rechenzeit.
 
-Zu beobachten: Die Wartestellung am Zonenanfang liegt jetzt bei y +0,445, 8–10 cm vor dem
-Bildbeginn der Basiskamera (y ≈ +0,52 … 0,54). Der Greifer steht dort hoch
-(> `max_obj_height_mm` über dem Band) und wird nicht als Klotz gemeldet — beim ersten
-Lauf gegenlesen.
+Die Zonengrenze y +0,445 ist der Rand, den der Nutzer so abgefahren hat, dass der
+Greifer gerade nicht im Bild der Basiskamera ist (L14); das Bild beginnt bei
+y ≈ +0,52 … 0,54. Damit gilt L4 unverändert: Greifzone und Wartebereich liegen außerhalb
+des Bildes.
+
+### L22 — Die Roboterkamera wird nicht mehr eingebunden (24.09.2026)
+
+**Entscheidung (Nutzer):** Gegriffen wird mit der Basiskamera allein. Die Ortung
+von Klötzen durch die Roboterkamera (Stufe 4c) wird aus den übrigen Komponenten
+entfernt; die Kamerablöcke selbst bleiben im Paket.
+
+**Begründung:** 7 von 7 greifbaren Klötzen wurden ohne Roboterkamera gegriffen und
+abgelegt, `err_laengs` ≈ +1 mm (L19, L20). Die Gewichte standen immer auf 0 (Z10);
+die Erkennung von `robot_cam_2` blieb unzuverlässig (L13). Ihr Treiber und ihre
+Komponente kosten Rechenzeit genau in den Prozessen an der Grenze (`event_engine`,
+gemeinsamer Python-Prozess, L2, L16, L18). Die möglichen Einsatzfälle — bewegte
+Basiskamera (C3), verrutschende Klötze hinter dem Bild — sind für das Projekt nicht
+relevant (Nutzer).
+
+**Entfernt:**
+- `follower_logic.py`: `CameraBlend`, `PoseHistory`, `camera_to_world`,
+  `robot_cam_world_xy`, `quat_from_rpy`, `rotate`, `quat_multiply` (ungenutzt), der
+  Korrekturterm in `tracking_point`, das Argument `measurement` von `step`, die
+  Bedingung `require_robot_cam_for_grasp` in der Greif-Freigabe; die Parameter
+  `weight_along`, `weight_across`, `w_ramp_s`, `correction_filter_window`,
+  `max_correction_m`, `robot_cam_max_age_s`, `require_robot_cam_for_grasp`,
+  `handeye_*` (13).
+- `object_follower`: Eingang `object_position`, das Füllen des Ringpuffers.
+- **S8 `follower_status`: 7 → 6 Felder**, `w_wirksam` entfällt (Verbraucher:
+  Streamer, `signal_reader.py`).
+- `interface_streamer`: Eingang `robot_debug_image`; das Bild der Basiskamera hat
+  die volle Breite, die Statuszeile kein `w`.
+- Tests: 14 Kamera-Tests und der Helfer `_s2`, 2 Ringpuffer-Tests;
+  `test_follower_camera_and_grasp.py` heißt jetzt `test_follower_grasp.py`. Der
+  Test „Versatz der Basiskamera“ bleibt als Grenze des Systems (12 mm quer →
+  Fehlgriff, sauber abgebrochen).
+
+**Bleibt:** `robot_cam.py`, `robot_cam_2.py`, `vision/robot_detection*.py`, ihre
+Beschreibungen, `setup.cfg`-Einträge und Tests; Vertrag S2 (ohne Abnehmer);
+`signal_reader.py object_position`; die Hand-Auge-Werte als Referenz in L11. Das
+ausgerichtete Greifen (Modus 2: `use_block_orientation`, `orientation_quality_min`,
+`gripper_yaw_offset_deg`), das Einfrieren der Gier beim Absenken und der ganze
+Greifablauf sind nicht betroffen — der Winkel kommt aus S4 (Basiskamera).
+
+**Nachweis, dass nichts anderes verändert ist:** Vor dem Umbau wurde der Follower in
+zwölf Szenarien im geschlossenen Regelkreis Takt für Takt aufgezeichnet — voller
+Zyklus, Modus 2 mit um 30° gedrehtem Klotz, Modus 2 mit zu geringer Winkelgüte,
+Montagewinkel 15°, Fehlgriff bei 12 mm Versatz, Klotz verloren, Abbruch mit Klotz,
+zurückgezogenes Ziel, Start in tiefer Lage, gedrosselt 0,07 m/s u. a. Nach dem
+Umbau: **27 200 Takte, 0 Abweichungen** in Zielpose, Zustand, Greiferbefehl,
+Regelabweichungen, `picked_id` und Meldungen. Gier beim Absenken: 90° (Modus 1),
+29,8° (Modus 2, Klotz 0,52 rad), 105° (Montagewinkel 15°). 236 Tests grün (vorher
+252; entfallen sind genau die 16 entfernten). Parameter und Ein-/Ausgänge im Code
+stimmen mit den Komponentenbeschreibungen überein.
+
+**Nach dem Build:** `object_follower` und `interface_streamer` in der Anwendung neu
+einfügen (die gespeicherte Anwendung kennt die entfernten Parameter und Eingänge),
+beim Follower `rate` 50. `realsense_camera_2` und `roboter_kamera_2_kanten` aus der
+Anwendung nehmen.
+
+**Am Aufbau bestätigt (nach dem Build, 24.09.2026):** Follower und Streamer neu
+eingefügt, Roboterkamera-Blöcke entfernt. Drei Griffe desselben 100-mm-Klotzes bei
+x −0,721 / −0,933 / −0,571 (der letzte erst durch die breitere Zone aus L21
+erreichbar), alle abgelegt; `err_laengs` −1,8 … +0,6 mm, `err_quer` ±0,1 mm, Greifhöhe
+337,1 … 337,3 mm, kein Schutzstopp, keine Warnung der Regelschleife. Seit dem ersten
+echten Griff **10 von 10** abgelegt.
+
+**Weiter:** Das ausgerichtete Greifen (Modus 2) war nur in der Simulation geprüft —
+am Aufbau getestet und begrenzt in L25, Standard seit L26.
+
+### L23 — Vorhersagedeckel zu knapp; Erreichbarkeit ohne Einschwingen (24.09.2026)
+
+**Beobachtung (Nutzer):** Beim kleinen Klotz setzte der Arm zum Griff an, brach ab,
+versuchte es halb noch einmal und ließ den Klotz trotz korrekter Erkennung durchlaufen
+— einmal sogar in GREIFEN. Außerdem wählte der `priority_handler` Klötze, die nicht
+mehr zu schaffen waren.
+
+**Messung** (Zustand und Fehler des Followers mit 50 Hz, jedes neue S4; nur ein
+Klotz auf dem Band):
+- Die Zielposition in S4 ist glatt (Sprünge < 1 mm) — nicht `vectoring`.
+- S4 kommt im Median alle 0,20 s, zu 95 % in 0,33 s; **Alter von S4 median 0,52 s,
+  95 % 0,73 s, max 0,93 s, 24 % der Zeit über dem Deckel `max_extrapolation_s` 0,6.**
+- Über dem Deckel bleibt die Vorhersage stehen, der Flansch fährt weiter: `err_laengs`
+  wächst von +6 auf +17 mm, mit dem nächsten S4 springt er auf ~0 zurück. Fällt der
+  Sägezahn ins ABSENKEN, greift der Rücksprung F3 (> 2 × 5 mm) — 14 Rücksprünge,
+  4 × „Greifebene überschritten“, 1 × „Zielsatz steht still“ (`target_timeout_s` 1,0)
+  mitten in GREIFEN. 3 von 7 abgelegt.
+- Der Deckel 0,6 lag seit L10 knapp über dem damals gemessenen Alter (~0,5 s);
+  die Kameras mit 15 Bildern/s (L16) und die zusätzliche Last durch das Debug-Bild der
+  Basiskamera und den `interface_streamer` im gemeinsamen Python-Prozess (L2) haben die
+  Reserve aufgebraucht (Nutzer: mit dem vorigen Aufbau ohne Streamer nie beobachtet).
+  Der kleine Klotz war öfter betroffen, weil er tiefer gegriffen wird und länger im
+  ABSENKEN ist.
+
+**Änderung 1 (Follower, Standardwert):** `max_extrapolation_s` **0,6 → 1,0**,
+`target_timeout_s` **1,0 → 1,5** (über dem Deckel). Am Aufbau mit denselben Klötzen:
+**9 von 9 abgelegt**, keine Deckelmeldung, Alter max 0,89 s, 2 Rücksprünge in einem
+Versuch, der trotzdem griff. Ein längerer Deckel ist unkritisch: Das Band läuft
+gleichmäßig, und bleiben die Daten aus, bricht der Timeout ab.
+
+**Änderung 2 (`priority_handler`, Nutzer: „pessimistisch — das Anfahren muss
+definitiv noch sinnvoll sein“):** Die Anfahrzeit enthielt nur Fahrt und 3/K, nicht das
+Einschwingen des Followers bis zur Greif-Freigabe. Gemessen: Wahl bis Absenkbeginn
+1,1–2,3 s bei geschätzter Anfahrt 0,9–2,5 s. Neu **`t_settle_s` = 1,2 s**:
+Kandidat ⟺ Zeit bis zur Greifebene > 1,5 × (Fahrt + 3/K + `t_settle_s`). Nachgerechnet:
+die zwei aussichtslosen Wahlen (1,71 s bzw. 3,17 s Rest) wären übersprungen worden,
+ebenso der knappe Fall direkt aus der Ablage (4,45 s Rest, 2,47 s Anfahrt); die
+normalen Griffe (4,0–5,0 s Rest, ~1 s Anfahrt) bleiben wählbar. Bei mehreren Klötzen
+nimmt er unter den so erreichbaren weiter den dringendsten — ein knapper, nicht mehr
+sicherer Klotz fällt heraus, der sichere dahinter wird gewählt.
+
+> **Nachgeschärft durch L24:** `t_settle_s` 0,4 (gemessen 0,23–0,33 s) und Faktor
+> 1,0 — mit 1,2 / 1,5 wurde aus der Ablagepose kein Klotz in der Zone mehr gewählt.
+
+**Nebenbefunde:** Nach dem Ablegen fährt der Follower ein bereits gewähltes Ziel direkt
+aus der Ablage an, nicht über die Wartepose; der `priority_handler` rechnet den
+Anfahrweg ab der aktuellen Flanschpose (N4). Die Greifebene liegt bei y ≈ +0,095 —
+~41 cm Band bis zum Zonenende für Absenken, Greifen und Heben im Mitfahren.
+
+**Nachgeprüft (Nutzer, 24.09.):** Das Zonenende y −0,32 passt exakt zum erreichbaren
+Bereich — mehr Luft bis zur Greifebene (y ≈ +0,095 = −0,32 + 0,128 m/s × 2,7 s × 1,2)
+gäbe es nur über kürzere Prozesszeiten: gemessen Absenken ~1,0 s, Greifen 0,5–1,0 s,
+Mitfahren beim Heben ~0,5–0,7 s gegen angesetzte 1,2 / 1,0 / 0,5 s × 1,2.
+
+**Ausgang:** Die Prozesszeiten wurden in L24 gemessen und nachgeschärft (Greifebene
+weiter stromab). Die Rechenlast mit Debug-Bild und Streamer reicht im Betrieb
+(Streamer 10 Hz, L24). Ein Abbruch in GREIFEN bei kurz stehendem Ziel ist mit dem
+längeren Deckel nicht mehr aufgetreten; der Dauerlauf lief zuverlässig (L26).
+
+### L24 — Tempo ausgereizt, flache Klötze greifbar (24.09.2026, abends)
+
+**Anlass (Nutzer):** Mit Sicherheitsfaktor 1,0 fuhr der Roboter Klötze nicht an, die
+direkt neben der Ablagepose in die Zone liefen — „er hätte es mindestens versuchen
+müssen“.
+
+**Ursache:** Die L23-Werte waren zu pessimistisch. Aus der Ablagepose (x −0,316 /
+y +0,476) sind es waagerecht 0,5 m bis zur Bandspur; gerechnet 0,5 / 0,30 + 3/K 0,6 +
+`t_settle_s` 1,2 = 3,47 s. Ein Klotz am Zonenanfang hat bis zur Greifebene (y +0,095)
+aber nur 2,74 s — höchstens zulässiger Faktor 0,79, also nie gewählt.
+
+**Messungen** (Zustand des Followers mit 50 Hz, jedes S4; ab dem zweiten Lauf auch S5
+und `picked_id`):
+
+| Lauf | abgelegt | zu spät | Fehlgriff | durchgelaufen | Ablegen |
+|---|---|---|---|---|---|
+| `t_settle_s` 0,4, `t_grasp_s` 0,8, Faktor 1,0, 0,30 m/s | 7 | 0 | 0 | – | 2,2–2,7 s |
+| dito, **Faktor 0,6** | 8 | **3** | 0 | 7 | 2,1–2,9 s |
+| Faktor 1,0, 0,40 m/s | 8 | 1 | 0 | 3 | 1,8–2,3 s |
+| **Faktor 1,0, 0,5 m/s, Absenken 0,25 m/s** | **15** | **0** | 1 | 9 | 1,3–2,2 s |
+
+- Einschwingen (FOLGEN bis Freigabe) **0,23–0,33 s**, Greifen 0,63–0,83 s, Absenken
+  1,0–1,2 s bei 0,15 m/s und **0,78–0,93 s bei 0,25 m/s**.
+- **Faktor 0,6:** alle drei Fehlversuche aus der Ablagepose gewählt, der Klotz schon
+  in der Zone (Verhältnis verfügbar/benötigt 0,67 / 0,61 / **0,91** — auch 0,91 kam zu
+  spät). Aus der Ablage braucht er real über 2,5 s bis zur Freigabe; das Modell mit
+  `t_settle_s` 0,4 rechnet 2,67 s — **es stimmt, die Grenze liegt bei Faktor ≈ 1,0.**
+  Ein Fehlversuch kostet ~2,2 s. Nach einem Abbruch steht der Arm am Band, der nächste
+  knappe Klotz gelingt dann (0,8 s Reserve).
+- **Zurückgenommen:** Nach dem ersten Lauf stand die Aussage, das Modell überschätze
+  die Zeit um das 2,4-Fache (1,1 s Wahl bis Absenken). Die 1,1 s galten nur für Klötze,
+  die bei der Wahl noch vor der Zone lagen — die Anfahrt steckte in der Wartezeit.
+- Letzter Lauf: 15 Klötze in ~2 min (~1 Klotz je 7 s), knappster Griff 0,34 s vor der
+  Greifebene. Die durchgelaufenen Klötze lagen jeweils kurz hinter einem gerade
+  gegriffenen — Taktgrenze aus Heben, Ablegen, Lösen und Rückweg, keine
+  Fehlentscheidung. Der eine Fehlgriff blieb Einzelfall.
+
+**Flache Klötze (Nutzer):** Klötze ab 2 cm Höhe sollen gegriffen werden, der
+geschlossene Greifer dabei höchstens bis 1 cm ans Band. Letzteres galt schon: Greifhöhe
+= Band + max(h/2, `min_grip_height_m` 0,021) → geschlossene Backenspitze 11 mm über dem
+Band (die 245 mm und die Bandhöhe B17 sind mit geschlossenem Greifer gemessen, der
+Abstand hängt nicht an deren ±5 mm). Höhere Klötze (≥ 42 mm) weiter mittig. Aufgehalten
+hatten den flachen Klotz zwei Filter:
+- `priority_handler` `min_graspable_height_m` 0,03 (gemessen 23,8 mm) → **0,02**.
+- `base_cam`: `min_obj_height` wirkt auf die **rohe** Tiefe vor `top_depth_bias_mm`
+  (Oberseite roh 11–15 mm). Mit 9 mm gab es im Betrieb Fehlerkennungen (60 s leeres Band
+  dagegen ohne); der Nutzer ließ `min_obj_height` bei **15** und senkte
+  `min_contour_area` **1500 → 1000** px — erkannt wird der Teil der Oberseite über der
+  Schwelle. Ergebnis (Nutzer): alle Klötze erkannt, flache gegriffen.
+
+**Neue Standardwerte:**
+
+| Komponente | Parameter | alt | neu |
+|---|---|---|---|
+| `priority_handler` | `attractor_v_max_mps` | 0,30 | **0,5** |
+| | `t_settle_s` | 1,2 | **0,4** |
+| | `t_descend_s` | 1,2 | **0,9** |
+| | `t_grasp_s` | 1,0 | **0,8** |
+| | `reach_safety_factor` | 1,5 | **1,0** |
+| | `min_graspable_height_m` | 0,03 | **0,02** |
+| `object_follower` | `descend_speed_mps` | 0,15 | **0,25** |
+| `base_cam` | `min_contour_area` | 1500 | **1000** |
+
+Greifebene damit bei y ≈ +0,018. Der Test-Fake bekommt statt des 25-mm-Würfels einen
+25 × 25 × 15-mm-Klotz als Negativfall unter der neuen Grenze.
+
+**Von Hand in AICA** (nicht im Paket): Attractor und IK-Controller
+`max_linear_velocity` **0,5**, IK-Controller `max_angular_velocity` **0,5** (war 0,25),
+`command_rate_limit` 2,0 bleibt (L20); `rate` von `vectoring` **20**,
+`robotiq_gripper` **20** (Rückmeldung bis zu 50 ms früher), `interface_streamer` **10**
+(flüssiges Bild für den Vortrag — Leistung reicht, Nutzer). Debug-Bild der
+Basiskamera an.
+
+**Grenze des Takts:** Mehr ginge nur über einen kürzeren Rückweg, also eine
+Ablagepose näher am Band. Die UR-Sicherheitsgrenzen ließen 0,5 m/s zu; Fehlgriffe
+bei 0,25 m/s Absenken blieben Einzelfälle, der Dauerlauf lief zuverlässig (L26).
+
+### L25 — Modus 2: höchstens ±45° aus der Grundstellung (24.09.2026, abends)
+
+**Vorgabe (Nutzer):** Der Greifer steht in der Grundstellung (Modus 1, Backen quer
+zur Laufrichtung) richtig. Beim Greifen gedrehter Klötze soll er sich von dort
+**höchstens 45° in jede Richtung** um z drehen, zur Sicherheit bis 50°. Alle Klötze
+sind rechteckig.
+
+**Bisher:** Modus 2 nahm den Klotzwinkel direkt und nutzte nur die Symmetrie des
+Greifers bei einer halben Drehung — bis zu ±90° aus der Grundstellung (ein um 60°
+gedrehter Klotz: 60° Drehung).
+
+**Neu (`follower_logic.yaw_deviation`):** Ein Rechteck lässt sich über jede Seite
+greifen; zusammen mit der Halbdrehung des Greifers zählt der Klotzwinkel **modulo
+90°** gegen die Bandrichtung und liegt damit immer in ±45° (60° → −30°, 85° → −5°).
+Neuer Parameter **`max_yaw_deviation_deg` = 50** („6 Orientierung: Drehung max. aus
+Grundstellung (Grad)“, erlaubt 45 bis unter 90): Bis dahin bleibt die zuletzt gewählte
+Seite, damit ein diagonal liegender Klotz den Greifer bei Rauschen nicht zwischen
++45° und −45° kippen lässt; darüber wird die andere Seite genommen. Beim Absenken
+bleibt der Winkel wie bisher eingefroren.
+
+**Warum das passt:** Der `priority_handler` prüft die Diagonale (≤ 117 mm, H2) — sie
+passt bei jeder Drehung; auch die lange Seite eines 100 × 50-Klotzes passt in die
+127 mm Öffnung. Ob die Basiskamera den Winkel der langen oder der kurzen Seite
+meldet, ist modulo 90° gleichgültig; kritisch bleiben nur Vorzeichen und Bezug in
+`world` — das prüft die statische Winkelmessung vor dem ersten Lauf.
+
+**Nachweis:** Referenzaufzeichnung wie L22 (12 Szenarien, geschlossener Regelkreis):
+11 Takt für Takt identisch, darunter alle Modus-1-Fälle und Modus 2 mit schlechter
+Güte; das Modus-2-Szenario (Klotz 120° gegen das Band) dreht jetzt +30° statt −60°
+und legt ab. Neue Tests: Zuordnung 20/−30/60/85/−70/90/135°, Hysterese 44–51°,
+Rauschen um 45° ohne Umschlagen, echtes Wandern über 50° mit genau einem Umschlag,
+Grenzen 45/90. `gripper_yaw_offset_deg` bleibt 0 (D23 erledigt).
+
+**Ausgang (L26):** Statische Winkelmessung und Messung im Lauf bestätigt, Attractor
+`angular_gains` [5.0] und Drehung 1,0 rad/s gesetzt, gedrehte Klötze im Lauf
+gegriffen; `t_settle_s` musste für die Drehzeit nicht angehoben werden.
+
+### L26 — Finaler Build: alle gefahrenen Werte als Standard (24.09.2026, spät)
+
+**Modus 2 am Aufbau (Nutzer: „passt perfekt und funktioniert“):**
+- Statisch (stehendes Band, 5 Klötze): Winkel der langen Kante in `world`, Streuung
+  ≤ ±1,9°; Richtung und Vorzeichen vom Nutzer am Band bestätigt (+ = gegen den
+  Uhrzeigersinn von oben). Güte im Stand 0 — `vectoring` rechnet sie nur für finale
+  Spuren bei bekannter Bandgeschwindigkeit.
+- Im Lauf (5 Klötze, auch fast quadratische 46 × 45 mm): **kein** 90°-Wechsel der
+  langen Kante, Güte (180°-Mittelung wie `vectoring`) 1,00. Der befürchtete Einbruch
+  der Güte bei quadratischen Oberseiten tritt nicht auf — `vectoring` bleibt unverändert.
+  (Die S3-Güte selbst wurde wegen eines falschen Statusfilters im Leseskript nicht
+  mitgeschrieben; sie folgt aus denselben Winkeln.)
+- Drehen zu langsam → Attractor `angular_gains` [1.0] → **[5.0]**,
+  `max_angular_velocity` an Attractor **und** IK-Controller **1,0** rad/s (45° in
+  ≈ 0,9 s statt ≈ 1,5 s).
+
+**Greifhöhe (Nutzer):** Flache Klötze tiefer fassen — `min_grip_height_m` 0,021 →
+**0,016** und `ws_z_min` 0,3086 → **0,3036** (beide nur gemeinsam, sonst klemmt das
+Gate): geschlossene Backenspitze **6 mm** über dem Band, Arbeitsraumgrenze bei 5 mm;
+die Auflage deckt 6–26 mm, den ganzen 25-mm-Klotz. Klötze bis 32 mm an der
+Untergrenze, darüber mittig. `Safety/workspace_bounds.json` nachgezogen
+(z_min, Marge 5 mm).
+
+**Neue Standardwerte (finaler Build):**
+
+| Komponente | Parameter | alt | neu |
+|---|---|---|---|
+| `object_follower` | `use_block_orientation` | false | **true** |
+| | `min_grip_height_m` | 0,021 | **0,016** |
+| | `ws_z_min` | 0,3086 | **0,3036** |
+| `base_cam` | `debug_enable` | false | **true** (der `interface_streamer` zeigt das Bild) |
+
+Alle übrigen am Aufbau gesetzten Werte der eigenen Komponenten entsprachen beim
+Auslesen bereits dem Standard (L24, L25). **Von Hand in AICA** bleiben: Attractor
+`linear_gains`/`angular_gains` [5.0], `rate` 50, `max_linear_velocity` 0,5,
+`max_angular_velocity` 1,0; IK-Controller `max_linear_velocity` 0,5,
+`max_angular_velocity` 1,0, `command_rate_limit` 2,0; `rate` der Komponenten
+(K2); UR-Nutzlast 1,3 kg.
+
+**AICA-Testumgebung (`--target test`):** 301 Tests, alle Logiktests grün; 8 Fehler in
+den 7 Konstruktionstest-Dateien, beide Ursachen alt: (1) `conftest.py` mit der Fixture
+`ros_context` war am 01.06.2026 (Commit `31c5fcc`) mit den Wizard-Beispieltests
+gelöscht worden — seitdem liefen die Konstruktionstests nirgends; wiederhergestellt
+aus der Wizard-Vorlage, `rclpy` erst in der Fixture importiert (sonst fallen lokal
+alle Tests aus). (2) `cv_bridge` fehlt im Testabbild (im Laufzeitabbild vorhanden);
+nicht in `package.xml` aufgenommen, weil apt-OpenCV mit dem pip-OpenCV kollidieren
+würde → diese Tests werden übersprungen (Nutzer: Variante a): in
+`test_base_cam_contract.py` per `skipif`-Marker, in `test_interface_streamer.py` per
+`importorskip` in der Fixture. Nicht auf Modulebene — eine Datei ohne eingesammelten
+Test lässt pytest mit Code 5 enden, und colcon zählt das als Fehler (zweiter Lauf:
+0 Fehler, nur diese 2 „Failures“). Die 5 übrigen Konstruktionstests sind grün.
+**Dritter Lauf: `--target test` vollständig grün** (Build FINISHED).
+
+**Dauerlauf (Nutzer, 24.09.):** gemischte und gedrehte Klötze — das System läuft
+zuverlässig. Damit gelten Ziel 4 und die Endabnahme als erfüllt. Zugleich
+abgeschlossen: Option C entfällt (B3), keine Singularitäten im Arbeitsraum (B11),
+Transferhöhe 0,49 m bestätigt (D12); die Sprungerkennung bleibt bei 0,05 m.
+
+**Nachweis:** Tests für Modus 1 halten `use_block_orientation=False` fest, ein Test
+prüft den neuen Standard; die Referenzaufzeichnung mit den alten Werten festgehalten
+ist mit L25 Takt für Takt identisch — geändert haben sich nur Standardwerte.

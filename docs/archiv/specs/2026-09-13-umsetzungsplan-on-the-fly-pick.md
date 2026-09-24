@@ -4,6 +4,9 @@
 **Paket:** `roboter_tetris` (AICA Package, UR10e)
 **Status:** Umsetzungsbereit, mit benannten Vorbedingungen
 
+> ⚠️ **Stufe 4c (Roboterkamera) ist seit 24.09.2026 entfernt** (`entscheidungen.md`
+> Nachtrag 13 / L22) — gegriffen wird mit der Basiskamera allein.
+
 > **Vorrang.** Normativ sind `docs/architektur/entscheidungen.md` und
 > `docs/architektur/datenvertraege.md`. Diese Spec ist daraus **abgeleitet** und
 > erzählt sie bewusst nach, damit sie ohne Vorkontext lesbar ist. Bei Widerspruch

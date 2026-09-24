@@ -5,11 +5,24 @@ working in millimetres. This file covers the signal boundary: the conversion to
 SI units and the move of the belt velocity into the header.
 """
 
-from roboter_tetris.base_cam import pack_tracked_objects
+import importlib.util
+
+import pytest
+
 from roboter_tetris.contracts import (
     OBJECTS_HEADER, OBJECTS_STRIDE, unpack_objects,
 )
 from roboter_tetris.vision.tracker import TrackedObject
+
+# The AICA runtime image has cv_bridge, the package-builder test image does not
+# (package.xml does not declare it on purpose: apt OpenCV would clash with the
+# pip one). A marker, not importorskip: a file with no collected test makes
+# pytest return 5, which colcon counts as a failure (Nachtrag 13 / L26).
+HAVE_CV_BRIDGE = importlib.util.find_spec("cv_bridge") is not None
+pytestmark = pytest.mark.skipif(not HAVE_CV_BRIDGE,
+                                reason="cv_bridge fehlt im Testabbild")
+if HAVE_CV_BRIDGE:
+    from roboter_tetris.base_cam import pack_tracked_objects
 
 
 def _track(tid=1, **kw):

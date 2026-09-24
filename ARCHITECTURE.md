@@ -99,6 +99,7 @@ Jede Python-Komponente benötigt zwingend eine `.json`-Datei im Ordner `componen
 **Zustandstypen (`signal_type`):**
 | Datentyp | `signal_type` |
 |---|---|
+| `sr.CartesianState` | `"cartesian_state"` |
 | `sr.CartesianPose` | `"cartesian_pose"` |
 | `sr.CartesianTwist` | `"cartesian_twist"` |
 | `sr.CartesianAcceleration` | `"cartesian_acceleration"` |
@@ -590,7 +591,7 @@ Der `reference_frame` ist standardmäßig **`world`**. → Relevant für die JTC
 - **Hardware Interface** = Verbindungsschicht zwischen AICA Core und der physischen/simulierten Hardware (liest Joint-/Sensorzustände, sendet Position/Velocity/Effort/Torque-Befehle); basiert auf **`ros2_control`**.
 - **Control-Stack:** physische Hardware → **Hardware Interface** → **Controller** (z. B. der JTC) → Components.
 - Laut Doku werden **Roboterarm und Greifer typischerweise als Hardware Interface** (ros2_control) integriert, nicht als Component. Für Custom-Hardware ohne fertiges Interface verweist AICA auf ros2_control-konforme Drittanbieter-Interfaces bzw. den Support.
-> ⚠️ **Architektur-Hinweis für dieses Projekt:** Der Robotiq-Greifer ist hier bewusst als **Component, die die `pyrobotiqgripper`-Library direkt nutzt**, umgesetzt (direkte USB-/Modbus-Ansteuerung), nicht als ros2_control-Hardware-Interface. Pragmatisch und funktionsfähig, weicht aber vom AICA-Idealpfad ab. Eine spätere Migration zu einem Hardware-Interface wäre ein anderer Pakettyp/Aufwand.
+> **Architektur-Hinweis für dieses Projekt:** Der Robotiq-Greifer ist hier bewusst als **Component, die die `pyrobotiqgripper`-Library direkt nutzt**, umgesetzt (direkte USB-/Modbus-Ansteuerung), nicht als ros2_control-Hardware-Interface. Pragmatisch und funktionsfähig, weicht aber vom AICA-Idealpfad ab. Eine spätere Migration zu einem Hardware-Interface wäre ein anderer Pakettyp/Aufwand.
 
 ---
 

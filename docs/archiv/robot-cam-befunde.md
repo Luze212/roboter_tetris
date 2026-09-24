@@ -5,6 +5,9 @@
 > **Fortsetzung:** zweiter Anlauf 22.09. in `entscheidungen.md` Nachtrag 12 / K3
 > (Banddistanz unter dem Blob trifft Schatten oder Klotz); seit 23.09. ist sie der
 > Median der Bildtiefe, weiter nur mit `robot_cam_2` (Nachtrag 13 / L5).
+> Hand-Auge neu eingemessen (L11), Erkennung weiter unzuverlässig (L13).
+> **Seit 24.09.2026 ist die Roboterkamera nicht mehr eingebunden** (Nachtrag 13 /
+> L22) — dieses Dokument ist die Grundlage, falls sie wieder aufgenommen wird.
 **Quellen:** §1–8 aus der Sitzung des **mobilen Setups**, in der `robot_cam` und
 `robot_cam_2` entstanden sind; §9 aus der Erprobung am **lokalen Setup** (Rechner
 am Roboter).

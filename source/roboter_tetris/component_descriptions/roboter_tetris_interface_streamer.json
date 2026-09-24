@@ -1,8 +1,8 @@
 {
   "name": "Interface Streamer",
   "description": {
-    "brief": "Setzt ein Übersichtsbild für RViz zusammen: beide Debug-Bilder, Follower-Status, Bandgeschwindigkeit und Klotzliste.",
-    "details": "Oben die Debug-Bilder von Basis- und Roboterkamera nebeneinander, seitenrichtig skaliert; ein Bild, das länger als 2 s ausbleibt, wird grau mit Hinweis. Darunter Zustand, Ziel-ID, w_wirksam und die drei Regelabweichungen des object_follower, dann die geschätzte Bandgeschwindigkeit mit Richtung und Zahl der beitragenden Klötze. Darunter je Klotz: final mit eigener Geschwindigkeit, einschwingend mit dv, gepickt, hinter der Greifebene oder nicht mehr im Bild - Letzteres ohne Position. Die einzige Komponente, ohne die das System vollständig funktioniert: 5 Hz, und jeder Fehler wird geloggt und übersprungen. Text in ASCII (OpenCV-Schrift ohne Umlaute)."
+    "brief": "Setzt ein Übersichtsbild für RViz zusammen: Debug-Bild der Basiskamera, Follower-Status, Bandgeschwindigkeit und Klotzliste.",
+    "details": "Oben das Debug-Bild der Basiskamera in voller Breite, seitenrichtig skaliert; bleibt es länger als 2 s aus, wird die Fläche grau mit Hinweis. Darunter Zustand, Ziel-ID und die drei Regelabweichungen des object_follower, dann die geschätzte Bandgeschwindigkeit mit Richtung und Zahl der beitragenden Klötze. Darunter je Klotz: final mit eigener Geschwindigkeit, einschwingend mit dv, gepickt, hinter der Greifebene oder nicht mehr im Bild - Letzteres ohne Position. Die einzige Komponente, ohne die das System vollständig funktioniert: 5 Hz, und jeder Fehler wird geloggt und übersprungen. Text in ASCII (OpenCV-Schrift ohne Umlaute)."
   },
   "registration": "roboter_tetris::InterfaceStreamer",
   "inherits": "modulo_components::LifecycleComponent",
@@ -11,13 +11,6 @@
       "display_name": "Debug-Bild Basiskamera",
       "description": "debug_image von base_cam.",
       "signal_name": "base_debug_image",
-      "signal_type": "other",
-      "custom_signal_type": "sensor_msgs::msg::Image"
-    },
-    {
-      "display_name": "Debug-Bild Roboterkamera",
-      "description": "debug_image von robot_cam.",
-      "signal_name": "robot_debug_image",
       "signal_type": "other",
       "custom_signal_type": "sensor_msgs::msg::Image"
     },
@@ -54,7 +47,7 @@
     },
     {
       "display_name": "Kamerabildhöhe (px)",
-      "description": "Höhe des Bereichs je Kamerabild.",
+      "description": "Höhe des Kamerabildbereichs.",
       "parameter_name": "image_height",
       "parameter_type": "int",
       "default_value": "360",

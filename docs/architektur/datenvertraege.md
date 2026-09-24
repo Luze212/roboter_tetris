@@ -4,21 +4,22 @@
 Grundlage für die Implementierung. Änderungen nur hier — und dann in
 `roboter_tetris/contracts.py` nachziehen, nie umgekehrt.
 
-Bezug: `entscheidungen.md` Themen 1–7 und Nachträge 3–13. **Stand 23.09.2026**
-(S1: Semantik von `z` und `height`), alle Signale in `contracts.py` umgesetzt.
+Bezug: `entscheidungen.md` Themen 1–7 und Nachträge 3–13. **Stand 24.09.2026**
+(S8 ohne `w_wirksam`, S2 ohne Abnehmer — Nachtrag 13 / L22), alle Signale in
+`contracts.py` umgesetzt.
 
 ## Übersicht
 
 | | Signal | von → an | Typ | Länge |
 |---|---|---|---|---|
 | S1 | `objects` | base_cam → vectoring | double_array | `3 + 9·n` |
-| S2 | `object_position` | robot_cam → object_follower | double_array | 6 |
+| S2 | `object_position` | robot_cam → (kein Abnehmer seit L22) | double_array | 6 |
 | S3 | `tracks` | vectoring → priority_handler, data_tracker | double_array | `5 + 14·n` |
 | S4 | `target` | priority_handler → object_follower | double_array | 17 |
 | S5 | `not_pickable` | priority_handler → data_tracker | double_array | `2 + n` |
 | S6 | `target_pose` | object_follower → signal_point_attractor | cartesian_pose | – |
 | S7 | `picked_id` | object_follower → priority_handler, data_tracker | double_array | 3 |
-| S8 | `follower_status` | object_follower → interface_streamer | double_array | 7 |
+| S8 | `follower_status` | object_follower → interface_streamer | double_array | 6 |
 | S9 | `gripper_close` / `motion_done` / `has_object` | object_follower ↔ robotiq_gripper | bool | – |
 | S10 | `world_state` | data_tracker → interface_streamer | double_array | `5 + 17·n` |
 
@@ -63,7 +64,7 @@ Bezug: `entscheidungen.md` Themen 1–7 und Nachträge 3–13. **Stand 23.09.202
 |---|---|
 | `t` | Zeitstempel des Bildes (`header.stamp`), Sekunden |
 | `n` | Anzahl Objekte |
-| `v_band_gemessen` | global geschätzte Bandgeschwindigkeit, m/s. **Frame-Größe, kein Objektmerkmal** — der Tracker weist sie allen Tracks gemeinsam zu (`set_global_velocity`). Dient nur noch als **grobe Laufkontrolle** des Bandes. Die maßgebliche Geschwindigkeit schätzt `vectoring` selbst (S3, `entscheidungen.md` Nachtrag 6 / Z2). ⚠️ Drei Eigenheiten der Quelle, siehe unten. |
+| `v_band_gemessen` | global geschätzte Bandgeschwindigkeit, m/s. **Frame-Größe, kein Objektmerkmal** — der Tracker weist sie allen Tracks gemeinsam zu (`set_global_velocity`). Dient nur noch als **grobe Laufkontrolle** des Bandes. Die maßgebliche Geschwindigkeit schätzt `vectoring` selbst (S3, `entscheidungen.md` Nachtrag 6 / Z2). Drei Eigenheiten der Quelle, siehe unten. |
 
 | # | Feld | Einheit | Bemerkung |
 |---|---|---|---|
@@ -79,23 +80,22 @@ Bezug: `entscheidungen.md` Themen 1–7 und Nachträge 3–13. **Stand 23.09.202
 
 **Länge:** `3 + 9·n`
 
-> Änderung gegenüber Ist-Stand: bisher Stride 10 ohne `t` und mit `vy` je Objekt,
-> Werte in mm. Neu: Kopf mit `t`, SI-Einheiten, `vy` in den Kopf verschoben.
+> Gegenüber dem übernommenen Code: dort Stride 10 ohne `t` und mit `vy` je Objekt,
+> Werte in mm. Hier: Kopf mit `t`, SI-Einheiten, `vy` im Kopf.
 
-### ⚠️ Drei Eigenheiten von `v_band_gemessen`
+### Drei Eigenheiten von `v_band_gemessen`
 
 Der Wert stammt aus dem Tracker von `base_cam` (Port des C++-Originals) und ist
 nicht so allgemein, wie der Name nahelegt:
 
 1. **Es ist die y-Komponente, nicht der Betrag.** Der Tracker kennt nur Bewegung
    entlang der Roboter-y-Achse. Bei einer Bandrichtung wenige Grad daneben liegt
-   der Unterschied unter 1 % — wer den Wert aber als Kalibrierquelle für B1 nimmt,
-   erhält systematisch etwas zu wenig. Für B1 ist die Auswertung der Positionen
-   über die Zeit die bessere Quelle; sie liefert Richtung und Betrag zugleich.
+   der Unterschied unter 1 % — als Bandgeschwindigkeit genommen, wäre er aber
+   systematisch etwas zu klein. Die Bandgeschwindigkeit schätzt deshalb `vectoring`
+   aus den Positionen über die Zeit; das liefert Richtung und Betrag zugleich.
 2. **Totzone 30 mm/s.** Gemessene Geschwindigkeiten darunter werden verworfen und
    auf 0 gesetzt. **Läuft das Band langsamer als 30 mm/s, meldet `base_cam`
-   dauerhaft `v_band = 0`** und die davon abhängige Kette bricht zusammen. Vor
-   allem anderen in B1 zu prüfen.
+   dauerhaft `v_band = 0`**. Das echte Band läuft mit rund 128 mm/s.
 3. **Der Wert wird gehalten, nicht zurückgesetzt.** Aktualisiert wird nur, solange
    sich ein Objekt in der Messregion des Trackers befindet; sonst bleibt der
    letzte Wert stehen. Beim Start ist er **0,0** — bis der erste Klotz die
@@ -148,11 +148,15 @@ nicht. Die Aufnahme als zehntes Feld wurde geprüft und **verworfen**:
    werden. Ein Verbraucher, der zurückbleibt, liest ab dem zweiten Objekt Unsinn.
 
 → Wer die Information braucht, rechnet sie aus `length`/`width` aus. Siehe auch
-`vorgaengerprojekt-abgleich.md` §7 und den Hinweis unter S3.
+`archiv/vorgaengerprojekt-abgleich.md` §7 und den Hinweis unter S3.
 
 ---
 
-## S2 — `object_position` · robot_cam → object_follower
+## S2 — `object_position` · robot_cam (ohne Abnehmer)
+
+> **Ohne Abnehmer** (Nachtrag 13 / L22): Gegriffen wird mit der Basiskamera allein;
+> der Follower hat keinen Eingang für S2. `robot_cam` und `robot_cam_2` erzeugen S2
+> weiter; der Vertrag beschreibt ihren Ausgang.
 
 Feste Länge 6, kein Kopf/Stride (immer höchstens ein Objekt).
 
@@ -172,12 +176,12 @@ unterscheidet der Empfänger "Kamera arbeitet, sieht nichts" (→ Rückfall auf
 > Die Umrechnung in world macht der `object_follower` über TCP-Ringpuffer und
 > Hand-Auge-Kalibrierung (Thema 2/3) — nicht die Kamerakomponente.
 
-### ⚠️ Pflicht des Empfängers: Höhenkorrektur von `x` und `y`
+### Höhenkorrektur von `x` und `y` — Pflicht jedes Empfängers
 
 `x` und `y` sind mit der **Banddistanz** zurückprojiziert, der gemessene Punkt
 liegt aber auf der **Oberseite** des Klotzes. Beide Werte sind dadurch um den
-Faktor `z_band/(z_band − blockhoehe)` zu groß. Der `object_follower` **muss**
-deshalb vor jeder weiteren Verarbeitung skalieren:
+Faktor `z_band/(z_band − blockhoehe)` zu groß. Ein Empfänger muss deshalb vor
+jeder weiteren Verarbeitung skalieren:
 
 ```
 x_korr = x · (z_band − blockhoehe) / z_band          (y analog)
@@ -303,7 +307,7 @@ Feste Länge 17, kein Kopf/Stride (immer genau ein Ziel oder keines).
 | 3 | `color` | – | |
 | 4 | `x` | m | world, gültig für `t` |
 | 5 | `y` | m | |
-| 6 | `z` | m | Oberkante |
+| 6 | `z` | m | Klotzmitte, wie S3 Feld 4 |
 | 7 | `orientation` | rad | [0, π) |
 | 8 | `length` | m | |
 | 9 | `width` | m | für die Greifer-Vorpositionierung |
@@ -352,7 +356,7 @@ ist die Abbruchregel** — wird ein Objekt gepickt oder verpasst (`picked_id`),
 verschwindet seine ID oder fällt sein Status auf 3 zurück, setzt
 `priority_handler` `has_target = 0` und der Follower bricht ab.
 
-> ⚠️ Hier stand zusätzlich „unerreichbar" und „unplausibel". **Unerreichbarkeit
+> Anmerkung: Hier stand früher zusätzlich „unerreichbar" und „unplausibel". **Unerreichbarkeit
 > war nie ein Rückzugsgrund** — P4 schließt sie ausdrücklich aus, damit ein fast
 > gelungener Griff nicht abbricht. Ob ein Griff noch *beginnen* darf, entscheidet
 > seit Nachtrag 6 / Z11 der Follower an der Greifebene (Feld 15). „Unplausibel"
@@ -426,7 +430,8 @@ keine Flankenerkennung, kein Verpassen bei Lastspitzen.
 
 ## S8 — `follower_status` · object_follower → interface_streamer
 
-Feste Länge 7. Reine Diagnose.
+Feste Länge **6** (früher 7 mit `w_wirksam`, entfallen mit der Roboterkamera,
+Nachtrag 13 / L22). Reine Diagnose.
 
 | # | Feld | Einheit | Bemerkung |
 |---|---|---|---|
@@ -436,7 +441,6 @@ Feste Länge 7. Reine Diagnose.
 | 3 | `err_laengs` | m | Regelabweichung in Bandrichtung |
 | 4 | `err_quer` | m | Regelabweichung quer |
 | 5 | `err_z` | m | Höhenabweichung |
-| 6 | `w_wirksam` | – | tatsächlich verwendete Gewichtung 0…1 (nach Rampe und Rückfall): der **Anteil der eingestellten Gewichte** `weight_along`/`weight_across`, der gerade wirkt — 0 = nur Basiskamera (Nachtrag 10 / J3) |
 
 **Zustandscodes (Feld 1)** — Reihenfolge wie im Zustandsautomaten (Thema 6):
 
@@ -455,9 +459,6 @@ links der Laufrichtung**; `err_z` = Flanschhöhe minus kommandierte Höhe. Im
 eingeschwungenen `FOLGEN` ist `err_laengs` das Maß für `lead_time_s` (Nachtrag 9 /
 G7). In Zuständen ohne Block (`WARTEN`, `ABLEGEN`, `LOESEN`, `ABBRUCH`) sind sie 0,
 ebenso `target_id` (Nachtrag 8 / F5).
-
-`w_wirksam` macht sichtbar, aus welcher Quelle die Zielposition gerade stammt —
-der zentrale Wert für euren geplanten Vergleich base_cam ↔ robot_cam.
 
 ---
 
@@ -480,7 +481,7 @@ der zentrale Wert für euren geplanten Vergleich base_cam ↔ robot_cam.
 Die vorhandenen Predicates `is_connected` / `is_object_grasped` bleiben für die
 UI erhalten.
 
-> ⚠️ `is_object_grasped` folgt dem Robotiq-Status `gOBJ` und ist auch dann true,
+> `is_object_grasped` folgt dem Robotiq-Status `gOBJ` und ist auch dann true,
 > wenn der Greifer **beim Öffnen** auf ein Objekt trifft
 > (`GOBJ_OBJECT_WHILE_OPENING`). In `LOESEN` kann `has_object` dadurch kurz
 > flackern. Die Zustandsmaschine darf `LOESEN` deshalb nicht über `has_object = 0`
@@ -563,11 +564,11 @@ Regeln:
 
 ---
 
-## Offene Punkte in diesem Dokument
+## Geklärte Festlegungen
 
-| Punkt | Abhängig von |
+| Punkt | Festlegung |
 |---|---|
-| ~~Typ von `target_pose`~~ | **erledigt 14.09.2026: `cartesian_pose`** (A2) |
-| ~~Zustandscodes in `follower_status` Feld 1~~ | **erledigt 21.09.2026** — S8, Nachtrag 8 / F5 |
-| ~~Verfallsfrist in `world_state`~~ | **erledigt 21.09.2026** — S10, `expiry_after_done_s` 10 s, Nachtrag 7 / T1 |
-| Ob `gripper_change` genutzt wird | Ausbaustufe |
+| Typ von `target_pose` | `cartesian_pose` (14.09.2026) |
+| Zustandscodes in `follower_status` Feld 1 | S8, Nachtrag 8 / F5 |
+| Verfallsfrist in `world_state` | S10, `expiry_after_done_s` 10 s, Nachtrag 7 / T1 |
+| `gripper_change` des Greifers | wird nicht genutzt |

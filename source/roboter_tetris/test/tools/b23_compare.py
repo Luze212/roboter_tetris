@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """B23/B21 evaluation: base camera vs. robot, from paired touch points.
 
-Fahrplan Block 2 (`docs/uebersicht/fahrplan-aufbau.md`). At several places
+Fahrplan Block 2 (`docs/archiv/fahrplan-aufbau.md`). At several places
 along the belt a resting block is measured by ``base_cam`` (S1) and then
 touched on the centre of its top face with the closed gripper (flange pose).
 Each place gives one pair. From the pairs this tool answers:

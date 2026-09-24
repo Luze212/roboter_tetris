@@ -82,14 +82,14 @@ sind.
 |---|---|---|---|
 | `zone_x_min` / `zone_x_max` | double | −0.95 / −0.68 | Greifzone in `world` — ~~Platzhalter bis B19~~ bestätigt 23.09.2026 (Nachtrag 13 / L14), im Robotersystem: das angetastete Band x = −0,70 … −0,93 (Nachtrag 8 / F1) |
 | `zone_y_min` / `zone_y_max` | double | −0.22 / 0.40 (bis 23.09.: −0.45 / 0.05) | **Vier Grenzen** — im Plan fehlte `y_min`. **Platzhalter bis B19**, geschätzt um den angetasteten Abschnitt. Vorher lagen die Platzhalter im System der Basiskamera (x ≈ +0,8) — auf der anderen Seite der Basis (B23) | ⚠️ Seit Nachtrag 13 / L4 liegt die Zone außerhalb des Bildes der Basiskamera, etwa y 0,30 … −0,30; das Band endet bei −0,375.
-| `attractor_v_max_mps` | double | 0.25 | max. Fahrgeschwindigkeit, für die Anfahrtsschätzung — der **kleinere** Wert aus Attractor und IK-Controller; bindend ist meist der IK-Controller (A1) |
+| `attractor_v_max_mps` | double | 0.25 (seit L24 0.5) | max. Fahrgeschwindigkeit, für die Anfahrtsschätzung — der **kleinere** Wert aus Attractor und IK-Controller; bindend ist meist der IK-Controller (A1) |
 | `attractor_gain` | double | 5.0 | `K`, für die Einschwingzeit `3/K` — muss zu `linear_gains` des Attractors passen (Einrichtung §2) |
-| `t_descend_s` | double | 1.2 (seit 24.09., vorher 2.0) | Absenkzeit — geht in die Greifebene ein (D22). Gekoppelt: `(observe_z − Greifhöhe) / descend_speed_mps` des Followers + Einschwingen (Nachtrag 10 / J2; vorher 1,0) |
-| `t_grasp_s` | double | 1.0 | Greifzeit bis `motion_done` — geht in die Greifebene ein (D22) |
+| `t_descend_s` | double | 0.9 (seit L24; 1.2 seit L18, vorher 2.0) | Absenkzeit — geht in die Greifebene ein (D22). Gekoppelt: `(observe_z − Greifhöhe) / descend_speed_mps` des Followers + Einschwingen (Nachtrag 10 / J2; vorher 1,0) |
+| `t_grasp_s` | double | 1.0 (seit L24 0.8, gemessen 0,63–0,83 s) | Greifzeit bis `motion_done` — geht in die Greifebene ein (D22) |
 | `t_lift_s` | double | 0.5 | Hebezeit bis `lift_clearance_m`, so lange fährt der Roboter noch mit (D22) |
 | `grasp_time_margin` | double | 1.2 | Aufschlag auf die Zeit des Greifprozesses bei der Lage der Greifebene |
-| `reach_safety_factor` | double | 1.5 | Sicherheitsfaktor im Erreichbarkeitskriterium |
-| `min_graspable_height_m` | double | 0.030 | flachere Blöcke gar nicht erst anfahren — `2 · min_grip_height_m` des Followers (B15, Nachtrag 6 / Z7) |
+| `reach_safety_factor` | double | 1.5 (seit L24 1.0 — darunter Unerreichbares gewählt) | Sicherheitsfaktor im Erreichbarkeitskriterium |
+| `min_graspable_height_m` | double | 0.030 (seit L24 0.020 — flache 25-mm-Klötze greifbar) | flachere Blöcke gar nicht erst anfahren — `2 · min_grip_height_m` des Followers (B15, Nachtrag 6 / Z7) |
 | `max_gripper_opening_m` | double | – (B16) | Öffnungsweite des Greifers |
 | `gripper_margin_m` | double | 0.01 | Reserve zur Öffnungsweite |
 
@@ -108,6 +108,7 @@ t_benötigt  = abstand / attractor_v_max_mps        ← Fahrt, abstand = TCP (ro
             + 3 / attractor_gain                   ← Einschwingen des Attractors
 
 kandidat ⟺ t_verfügbar > reach_safety_factor · t_benötigt
+# seit 24.09.2026: t_benötigt = Fahrt + 3/K + t_settle_s (0,4 s seit L24; 1,2 s in L23)
 ```
 
 > ⚠️ **Geändert (Nachtrag 6 / Z11):** Gemessen wird bis zur **Greifebene**, nicht

@@ -139,10 +139,10 @@
     },
     {
       "display_name": "Min Konturfläche (px)",
-      "description": "Mindestfläche in Pixeln",
+      "description": "Mindestfläche in Pixeln. 1000: Von flachen 25-mm-Klötzen liegt nur ein Teil der Oberseite über min_obj_height; mit 1500 fielen sie heraus (Nachtrag 13 / L24).",
       "parameter_name": "min_contour_area",
       "parameter_type": "double",
-      "default_value": "1500.0",
+      "default_value": "1000.0",
       "dynamic": true
     },
     {
@@ -315,10 +315,10 @@
     },
     {
       "display_name": "Debug aktivieren",
-      "description": "Debug-Bild erzeugen und publizieren (kostet Rechenzeit)",
+      "description": "Debug-Bild erzeugen und publizieren (kostet Rechenzeit). An seit dem finalen Build: der interface_streamer zeigt es (Nachtrag 13 / L26).",
       "parameter_name": "debug_enable",
       "parameter_type": "bool",
-      "default_value": "false",
+      "default_value": "true",
       "dynamic": true
     },
     {

@@ -1,10 +1,10 @@
 """AICA lifecycle component `object_follower` -- stages 4a to 4d.
 
 Thin shell around :class:`roboter_tetris.follower_logic.FollowerCore`. It feeds
-the core with the flange pose (``robot_state``, also into the core's ring
-buffer), the target (S4), the robot camera (S2) and the gripper (S9), and turns
-the core's flange target into a ``cartesian_pose`` for the attractor input of
-the ``SignalPointAttractor`` (S6).
+the core with the flange pose (``robot_state``), the target (S4) and the gripper
+(S9), and turns the core's flange target into a ``cartesian_pose`` for the
+attractor input of the ``SignalPointAttractor`` (S6). The robot camera input
+(S2, stage 4c) was removed on 24.09.2026 (Nachtrag 13 / L22).
 """
 
 import math
@@ -18,7 +18,7 @@ from std_msgs.msg import Bool, Float64MultiArray
 
 from .contracts import (
     S6_REFERENCE_FRAME, STATE_ABORT, STATE_DESCEND, STATE_FOLLOW, ContractError,
-    pack_follower_status, pack_picked_id, unpack_object_position, unpack_target,
+    pack_follower_status, pack_picked_id, unpack_target,
 )
 from .follower_logic import (
     REQUIRED, FollowerCore, FollowerParams, GripperFeedback, Pose,
@@ -48,9 +48,10 @@ DESCRIPTIONS = {
     "latency_compensation_s": "Zusätzlicher Vorhersagehorizont (s) (D7).",
     "max_extrapolation_s": "Deckel der Vorhersage (s), Gate-Prüfung 3 (D14). Muss über "
                            "dem Alter von S4 vor der nächsten Messung liegen - gemessen "
-                           "bis ~0,5 s (Nachtrag 13 / L2).",
+                           "bis 0,93 s (Nachtrag 13 / L23). Darunter bleibt die Vorhersage "
+                           "stehen und das Absenken bricht ab.",
     "target_timeout_s": "S4-Zeitstempel steht so lange (s) still -> Abbruch, Gate-Prüfung 2. "
-                        "Über dem Abstand zweier Messungen der Basiskamera (bis ~0,5 s).",
+                        "Muss über max_extrapolation_s liegen (L23).",
     "timeout_approach_s": "ANFAHREN darf so lange (s) über die erwartete Ankunft des "
                           "Klotzes an der Zone hinaus dauern (D5).",
     "timeout_track_s": "Höchstdauer (s) in FOLGEN bis zum Absenken (D5). Zum Einmessen "
@@ -58,33 +59,21 @@ DESCRIPTIONS = {
     "use_block_orientation": "Modus 2: entlang des Klotzwinkels greifen statt entlang "
                              "der geschätzten Bandrichtung (Modus 1).",
     "orientation_quality_min": "Mindestgüte (S4 Feld 16, 0...1) für den Klotzwinkel (D11).",
+    "max_yaw_deviation_deg": "Modus 2: größte Drehung aus der Grundstellung (Bandrichtung, "
+                             "wie Modus 1) in Grad, 45 bis unter 90. Ein Rechteck wird über "
+                             "die nähere Seite gegriffen, also höchstens 45°; bis zu diesem "
+                             "Wert bleibt die zuletzt gewählte Seite (Nachtrag 13 / L25).",
     "gripper_yaw_offset_deg": "Montagewinkel der Backen gegen die Werkzeug-x-Achse "
                               "(Grad). Nicht gemessen (D23).",
-    "weight_along": "Gewicht der Roboterkamera entlang des Bandes, 0...1. 0 = nur "
-                    "Basiskamera (Nachtrag 6 / Z10).",
-    "weight_across": "Gewicht der Roboterkamera quer zum Band, 0...1.",
-    "w_ramp_s": "Ein- und Ausblenden der Gewichte (s) (D8).",
-    "correction_filter_window": "Gleitender Mittelwert über so viele angenommene "
-                                "Korrekturen.",
-    "max_correction_m": "Größere Korrektur (m) gilt als anderer Klotz im Bild - "
-                        "verwerfen, w -> 0 (R4, D16).",
-    "robot_cam_max_age_s": "Ältere Messung (s) -> Rückfall auf w = 0 (D6).",
-    "require_robot_cam_for_grasp": "Absenken nur mit voll eingeblendeter Roboterkamera "
-                                   "(D9/D10). Vorerst aus (Nachtrag 6 / Z10).",
-    "handeye_x": "Hand-Auge Flansch -> Kamera, x (m). Eingemessen 23.09.2026 (Nachtrag 13 / L11).",
-    "handeye_y": "Hand-Auge Flansch -> Kamera, y (m). Eingemessen 23.09.2026 (Nachtrag 13 / L11).",
-    "handeye_z": "Hand-Auge Flansch -> Kamera, z (m). Eingemessen 23.09.2026 (Nachtrag 13 / L11).",
-    "handeye_roll_deg": "Hand-Auge, Rollwinkel (Grad), R = Rz * Ry * Rx (Nachtrag 13 / L11).",
-    "handeye_pitch_deg": "Hand-Auge, Nickwinkel (Grad) (Nachtrag 13 / L11).",
-    "handeye_yaw_deg": "Hand-Auge, Gierwinkel (Grad) (Nachtrag 13 / L11).",
     "belt_surface_z_m": "Höhe der Bandoberfläche in world (m), gemessen (B17).",
     "flange_to_grip_point_m": "Flansch -> Griffpunkt (m), gemessen 0,235 - nicht der TCP "
                               "der UR-Steuerung (215 mm) (Nachtrag 6 / Z7).",
     "min_grip_height_m": "Untere Grenze der Greifhöhe über dem Band (m), Mitte der Auflage. "
-                         "0,021: liegt über der Arbeitsraum-Untergrenze (geschlossene "
-                         "Backenspitze 10 mm über dem Band, Nachtrag 13 / L14).",
+                         "0,016: geschlossene Backenspitze 6 mm über dem Band, Flansch 0,3046 m "
+                         "1 mm über ws_z_min 0,3036 (Nachtrag 13 / L26). Nur zusammen mit "
+                         "ws_z_min senken, sonst bricht das Gate jeden flachen Griff ab.",
     "descend_speed_mps": "Sinkgeschwindigkeit (m/s). Gekoppelt an t_descend_s des "
-                         "priority_handler (Nachtrag 10 / J2).",
+                         "priority_handler (Nachtrag 10 / J2; 0,25 seit L24).",
     "lift_clearance_m": "So hoch (m) über die Greifhöhe fährt der Roboter beim Heben "
                         "noch mit dem Band mit.",
     "tol_along_m": "Greif-Freigabe: Abweichung entlang des Bandes (m) (D3, B18).",
@@ -102,12 +91,13 @@ DESCRIPTIONS = {
     "robot_state_max_age_s": "Ist der letzte robot_state älter (s), gilt die Flanschpose "
                              "als unbekannt; keine neue Zielpose.",
 }
-_BOUNDED_01 = ("orientation_quality_min", "weight_along", "weight_across")
+_BOUNDED_01 = ("orientation_quality_min",)
+#: [45, 90) degrees: below 45 some block angles could not be reached at all.
+_YAW_LIMIT = ("max_yaw_deviation_deg",)
 _NON_NEGATIVE = ("lead_time_s", "latency_compensation_s", "min_grip_height_m",
                  "lift_clearance_m")
-_FREE = ("gripper_yaw_offset_deg", "handeye_x", "handeye_y", "handeye_z",
-         "handeye_roll_deg", "handeye_pitch_deg", "handeye_yaw_deg", "place_x",
-         "place_y", "place_z", "place_yaw_deg", "belt_surface_z_m")
+_FREE = ("gripper_yaw_offset_deg", "place_x", "place_y", "place_z", "place_yaw_deg",
+         "belt_surface_z_m")
 #: The parameters this component checks. modulo validates its own ones through
 #: the same callback -- the "<signal>_topic" strings of every input and output,
 #: and the inherited rate. Checking those as numbers failed on the strings, so no
@@ -148,8 +138,6 @@ class ObjectFollower(LifecycleComponent):
                        user_callback=self._on_robot_state)
         self._target_in = []
         self.add_input("target", "_target_in", Float64MultiArray)
-        self._object_position_in = []
-        self.add_input("object_position", "_object_position_in", Float64MultiArray)
         self._gripper_motion_done = False
         self.add_input("gripper_motion_done", "_gripper_motion_done", Bool)
         self._gripper_has_object = False
@@ -166,7 +154,7 @@ class ObjectFollower(LifecycleComponent):
         # S7 from activation on: seq 0 = no attempt yet (Nachtrag 7 / H5).
         self._picked_id = pack_picked_id(0, 0, 0)
         self.add_output("picked_id", "_picked_id", Float64MultiArray)
-        self._follower_status = pack_follower_status(0.0, STATE_ABORT, 0, 0, 0, 0, 0)
+        self._follower_status = pack_follower_status(0.0, STATE_ABORT, 0, 0, 0, 0)
         self.add_output("follower_status", "_follower_status", Float64MultiArray)
 
         # -- Predicates -------------------------------------------------------------
@@ -202,6 +190,11 @@ class ObjectFollower(LifecycleComponent):
         if name in _BOUNDED_01:
             if not 0.0 <= value <= 1.0:
                 self.get_logger().warn(f"{name} must lie in [0, 1]")
+                return False
+            return True
+        if name in _YAW_LIMIT:
+            if not 45.0 <= value < 90.0:
+                self.get_logger().warn(f"{name} must lie in [45, 90)")
                 return False
             return True
         if name in _NON_NEGATIVE:
@@ -259,7 +252,7 @@ class ObjectFollower(LifecycleComponent):
             self._last_warn[key] = now
 
     def _on_robot_state(self) -> None:
-        """Every robot_state: into the core's ring buffer, stamped on arrival."""
+        """Every robot_state, stamped on arrival."""
         if self._robot_state.is_empty():
             return
         position = self._robot_state.get_position()
@@ -267,7 +260,6 @@ class ObjectFollower(LifecycleComponent):
         pose = Pose(*(float(v) for v in position), *(float(v) for v in orientation))
         now = self._now_s()
         self._last_robot_state = (now, pose)
-        self._core.history.add(now, pose)
         if not self._frame_reported:
             self._frame_reported = True
             frame = self._robot_state.get_reference_frame()
@@ -306,12 +298,10 @@ class ObjectFollower(LifecycleComponent):
             self._warn_throttled("robot_state", "object_follower: kein frischer "
                                  "robot_state - keine neue Zielpose")
         target = self._read("target", unpack_target, self._target_in)
-        measurement = self._read("object_position", unpack_object_position,
-                                 self._object_position_in)
         gripper = GripperFeedback(bool(self._gripper_motion_done),
                                   bool(self._gripper_has_object))
         now = self._now_s()
-        output = self._core.step(flange, target, now, measurement, gripper)
+        output = self._core.step(flange, target, now, gripper)
         for line in self._core.pop_events():
             self.get_logger().info(f"object_follower: {line}")
 
@@ -324,7 +314,7 @@ class ObjectFollower(LifecycleComponent):
         status = output.status
         self._follower_status = pack_follower_status(
             now, output.state, status.target_id, status.err_along,
-            status.err_across, status.err_z, status.w_effective)
+            status.err_across, status.err_z)
         self.set_predicate("is_tracking", output.state in (STATE_FOLLOW, STATE_DESCEND))
         self.set_predicate("is_holding_object", self._core.holding)
         self.set_predicate("has_aborted", self._core.has_aborted)

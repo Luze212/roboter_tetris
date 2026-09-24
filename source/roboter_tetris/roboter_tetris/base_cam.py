@@ -115,7 +115,7 @@ class BaseCam(LifecycleComponent):
         self.add_parameter(sr.Parameter("z_offset", 0.0, sr.ParameterType.DOUBLE),
                            "Reflexions-Offset Fließband in mm (alte Config: 15; das alte "
                            "C++ wandte ihn nicht an, daher Default 0)")
-        self.add_parameter(sr.Parameter("min_contour_area", 1500.0, sr.ParameterType.DOUBLE),
+        self.add_parameter(sr.Parameter("min_contour_area", 1000.0, sr.ParameterType.DOUBLE),
                            "Mindest-Konturfläche in px")
         self.add_parameter(sr.Parameter("depth_scale_to_mm", 1.0, sr.ParameterType.DOUBLE),
                            "mm pro Tiefen-Rohwert (16UC1-Bild). 1.0 = Werte sind bereits in mm "
@@ -183,8 +183,9 @@ class BaseCam(LifecycleComponent):
         self.add_parameter(sr.Parameter("vel_filter_alpha", DEFAULT_VEL_FILTER_ALPHA, sr.ParameterType.DOUBLE),
                            "EMA-Tiefpass der Bandgeschwindigkeit (0-1; 0.3 = 30 % neu)")
 
-        self.add_parameter(sr.Parameter("debug_enable", False, sr.ParameterType.BOOL),
-                           "Debug-Bild erzeugen und publizieren")
+        self.add_parameter(sr.Parameter("debug_enable", True, sr.ParameterType.BOOL),
+                           "Debug-Bild erzeugen und publizieren - der interface_streamer zeigt es "
+                           "(an seit dem finalen Build, Nachtrag 13 / L26)")
         self.add_parameter(sr.Parameter("camera_node", "/realsense_camera", sr.ParameterType.STRING),
                            "Node-Name des RealSense-Blocks dieser Kamera (z. B. /realsense_camera_2). "
                            "Ist er gesetzt, erzwingt die Komponente dort global_time_enabled=true, "
