@@ -3,7 +3,7 @@
 Wo was liegt und was verbindlich ist. Die Aufteilung folgt der Frage, **für wen**
 ein Dokument geschrieben ist.
 
-**Stand 23.09.2026:** Alle Komponenten sind gebaut und laufen in AICA; die
+**Stand 24.09.2026:** Alle Komponenten sind gebaut und laufen in AICA; die
 Inbetriebnahme am Aufbau ist im Gang, B23 ist erledigt. Stand und Reihenfolge:
 `uebersicht/fahrplan-aufbau.md`.
 
@@ -97,7 +97,10 @@ Erkenntnis in fünf Dateien schreiben.
 | Warum Greifzone und Wartebereich außerhalb des Bildes der Basiskamera liegen | ebd. Nachtrag 13 / L4 |
 | Wie Klötze hinter dem Bild der Basiskamera weitergeführt werden (Status 4) | ebd. Nachtrag 13 / L10; `architektur/datenvertraege.md` S3 |
 | Woher die Hand-Auge-Kalibrierung der Roboterkamera stammt | ebd. Nachtrag 13 / L11 |
-| Arbeitsraum, Greifzone, Wartepose und Folgehöhe | ebd. Nachtrag 13 / L14; `Safety/workspace_bounds.json`; `uebersicht/einrichtung-projektanwendung.md` §9 |
+| Arbeitsraum, Greifzone, Wartepose und Folgehöhe | ebd. Nachtrag 13 / L14, L15; `Safety/workspace_bounds.json`; `uebersicht/einrichtung-projektanwendung.md` §9 |
+| Erster Lauf am echten Roboter, Attractor-Verstärkung, Vorhalt, Einbrüche der 500-Hz-Schleife | ebd. Nachtrag 13 / L18; `uebersicht/fahrplan-aufbau.md` „Stand nach Termin C“ |
+| Kamerabildrate, Infrarot der Roboterkamera, keine GPU | ebd. Nachtrag 13 / L16; `uebersicht/einrichtung-projektanwendung.md` §3 |
+| Warum der Follower anfangs keine Signale hatte | ebd. Nachtrag 13 / L17 |
 | Wie der Follower startet (Abbruchpfad) und warum Arbeitsraum und Beobachtungspose keine Defaults haben | ebd. Nachtrag 8 / F3, F4 |
 | Wie `lead_time_s` eingemessen wird (B4) und was `outcome = 4` heißt | ebd. Nachtrag 9 / G7, G2 |
 | Wie die Roboterkamera wirkt und wie der Greifzyklus abläuft, warum die Freihöhe 0,49 m ist | ebd. Nachtrag 10 / J1–J8 |

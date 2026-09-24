@@ -5,7 +5,9 @@ Robot-frame numbers from the setup: belt surface touched at x = -0.70 ... -0.93,
 y = -0.20 ... +0.07 (Nachtrag 5 / M9); place pose x = -0.316, y = +0.476.
 """
 
+import json
 import math
+import os
 from dataclasses import replace
 
 from roboter_tetris.contracts import (
@@ -18,11 +20,13 @@ from roboter_tetris.follower_logic import (
     yaw_of,
 )
 
-# Provisional values for the tests only -- B10 and B8 are open.
+# Test values, wider than the real workspace (defaults: Nachtrag 13 / L15).
+# lead_time_s pinned to the theory value 1/K: the lead arithmetic below uses 0.2.
 PARAMS = FollowerParams(
     ws_x_min=-1.10, ws_x_max=-0.20, ws_y_min=-0.60, ws_y_max=0.60,
     ws_z_min=0.30, ws_z_max=0.80,
-    observe_x=-0.80, observe_y=-0.10, observe_z=0.60, observe_yaw_deg=90.0)
+    observe_x=-0.80, observe_y=-0.10, observe_z=0.60, observe_yaw_deg=90.0,
+    lead_time_s=0.2)
 DOWN = vertical_orientation(0.0)
 
 
@@ -61,10 +65,31 @@ def test_measured_place_orientation_has_the_same_form():
 
 # -- Parameters -------------------------------------------------------------------------
 
+_WORKSPACE_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "..", "roboter_tetris",
+    "Safety", "workspace_bounds.json")
+
+
 def test_missing_parameters_are_named():
-    problems = FollowerParams(observe_x=-0.8).problems()
+    """A field emptied in the AICA interface arrives as None."""
+    problems = FollowerParams(ws_x_min=None, observe_yaw_deg=None).problems()
     assert len(problems) == 1 and "ws_x_min" in problems[0] \
-        and "observe_yaw_deg" in problems[0] and "observe_x," not in problems[0]
+        and "observe_yaw_deg" in problems[0] and "observe_x" not in problems[0]
+
+
+def test_the_defaults_are_a_consistent_set():
+    """Since 24.09.2026 (Nachtrag 13 / L15) the component starts without any
+    hand-entered value: workspace, observation, transfer and place pose fit."""
+    assert FollowerParams().problems() == []
+
+
+def test_the_default_workspace_is_the_documented_one():
+    """The runtime parameters are a copy of Safety/workspace_bounds.json (B10)."""
+    with open(_WORKSPACE_FILE, encoding="utf-8") as fh:
+        bounds = json.load(fh)["bounds_m"]
+    params = FollowerParams()
+    for key, value in bounds.items():
+        assert getattr(params, f"ws_{key}") == value, key
 
 
 def test_a_complete_consistent_set_has_no_problems():

@@ -22,7 +22,7 @@ frühere Festlegung berührt; an der alten Stelle steht dann ein Verweis.
 | Nachtrag 10 | Bau `object_follower` 4c/4d: J1 Freihöhe, J2 Absenkzeit, J3–J8 |
 | Nachtrag 11 | Bau `interface_streamer`: V1–V3 |
 | Nachtrag 12 | Inbetriebnahme am Aufbau (22.09.): K1–K6, u. a. 180° `base`/`world`, falsche Gier der Altkalibrierung |
-| **Nachtrag 13** | **Audit und Aufbau (23.09.):** L1 Audit, L2 Datenrate/Latenz, L3 Hardware-Takt, L4 Greifer im Bild, L5 Roboterkamera, L6 B23 abgeschlossen (Neigung, Parallaxe, neue Extrinsik), L7 Bandgeschwindigkeit, L8 Standardwerte, L9 Block 3 und Pool-Mindestgeschwindigkeit, L10 Weiterführung hinter dem Bild, L11 Roboterkamera und Hand-Auge, L12 Nah-Gate ohne fehlende Tiefe, L13 Erkennung der Roboterkamera, L14 Arbeitsraum und Greifzone |
+| **Nachtrag 13** | **Audit und Aufbau (23.09.):** L1 Audit, L2 Datenrate/Latenz, L3 Hardware-Takt, L4 Greifer im Bild, L5 Roboterkamera, L6 B23 abgeschlossen (Neigung, Parallaxe, neue Extrinsik), L7 Bandgeschwindigkeit, L8 Standardwerte, L9 Block 3 und Pool-Mindestgeschwindigkeit, L10 Weiterführung hinter dem Bild, L11 Roboterkamera und Hand-Auge, L12 Nah-Gate ohne fehlende Tiefe, L13 Erkennung der Roboterkamera, L14 Arbeitsraum und Greifzone, L15 Standardwerte für Arbeitsraum und Beobachtungspose (24.09.), L16 Kameras 15 Bilder/s, Infrarot aus (24.09.), L17 Follower ohne Signale, Fake-Zeitstempel (24.09.), L18 Block 7 gedrosselt bestanden (24.09.) |
 
 ⚠️ Namensgleichheit: **F1–F3 in Nachtrag 2** und **F1–F6 in Nachtrag 8** sind
 verschiedene Punkte — im Text immer mit Nachtragsnummer zitiert.
@@ -2382,6 +2382,10 @@ Inbetriebnahme-Schalter und `has_object` in `WARTEN` als Auslöser (flackert bei
 
 ### F3 — Arbeitsraum und Beobachtungspose haben keine Defaults
 
+> ⚠️ **Überholt durch Nachtrag 13 / L15 (24.09.2026):** Seit der Festlegung von B10
+> sind beide als Standardwert eingetragen. Pflichtparameter bleiben sie: leer →
+> `configure` scheitert.
+
 `ws_x_min` … `ws_z_max` (B10) und `observe_x/y/z/yaw_deg` (B8) sind
 **Pflichtparameter** (`default_value: null`). Fehlt einer, schlägt `on_configure`
 mit einer Meldung fehl, die alle fehlenden nennt. Grund für den Arbeitsraum ist die
@@ -3051,8 +3055,10 @@ y ≈ 0,46 … 1,03 ab; die übrigen ~0,84 m (6,5 s) sieht sie nicht.
 `camera_node` `/realsense_camera`, `belt_surface_z_mm` 53,6,
 `top_depth_bias_mm` 11,5. `vectoring`:
 Einschwing-Halbfenster 5 (zählt Messungen; bei 5–7 Messungen/s ≈ 0,7–1 s).
-⚠️ **Gespeicherte Blockparameter gehen vor:** Neue Standardwerte gelten nur für
-neu eingefügte Blöcke. `rate` bleibt in der Oberfläche (K2).
+⚠️ **Von Hand gesetzte Blockparameter gehen vor.** Neue Standardwerte übernimmt
+nach dem Build auch ein bestehender Block, wo der Parameter auf dem Standardwert
+steht (korrigiert 24.09.2026, Nutzer; vorher hieß es „nur neu eingefügte Blöcke“).
+`rate` bleibt in der Oberfläche (K2).
 
 ### L9 — Block 3: Schätzung je Klotz stimmt, Pool und Bildrand nicht
 
@@ -3252,3 +3258,126 @@ Bereich), **z min 0,3086** (geschlossene Backenspitze 10 mm über dem Band:
   Roboterkamera spricht nichts gegen tieferes Folgen: **`observe_z` 0,45,
   `t_descend_s` 1,2** (0,14 m / 0,15 m/s + Einschwingen) → Greifebene y ≈ +0,20,
   20 cm Fenster. Für die Roboterkamera später wieder höher (B8).
+
+### L15 — Arbeitsraum und Beobachtungspose als Standardwert (24.09.2026)
+
+Nutzer: Die Werte aus L14 gelten als fest und werden Standardwerte. Damit ist F3
+(Nachtrag 8) in seinem Grund überholt — der Arbeitsraum ist dokumentiert
+festgelegt, die Beobachtungspose ist für den Betrieb ohne Roboterkamera entschieden.
+
+- **Standardwerte** in `FollowerParams` und in der Komponentenbeschreibung:
+  `ws_*` = `Safety/workspace_bounds.json` (x −1,0 … −0,30, y −0,32 … +0,48,
+  z 0,3086 … 0,60); `observe_*` = −0,816 / +0,35 / 0,45 / 90°.
+- **Pflicht bleibt:** Wird ein Feld in der Oberfläche geleert, scheitert
+  `configure` wie bisher mit der Liste der fehlenden. Die Prüfung als Satz
+  (Beobachtungs-, Ablagepose und Freihöhe im Arbeitsraum) bleibt unverändert.
+- **Zwei Stellen, eine Quelle:** Ein Test prüft, dass die Standardwerte gleich
+  `workspace_bounds.json` sind. Wird der Arbeitsraum neu abgefahren, Datei,
+  `FollowerParams` und Komponentenbeschreibung gemeinsam ändern.
+- **Grenzen:** Von Hand gesetzte Werte eines Blocks gehen dem Standardwert vor. Wird
+  Band oder Roboter verschoben, gilt der Standardwert unbemerkt weiter —
+  dann B10 neu abfahren. Mit Roboterkamera muss `observe_z` wieder höher (B8).
+
+### L16 — Kameras auf 15 Bilder/s, Infrarotbilder der Roboterkamera aus (24.09.2026)
+
+Der Rechner hat **keine NVIDIA-Grafik** (Intel Core 3 100U mit integrierter Grafik,
+2 Performance- und 4 Effizienzkerne): „Enable GPU capabilities“ im AICA-Launcher
+kann nicht funktionieren, und die eigenen Komponenten rechnen ohnehin auf der CPU.
+Entlastet wurde deshalb an den Kameratreibern (`event_engine`, dort läuft auch der
+500-Hz-Regelkreis).
+
+- **Profile auf 15 Bilder/s** (Nutzer, im AICA-Block): Basiskamera Farbe
+  `1280x720x15`, Tiefe `640x480x30` (die L515 kann nur 30); Roboterkamera beide
+  `848x480x15`. Gemessen über `camera_info`: 15,0 / 15,0 Bilder/s. `base_cam`
+  liefert unverändert **8,6 Messungen/s**, Alter bei Ankunft Median 161 ms, vor der
+  nächsten Median 263 ms / 95 % 357 ms — sie war nicht durch die Kamerarate
+  begrenzt. ⚠️ `ros2 topic hz` auf Bild-Topics misst sich selbst (4–7/s); Raten
+  über die kleinen `camera_info`-Topics messen.
+- **Infrarotbilder der Roboterkamera aus:** Der D435i-Treiber publizierte
+  `infra1`/`infra2` und richtete die Tiefe zusätzlich auf `infra1` aus. Der
+  Parameter `enable_infra` des AICA-Blocks gilt nur für die L515 und erreicht sie
+  nicht. Zur Laufzeit abgeschaltet: `event_engine` **123 → 106 % CPU**, ausgerichtete
+  Tiefe 12,9 → 14,6 Bilder/s. **Dauerhaft:** `robot_cam_2` schaltet sie bei jeder
+  Aktivierung über den neuen Parameter `camera_node` (Standard
+  `/realsense_camera_2`) ab — wie `base_cam` `global_time_enabled` erzwingt.
+  `robot_cam` hat das nicht (nicht in der Anwendung, L5).
+  ⚠️ **Nach dem Build hängte sich damit die Anwendung auf:** Die Roboterkamera
+  antwortete nicht mehr auf Parameteranfragen, die ausgerichtete Tiefe blieb aus,
+  und nach dem Neustart luden Greifer und `data_tracker` nicht mehr, und AICA ließ
+  sich nicht mehr beenden. Mit geleertem `camera_node` lief alles wieder.
+  Vermutung: Das Umschalten der Ströme kurz nach dem Start des Treibers blockiert
+  ihn und damit den `event_engine`; von Hand im laufenden Betrieb ging es. Bis das
+  geklärt ist, **`camera_node` am Block leer lassen** — seit 24.09. auch der
+  Standardwert.
+- **Größter verbleibender Verbraucher außerhalb von AICA:** die AICA-Oberfläche
+  (`WebKitWebProcess`) mit ~100 % eines Kerns — während eines Laufs minimieren.
+
+### L17 — Der Follower hatte keine Signale; der Fake stempelte in Laufzeit (24.09.2026)
+
+Beim Trockenlauf zu Block 7 blieb die Statusanzeige des Followers leer. Im Log beim
+Laden: `Failed to add input 'robot_state': ParameterError … must be real number,
+not str`, ebenso für alle anderen Ein- und Ausgänge.
+
+- **Ursache:** modulo legt zu jedem Signal einen Text-Parameter `<signal>_topic`
+  an und prüft ihn über dasselbe `on_validate_parameter_callback`. Die Prüfung des
+  Followers behandelte **jeden** Parameter als Zahl (`math.isfinite`) — der Aufruf
+  scheiterte an der Zeichenkette, das Signal wurde nicht angelegt. Seit dem ersten
+  Build; aufgefallen ist es erst jetzt, weil der Follower bisher nie verdrahtet lief.
+  Die anderen Komponenten prüfen nur namentlich aufgezählte Parameter.
+- **Korrektur:** Die Prüfung greift nur für die eigenen Parameter
+  (`FollowerParams` und `robot_state_max_age_s`). Test in der AICA-Umgebung: zu
+  jedem Signal existiert der Topic-Parameter.
+- **`fake_objects.py`:** stempelte S1 mit Sekunden seit dem Start. `vectoring` und
+  `priority_handler` rechnen nur mit Zeitdifferenzen und liefen damit (Pool
+  −70,0 mm/s bei `--velocity -0.07 --rate 8`), der Follower altert Ziele aber gegen
+  seine Uhr und hätte sie als ~56 Jahre alt verworfen. Jetzt trägt S1 die ROS-Zeit;
+  die Szene läuft weiter in Sekunden seit dem Start.
+
+### L18 — Block 7: erster Lauf am echten Roboter, gedrosselt, bestanden (24.09.2026)
+
+Zielquelle `fake_objects.py` (`--velocity -0.07 --rate 8`), Basiskamera aus, Band
+steht und ist leer, IK-Controller `max_linear_velocity` 0,10 m/s, Hand am Not-Aus.
+Kette: `object_follower.target_pose` → Attractor (`attractor`) → `twist` →
+IK-Controller. Mitgelesen: Zustand, Zielpose, Flanschpose, `gripper_close`; ein
+Wächter hätte den Fake beim Verlassen des erwarteten Quaders beendet (löste nie aus).
+
+1. **Trockenlauf ohne Anschluss:** Zustände und Zielposen plausibel (ANFAHREN auf den
+   Zonenanfang y +0,40 geklemmt, FOLGEN mit 70 mm/s, Gier 90°). Beobachtet: Nach der
+   Aktivierung bleibt der Follower in ABBRUCH, bis der Flansch über der Freihöhe
+   steht (≥ 0,48) — ohne angeschlossene Bewegung also für immer; gewollt.
+2. **Verdrahtungsfehler vor dem ersten Lauf:** `target_pose` hing direkt am
+   IK-Controller statt am Attractor — vor dem Start durch Mitlesen gefunden. Vor jedem
+   Lauf prüfen: Abnehmer von `target_pose` ist `signal_point_attractor`.
+3. **Folgen ohne Absenken, Attractor K = 1 (AICA-Standard):** Flansch 68–70 mm hinter
+   der Zielpose = v/K. **`linear_gains` [5.0] und `rate` 50 Hz am Attractor gesetzt**
+   (Einrichtung §2), `attractor_v_max_mps` im `priority_handler` = 0,10 (kleinere
+   der beiden Grenzen).
+4. **Mit K = 5:** Flansch 14 mm hinter der Zielpose (70/5), der Vorhalt 0,2 s gleicht
+   es aus: **`err_laengs` −2,4 … −2,8 mm, `err_quer` ±0,1 mm**, Einschwingen ~1,5 s.
+   Feinabstimmung `lead_time_s` ≈ 0,24 erst am echten Band (B4).
+5. **Mit Absenken, `descend_speed_mps` 0,15:** kein Griff — viermal ABSENKEN → FOLGEN.
+   Ursache: Die IK-Grenze gilt für den **Betrag** der Geschwindigkeit; Band 0,07 und
+   Absenken 0,15 ergeben 0,17 m/s, gekappt auf 0,10 fällt der Arm längs zurück
+   (−11 … −15 mm) und der Rücksprung F3 greift — Schutzfunktion korrekt.
+6. **`descend_speed_mps` 0,05, `t_descend_s` 3,0, `timeout_track_s` 5:** voller
+   Zyklus. ABSENKEN bei `err_laengs` −2 … −3,5 mm von 0,45 auf **0,339** (Klotz
+   100 mm: 53,6 + 50 + 235 = 338,6 mm), GREIFEN, Greifer zu, **„Greifer geschlossen,
+   kein Klotz (Fehlgriff)“** nach 1 s, öffnen, senkrecht auf 0,49, WARTEN. Klotz 2
+   (1,06 s bis zur Greifebene gewählt): „Greifebene überschritten, bevor abgesenkt
+   wurde“ → sauberer Abbruch. `picked_id` gibt jedes Mal das nächste Ziel frei.
+
+7. **Betriebsgeschwindigkeit (IK 0,30, `descend_speed_mps` 0,15, `t_descend_s` 1,2), Fake
+   0,13 m/s:** Zyklus in ~2 s, `err_laengs` beim Greifen −4,6 … −5,0 mm — an der
+   Toleranzgrenze. Der Rest ist in beiden Läufen 0,037 s × v → **`lead_time_s` 0,24**
+   (Standardwert seit dem Build vom 24.09.), `attractor_v_max_mps` Standard 0,30,
+   `t_descend_s` Standard 1,2 (Absenken gemessen ~1,0 s; vorher 2,0 für `observe_z` 0,60).
+   Der Kontrolllauf mit 0,24 brach an einem **Einbruch der 500-Hz-Schleife** ab
+   (4/500 Hz für ~1 s, „RTDE Pipeline overflowed“, External Control stoppte);
+   Gate brach korrekt ab. Die Schleife läuft auch in Ruhe nur mit 84–86 %; der
+   Rechner ist zeitweise voll (Warteschlange 5–13 bei 8 Threads), `event_engine`
+   wächst (430 → 705 MB). Mitlesen jetzt ohne die 500-Hz-Flanschpose.
+
+**Offen:** Kontrolllauf `lead_time_s` 0,24; Ablegen (nur mit echtem Klotz im Greifer), IK auf Betriebswert mit
+`descend_speed_mps` 0,15 und `t_descend_s` 1,2 zurück, dann Basiskamera und echtes
+Band. Beobachtung: Der `priority_handler` wählte Klotz 2 mit 1,06 s Restzeit — die
+Einschwingzeit des Followers (~1,5 s) steckt nicht in der Erreichbarkeit.

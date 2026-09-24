@@ -139,7 +139,7 @@ Werte, die in zwei Komponenten zusammenpassen müssen:
 
 | Wert hier | muss passen zu | Grund |
 |---|---|---|
-| `lead_time_s` (Follower) | `linear_gains` K des Attractors | Vorhalt ≈ 1/K; eingemessen über `err_laengs` (Nachtrag 9 / G7) |
+| `lead_time_s` (Follower) | `linear_gains` K des Attractors | Vorhalt ≈ 1/K; eingemessen über `err_laengs` (Nachtrag 9 / G7) — am Roboter 0,24 s bei K = 5 (Nachtrag 13 / L18) |
 | `attractor_gain`, `attractor_v_max_mps` (`priority_handler`) | Attractor-Gain; kleineres `max_linear_velocity` aus Attractor und IK-Controller | Anfahrzeit in der Erreichbarkeitsprüfung |
 | `t_descend_s` (`priority_handler`) | `(observe_z − Greifhöhe) / descend_speed_mps` des Followers | Lage der Greifebene (Nachtrag 10 / J2) |
 | `min_graspable_height_m` (`priority_handler`) | `2 · min_grip_height_m` des Followers | kein Klotz, den der Follower nicht fassen kann |

@@ -121,24 +121,29 @@ def nearest_equivalent(yaw: float, reference: float) -> float:
 
 # -- Parameters ---------------------------------------------------------------------
 
-#: No default on purpose (Nachtrag 8 / F3): the workspace is a safety boundary
-#: (B10, Safety/README), the observation pose is still open (B8).
+#: Must not be empty; checked as a set before configure (Nachtrag 8 / F3).
+#: Without a default until 24.09.2026; since then the workspace fixed at the
+#: setup (B10, Safety/workspace_bounds.json) and the observation pose for
+#: following without the robot camera (Nachtrag 13 / L15).
 REQUIRED = ("ws_x_min", "ws_x_max", "ws_y_min", "ws_y_max", "ws_z_min",
             "ws_z_max", "observe_x", "observe_y", "observe_z", "observe_yaw_deg")
 
 
 @dataclass
 class FollowerParams:
-    ws_x_min: Optional[float] = None
-    ws_x_max: Optional[float] = None
-    ws_y_min: Optional[float] = None
-    ws_y_max: Optional[float] = None
-    ws_z_min: Optional[float] = None
-    ws_z_max: Optional[float] = None
-    observe_x: Optional[float] = None
-    observe_y: Optional[float] = None
-    observe_z: Optional[float] = None
-    observe_yaw_deg: Optional[float] = None
+    #: Workspace of the flange = Safety/workspace_bounds.json (Nachtrag 13 / L14).
+    ws_x_min: Optional[float] = -1.0
+    ws_x_max: Optional[float] = -0.30
+    ws_y_min: Optional[float] = -0.32
+    ws_y_max: Optional[float] = 0.48
+    ws_z_min: Optional[float] = 0.3086
+    ws_z_max: Optional[float] = 0.60
+    #: Observation pose: belt middle at the start of the grasp zone (y +0.40),
+    #: low enough to follow without the robot camera (B8, Nachtrag 13 / L14).
+    observe_x: Optional[float] = -0.816
+    observe_y: Optional[float] = 0.35
+    observe_z: Optional[float] = 0.45
+    observe_yaw_deg: Optional[float] = 90.0
     #: Free height of the flange: transfer, and where the abort path rises to.
     #: D12 plus the held block: belt 53.6 + standing block 100 + lower half of
     #: a held block 50 + grip point 235 + air 50 mm -> 0.49 m (Nachtrag 10 / J1).
@@ -149,8 +154,10 @@ class FollowerParams:
     max_target_jump_m: float = 0.05
     # -- 4b: tracking --------------------------------------------------------
     #: Lead as a time: target = prediction + v * lead_time_s. Theory 1/K
-    #: (K = 5 -> 0.2 s); calibrated in 4b (B4).
-    lead_time_s: float = 0.2
+    #: (K = 5 -> 0.2 s). 0.24 since 24.09.2026: at 0.07 and 0.13 m/s the flange
+    #: stayed 0.037 s x v behind the block with 0.2 (Nachtrag 13 / L18); with
+    #: real camera latency still to be checked (B4).
+    lead_time_s: float = 0.24
     #: Added to the prediction horizon (D7).
     latency_compensation_s: float = 0.0
     #: Cap of the prediction horizon, gate check 3 (D14). Measured at the
@@ -202,7 +209,7 @@ class FollowerParams:
     #: 0.3086), and 53.6 + 21 + 235 = 309.6 mm clears it (Nachtrag 13 / L14).
     #: Pad 11...31 mm: a 30 mm block is still gripped. Was 0.015 (B15).
     min_grip_height_m: float = 0.021
-    #: 0.15 m/s: observation height 0.60 -> grip height 0.34 in 1.7 s. Couples
+    #: 0.15 m/s: observation height 0.45 -> grip height 0.31...0.34 in ~1 s. Couples
     #: to t_descend_s of the priority_handler (Nachtrag 10 / J2).
     descend_speed_mps: float = 0.15
     #: Rise above the grip height while still moving with the belt.

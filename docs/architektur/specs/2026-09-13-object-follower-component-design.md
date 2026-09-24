@@ -163,7 +163,7 @@ leicht abweicht; eine Strecke müsste man dafür neu einmessen. Wird später der
 
 | Name | Typ | Bedeutung |
 |---|---|---|
-| `observe_x/y/z` | double | Beobachtungspose (B8) — Orientierung **fest senkrecht**. **Pflicht, kein Default** (F3) |
+| `observe_x/y/z` | double | Beobachtungspose (B8) — Orientierung **fest senkrecht**. **Pflicht**; Default seit 24.09.2026 −0,816 / +0,35 / 0,45 (Nachtrag 13 / L15, vorher kein Default nach F3) |
 | `observe_yaw_deg` | double | Gierwinkel der Beobachtungspose — Richtung der Werkzeug-x-Achse. Pflicht (F3) |
 | `place_x/y/z` | double | Ablagepose über der Auffangkiste (B9) |
 | `transfer_height_m` | double | Freihöhe für die Transferfahrt (D12), **0,49** — mit dem gehaltenen Klotz (Nachtrag 10 / J1); auch die Höhe, auf die der Abbruchpfad steigt |
@@ -185,7 +185,7 @@ leicht abweicht; eine Strecke müsste man dafür neu einmessen. Wird später der
 
 | Name | Typ | Bedeutung |
 |---|---|---|
-| `ws_x_min` … `ws_z_max` | double | Arbeitsraum (B10) — **nicht** die Greifzone. **Pflicht, kein Default** (Nachtrag 8 / F3) |
+| `ws_x_min` … `ws_z_max` | double | Arbeitsraum (B10) — **nicht** die Greifzone. **Pflicht**; Default seit 24.09.2026 = `Safety/workspace_bounds.json` (Nachtrag 13 / L15, vorher kein Default nach Nachtrag 8 / F3) |
 | `max_target_jump_m` | double | Sprungerkennung im Sicherheitsgate (D15), vorläufig 0,05 |
 | `robot_state_max_age_s` | double | 0,2 — älter gilt die Flanschpose als unbekannt, keine neue Zielpose (F4) |
 | `pose_tolerance_m` | double | 0,01 — „angekommen" für stehende Ziele; ersetzt `is_in_range` des Attractors, das kein Signal ist (F4) |

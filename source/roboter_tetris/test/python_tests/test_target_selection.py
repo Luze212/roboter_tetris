@@ -31,8 +31,9 @@ FLANGE = (0.80, -0.60)          # waiting above the zone
 # A fixed test zone, independent of the placeholder defaults:
 # y -1.0 ... -0.5  ->  s = -y from 0.5 to 1.0.
 # Grasp plane: 1.0 - 0.1 * (1.0 + 1.0 + 0.5) * 1.2 = 0.70, i.e. y = -0.70.
+# attractor_v_max_mps pinned: the reachability numbers below are worked out for 0.25.
 P = SelectorParams(zone_x_min=0.6, zone_x_max=1.0, zone_y_min=-1.0, zone_y_max=-0.5,
-                   t_descend_s=1.0)
+                   t_descend_s=1.0, attractor_v_max_mps=0.25)
 
 
 def _track(tid, y, x=0.80, status=TRACK_FINAL, length=0.05, width=0.05,

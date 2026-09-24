@@ -59,7 +59,7 @@
   ],
   "parameters": [
     {
-      "display_name": "Greifzone x min (m)",
+      "display_name": "Greifzone x min (m) [zone_x_min]",
       "description": "Untere x-Grenze der Greifzone in world. Festgelegt 23.09.2026 (B19, Nachtrag 13 / L14): im Arbeitsraum, außerhalb des Bildes der Basiskamera; y +0,40 ... -0,22 bei Bandende -0,32.",
       "parameter_name": "zone_x_min",
       "parameter_type": "double",
@@ -67,7 +67,7 @@
       "dynamic": true
     },
     {
-      "display_name": "Greifzone x max (m)",
+      "display_name": "Greifzone x max (m) [zone_x_max]",
       "description": "Obere x-Grenze der Greifzone in world. Festgelegt 23.09.2026 (B19, Nachtrag 13 / L14): im Arbeitsraum, außerhalb des Bildes der Basiskamera; y +0,40 ... -0,22 bei Bandende -0,32.",
       "parameter_name": "zone_x_max",
       "parameter_type": "double",
@@ -75,7 +75,7 @@
       "dynamic": true
     },
     {
-      "display_name": "Greifzone y min (m)",
+      "display_name": "Greifzone y min (m) [zone_y_min]",
       "description": "Untere y-Grenze der Greifzone in world. Festgelegt 23.09.2026 (B19, Nachtrag 13 / L14): im Arbeitsraum, außerhalb des Bildes der Basiskamera; y +0,40 ... -0,22 bei Bandende -0,32.",
       "parameter_name": "zone_y_min",
       "parameter_type": "double",
@@ -83,7 +83,7 @@
       "dynamic": true
     },
     {
-      "display_name": "Greifzone y max (m)",
+      "display_name": "Greifzone y max (m) [zone_y_max]",
       "description": "Obere y-Grenze der Greifzone in world. Festgelegt 23.09.2026 (B19, Nachtrag 13 / L14): im Arbeitsraum, außerhalb des Bildes der Basiskamera; y +0,40 ... -0,22 bei Bandende -0,32.",
       "parameter_name": "zone_y_max",
       "parameter_type": "double",
@@ -91,15 +91,15 @@
       "dynamic": true
     },
     {
-      "display_name": "Anfahrgeschwindigkeit max (m/s)",
-      "description": "Der kleinere Wert aus max_linear_velocity von Attractor und IK-Controller. Bindend ist meist der IK-Controller, Default 0,25 (A1).",
+      "display_name": "Anfahrgeschwindigkeit max (m/s) [attractor_v_max_mps]",
+      "description": "Der kleinere Wert aus max_linear_velocity von Attractor und IK-Controller. Bindend ist meist der IK-Controller; für das laufende Band 0,30 (Einrichtung §2, Nachtrag 13 / L18). Bei gedrosseltem IK-Controller hier denselben kleineren Wert eintragen.",
       "parameter_name": "attractor_v_max_mps",
       "parameter_type": "double",
-      "default_value": "0.25",
+      "default_value": "0.30",
       "dynamic": true
     },
     {
-      "display_name": "Attractor-Verstärkung K",
+      "display_name": "Attractor-Verstärkung K [attractor_gain]",
       "description": "linear_gains des Signal Point Attractors, wie dort eingestellt. Das Einschwingen dauert etwa 3/K; die Einrichtung sieht K ≈ 5 vor.",
       "parameter_name": "attractor_gain",
       "parameter_type": "double",
@@ -107,15 +107,15 @@
       "dynamic": true
     },
     {
-      "display_name": "Absenkzeit (s)",
-      "description": "Dauer des Absenkens von der Folgehöhe auf die Greifhöhe: (observe_z - Greifhöhe) / descend_speed_mps des object_follower plus Einschwingen - mit 0,60 m, 0,34 m und 0,15 m/s rund 2 s. Geht in die Lage der Greifebene ein. (D22, in Stufe 4d messen)",
+      "display_name": "Absenkzeit (s) [t_descend_s]",
+      "description": "Dauer des Absenkens von der Folgehöhe auf die Greifhöhe: (observe_z - Greifhöhe) / descend_speed_mps des object_follower plus Einschwingen - mit 0,45 m, 0,31...0,34 m und 0,15 m/s rund 1,2 s (am Roboter ~1,0 s gemessen, Nachtrag 13 / L18). Geht in die Lage der Greifebene ein. Gedrosselt mit langsamerem Absenken entsprechend höher.",
       "parameter_name": "t_descend_s",
       "parameter_type": "double",
-      "default_value": "2.0",
+      "default_value": "1.2",
       "dynamic": true
     },
     {
-      "display_name": "Greifzeit (s)",
+      "display_name": "Greifzeit (s) [t_grasp_s]",
       "description": "Dauer des Schließens bis motion_done. (D22)",
       "parameter_name": "t_grasp_s",
       "parameter_type": "double",
@@ -123,7 +123,7 @@
       "dynamic": true
     },
     {
-      "display_name": "Hebezeit (s)",
+      "display_name": "Hebezeit (s) [t_lift_s]",
       "description": "Dauer des Hebens bis lift_clearance_m - so lange fährt der Roboter noch mit dem Band. (D22)",
       "parameter_name": "t_lift_s",
       "parameter_type": "double",
@@ -131,7 +131,7 @@
       "dynamic": true
     },
     {
-      "display_name": "Aufschlag Greifprozess",
+      "display_name": "Aufschlag Greifprozess [grasp_time_margin]",
       "description": "Faktor auf die Dauer des Greifprozesses bei der Lage der Greifebene. Zu knapp: Griffe beginnen, die vor dem Zonenende nicht fertig werden. Zu großzügig: unnötig viele verpasste Klötze. (D22)",
       "parameter_name": "grasp_time_margin",
       "parameter_type": "double",
@@ -139,7 +139,7 @@
       "dynamic": true
     },
     {
-      "display_name": "Sicherheitsfaktor Erreichbarkeit",
+      "display_name": "Sicherheitsfaktor Erreichbarkeit [reach_safety_factor]",
       "description": "Erreichbar heißt: Zeit bis zur Greifebene > Faktor × Anfahrzeit. Wirkt nur auf das Anfahren.",
       "parameter_name": "reach_safety_factor",
       "parameter_type": "double",
@@ -147,7 +147,7 @@
       "dynamic": true
     },
     {
-      "display_name": "Mindesthöhe (m)",
+      "display_name": "Mindesthöhe (m) [min_graspable_height_m]",
       "description": "Flachere Klötze werden nicht gewählt - doppelte min_grip_height_m des Followers. (B15, vorläufig mit 5 mm Luft)",
       "parameter_name": "min_graspable_height_m",
       "parameter_type": "double",
@@ -155,7 +155,7 @@
       "dynamic": true
     },
     {
-      "display_name": "Greiferöffnung (m)",
+      "display_name": "Greiferöffnung (m) [max_gripper_opening_m]",
       "description": "Backenabstand bei offenem Greifer, gemessen 0,127. (B16)",
       "parameter_name": "max_gripper_opening_m",
       "parameter_type": "double",
@@ -163,7 +163,7 @@
       "dynamic": true
     },
     {
-      "display_name": "Greifer-Reserve (m)",
+      "display_name": "Greifer-Reserve (m) [gripper_margin_m]",
       "description": "Reserve zur Öffnungsweite. Geprüft wird die Diagonale des Klotzes, weil der Gierwinkel des Followers hier unbekannt ist.",
       "parameter_name": "gripper_margin_m",
       "parameter_type": "double",

@@ -1,6 +1,6 @@
 # Einrichtung der Projektanwendung in AICA
 
-**Stand 23.09.2026** (angelegt 14.09.). Was beim Anlegen der AICA-Anwendung für
+**Stand 24.09.2026** (angelegt 14.09.). Was beim Anlegen der AICA-Anwendung für
 den On-the-fly-Pick gesetzt werden muss — und warum die Defaults nicht taugen.
 Verdrahtung der neuen Komponenten: §6; Werte für den virtuellen Roboter: §9;
 Reihenfolge am Aufbau: `fahrplan-aufbau.md`; Kopplungen zwischen Parametern:
@@ -8,9 +8,9 @@ Reihenfolge am Aufbau: `fahrplan-aufbau.md`; Kopplungen zwischen Parametern:
 
 > **Seit 23.09.2026 stehen die gemessenen Werte der Basiskamera als Standardwerte
 > im Paket** (Kalibrierung, Trackergrenzen, Messregion, `camera_node`,
-> Bandhöhe, Tiefenversatz; `entscheidungen.md` Nachtrag 13 / L6, L8). Sie gelten
-> nur für **neu eingefügte** Blöcke — ein bestehender Block behält seine
-> gespeicherten Werte.
+> Bandhöhe, Tiefenversatz; `entscheidungen.md` Nachtrag 13 / L6, L8). Nach dem
+> Build gelten sie auch in **bestehenden** Blöcken, sofern der Parameter dort auf
+> dem Standardwert steht; ein von Hand gesetzter Wert bleibt (Nutzer, 24.09.2026).
 
 Grundlage: die Messungen am Aufbau vom 14.09.2026 und die Auswertung der
 Komponentenbeschreibungen im AICA-Image (`v2.0.5-jazzy`, core v5.0.0).
@@ -32,7 +32,7 @@ Komponentenbeschreibungen im AICA-Image (`v2.0.5-jazzy`, core v5.0.0).
 | **`rgb_camera.global_time_enabled`** der **Basiskamera** | **`true`** | **Kritisch.** Steht er auf `false`, stempelt die L515 in ihrer Hardwareuhr: fremde Epoche (gemessen: Jahr 2006), Drift von **3,9 ms/s** gegen die ROS-Zeit, und nach wenigen Minuten bleibt der Stempel ganz stehen. Dann verwirft das Frame-Gating in `base_cam` jedes Bild nach dem ersten und die Objektliste bleibt leer. Am 14.09. genau so gemessen. |
 | **`depth_module.global_time_enabled`** der Basiskamera | **`true`** | dito |
 | Beides bei der **Roboterkamera** | `true` | steht dort bereits richtig — beim Neuanlegen nicht verlieren. Der Follower ordnet ihre Bilder über die Bildzeit seinem Ringpuffer zu (B24) |
-| **`object_follower`: `ws_*`, `observe_*`** | ohne Default — **Werte in §9** | Arbeitsraum (B10, festgelegt) und Beobachtungspose (B8) — ohne sie scheitert `configure` mit einer Liste der fehlenden |
+| **`object_follower`: `ws_*`, `observe_*`** | seit 24.09.2026 Standardwert — **Werte in §9**, prüfen | Arbeitsraum (B10, festgelegt) und Beobachtungspose (B8), Nachtrag 13 / L15. Leer → `configure` scheitert mit einer Liste der fehlenden. Bis zum Build sind die Felder leer |
 
 > ⚠️ **Der AICA-RealSense-Block exponiert diese Parameter nicht** (er bietet 25,
 > diese sind nicht dabei). Sie lassen sich nur zur Laufzeit über den
@@ -117,7 +117,11 @@ Matrixrechnung.
 aus `linear_gains`, `attractor_v_max_mps` = der **kleinere** der beiden
 `max_linear_velocity`. Er rechnet damit die Anfahrzeit; passen die Werte nicht,
 wählt er Klötze, die nicht zu schaffen sind, oder verwirft erreichbare. Defaults:
-5,0 und 0,25.
+5,0 und **0,30** (seit 24.09.2026, IK-Controller für das Band auf 0,30).
+
+**Am Aufbau gesetzt und bestätigt (24.09.2026, Nachtrag 13 / L18):** Attractor
+`linear_gains` [5.0] und `rate` 50; IK-Controller `max_linear_velocity` 0,30 —
+beides AICA-Blöcke, also von Hand. Mit K = 1 lief der Flansch 70 mm hinterher.
 
 ---
 
@@ -127,13 +131,20 @@ wählt er Klötze, die nicht zu schaffen sind, oder verwirft erreichbare. Defaul
 |---|---|---|
 | Typ | D435i | L515 |
 | `serial_no` | `241122074842` | `f1370107` |
-| `rgb_camera.profile` | `848x480x30` | `1280x720x30` |
-| `depth_module.profile` | `848x480x30` | `640x480x30` |
+| `rgb_camera.profile` | `848x480x15` | `1280x720x15` |
+| `depth_module.profile` | `848x480x15` | `640x480x30` (L515 nur 30) |
 | `align_depth.enable` | **`true`** | **`true`** |
 | `global_time_enabled` | `true` | **`true` (siehe §1)** |
+| `enable_infra1/2` | an (Treiber-Default). ⚠️ `camera_node` von `robot_cam_2` **leer lassen** — das automatische Abschalten hängte AICA auf (L16) | — |
 
 Gemessen am 14.09.: beide Kameras liefern **~29,7 Bilder/s** für Farbe und
 aligned Depth — der in Thema 2 angenommene Kameratakt stimmt (**A6 erledigt**).
+**Seit 24.09.2026 15 Bilder/s** (Nachtrag 13 / L16): `base_cam` schafft ohnehin nur
+~8,6 Messungen/s, die halbe Rate entlastet die Treiber im `event_engine`. Raten
+über die `camera_info`-Topics messen — `ros2 topic hz` auf Bild-Topics misst sich
+selbst. Die Infrarotbilder der D435i zeigt der AICA-Block nicht an (`enable_infra`
+gilt nur für die L515). `robot_cam_2` kann sie über `camera_node` abschalten —
+⚠️ das hängte nach dem Start AICA auf, deshalb vorerst leer lassen (L16).
 
 **Profile immer explizit setzen.** Ohne Angabe gilt ein Treiber-Default, und
 `base_cam` klemmt eine zu große ROI **stillschweigend** auf das Bild, ohne
@@ -173,7 +184,7 @@ aber bei der Beurteilung der Geometrie zu wissen.
 |---|---|---|
 | `base_cam`, `robot_cam_2` | 10 Hz (Default); über 30 Hz sinnlos | `base_cam` schafft damit ~7 Messungen/s (23.09.). Nur `robot_cam_2` in die Anwendung, nicht `robot_cam` (Nachtrag 13 / L5) |
 | `vectoring`, `priority_handler` | **20 Hz** | Mehr bringt nichts, solange < 10 Messungen/s ankommen. Einschwing-Halbfenster in `vectoring` = **5** (Standardwert seit 23.09.; zählt Messungen); `pool_min_speed_mps` = 0,05 — nur bewegte Klötze gehen in die Bandgeschwindigkeit ein; `predict_max_s` = 8 — finale Tracks laufen hinter dem Bild als Status 4 weiter (L10) |
-| `object_follower` | 100 Hz, bei Rechenzeitmangel 50 Hz | glatte Zielpose für den Attractor (Thema 2) |
+| `object_follower` | 100 Hz, bei Rechenzeitmangel 50 Hz — **am Aufbau 50 Hz** (L18) | glatte Zielpose für den Attractor (Thema 2). Attractor ebenfalls 50 Hz |
 | `data_tracker` | 2 Hz | nur Anzeige |
 | `interface_streamer` | 5 Hz, nur bei Bedarf in der Anwendung | Bildverarbeitung, kostet Messrate |
 | `robotiq_gripper` | ereignisgetrieben | |
@@ -228,9 +239,9 @@ Die Signalliste steht in `systemgraph.md`. Zwei Punkte, die aus der Prüfung am
   `target_pose` → `attractor` des Signal Point Attractors; `gripper_close` →
   `robotiq_gripper` (bis 4d immer offen); `picked_id` → `priority_handler` und
   `data_tracker`. Die
-  **Pflichtparameter** `ws_*` und `observe_*` haben keinen Default — ohne sie lässt
-  sich die Komponente nicht konfigurieren (Nachtrag 8 / F3). Vorschläge für den
-  virtuellen Roboter: Abschnitt 9.
+  **Pflichtparameter** `ws_*` und `observe_*` — seit 24.09.2026 mit Standardwert
+  (Nachtrag 13 / L15); geleert lässt sich die Komponente nicht konfigurieren
+  (Nachtrag 8 / F3). Werte: Abschnitt 9.
 
 ---
 
@@ -295,8 +306,14 @@ Programm gegenlesen**, bevor sie fest eingetragen wird.
 
 Der Arbeitsraum ist seit 23.09.2026 **am Aufbau festgelegt** (B10, Quelle
 `source/roboter_tetris/roboter_tetris/Safety/workspace_bounds.json`, Herleitung
-`entscheidungen.md` Nachtrag 13 / L14). Die Parameter haben bewusst keinen Default —
-beim Anlegen von Hand übernehmen.
+`entscheidungen.md` Nachtrag 13 / L14). Seit 24.09.2026 sind alle Werte dieser
+Tabelle **Standardwerte** der Komponente (L15) — nach dem Build trägt sie jeder
+Block, in dem sie nicht von Hand überschrieben sind.
+
+> **Parameter in der Oberfläche finden:** Seit 24.09.2026 heißen die Follower-Parameter
+> „Gruppe: Klartext [parameter_name]“ und stehen in neun Gruppen (1 Arbeitsraum …
+> 9 Aufbau); die des `priority_handler` tragen den Parameternamen in Klammern —
+> `t_descend_s` ist dort „Absenkzeit (s)“. `t_descend_s` gehört zum `priority_handler` und wird dort gesetzt.
 
 | Parameter | Wert | Herleitung |
 |---|---|---|
@@ -318,8 +335,10 @@ Die Werte stammen aus denselben Zahlen wie die Tests (`test_follower_logic.py`).
 `gripper_motion_done` und `gripper_has_object`, solange der echte Greifer fehlt.
 Die Ablagepose steht als Default aus B9 bereit. `weight_along`/`weight_across`
 bleiben auf 0 (Basiskamera allein, Z10). `gripper_yaw_offset_deg` erst nach D23.
-Mit der vorgeschlagenen Beobachtungshöhe 0,60 m passt `t_descend_s` = 2,0 im
-`priority_handler` zu `descend_speed_mps` = 0,15 (Nachtrag 10 / J2).
+Mit der Beobachtungshöhe 0,45 m passt `t_descend_s` = 1,2 im `priority_handler` zu
+`descend_speed_mps` = 0,15 (Nachtrag 10 / J2) — seit 24.09.2026 Standardwert, am
+Roboter ~1,0 s gemessen (L18). Gedrosselt (IK 0,10) langsamer absenken: 0,05 m/s
+und `t_descend_s` 3,0.
 
 **Für Stufe 4c:** `object_position` von `robot_cam` an den Follower, Gewichte
 schrittweise auf 1. `w_wirksam` in `follower_status` zeigt, ob die Kamera wirkt;

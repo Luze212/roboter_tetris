@@ -14,6 +14,8 @@ import numpy as np
 from cv_bridge import CvBridge
 from modulo_components.lifecycle_component import LifecycleComponent
 import state_representation as sr
+from rcl_interfaces.msg import Parameter as RosParameter, ParameterType, ParameterValue
+from rcl_interfaces.srv import SetParameters
 from rclpy.qos import QoSProfile
 from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import Image, CameraInfo
@@ -27,6 +29,19 @@ from .vision.robot_detection_edge import (
 
 STALE_TIMEOUT_S = 1.0
 ERROR_LOG_PERIOD_S = 1.0
+
+# The D435i driver publishes both infrared images and aligns the depth to them
+# as well, although nothing here uses them. Switching them off at the setup took
+# the event_engine (camera drivers and the 500 Hz control loop) from 123 to
+# 106 % CPU and let the aligned depth reach the full 15/s (24.09.2026, Nachtrag 13
+# / L16). The AICA RealSense block does not expose them (its enable_infra is the
+# L515 stream), so the component switches them off on the camera node itself --
+# the same way base_cam enforces global_time_enabled. Off by default: set by
+# the component right after start-up, it hung the camera driver and with it the
+# event_engine; set by hand while running it worked (L16).
+INFRA_PARAMETERS = ("enable_infra1", "enable_infra2")
+INFRA_RETRY_PERIOD_S = 2.0
+INFRA_MAX_ATTEMPTS = 10
 
 
 class RobotCam2(LifecycleComponent):
@@ -116,6 +131,13 @@ class RobotCam2(LifecycleComponent):
         self.add_parameter(
             sr.Parameter("debug_enable", False, sr.ParameterType.BOOL),
             "Debug-Bild erzeugen und publizieren (kostet Rechenzeit).")
+        self.add_parameter(
+            sr.Parameter("camera_node", "", sr.ParameterType.STRING),
+            "Node-Name des RealSense-Blocks der Roboterkamera (über serial_no "
+            "241122074842 prüfen). Ist er gesetzt, schaltet die Komponente dort "
+            "enable_infra1/enable_infra2 ab - ungenutzte Infrarotbilder kosten "
+            "Rechenzeit im event_engine. Leer = aus (Standard): nach dem Start "
+            "gesetzt, hängte das AICA auf (Nachtrag 13 / L16).")
 
         # -- Inputs (endeffector RealSense only) ----------------------------------
         # Queue depth 1, as in base_cam: with modulo's default of 10 the step
@@ -154,6 +176,10 @@ class RobotCam2(LifecycleComponent):
         self._last_frame_walltime = None
         self._last_error_walltime = None
         self._logged_shapes = False
+        self._set_param_client = None     # created in on_configure (ROS 2 service client)
+        self._infra_done = False
+        self._infra_attempts = 0
+        self._infra_last_try = None
 
     # -- Validation ----------------------------------------------------------------
 
@@ -173,6 +199,14 @@ class RobotCam2(LifecycleComponent):
     # -- Lifecycle -----------------------------------------------------------------
 
     def on_configure_callback(self) -> bool:
+        # Service clients are not abstracted by AICA; created here (not in
+        # __init__) so the UI parameters are already applied (ARCHITECTURE.md §3).
+        node_name = self.get_parameter("camera_node").get_value().strip()
+        if node_name:
+            if not node_name.startswith("/"):
+                node_name = "/" + node_name
+            self._set_param_client = self.create_client(
+                SetParameters, f"{node_name}/set_parameters")
         return True
 
     def on_activate_callback(self) -> bool:
@@ -185,6 +219,9 @@ class RobotCam2(LifecycleComponent):
         self._info_msg = CameraInfo()
         self._aligned_depth_msg = Image()
         self._object_position = []
+        self._infra_done = False
+        self._infra_attempts = 0
+        self._infra_last_try = None
         self.set_predicate("is_object_visible", False)
         self.set_predicate("is_receiving_frames", False)
         return True
@@ -243,7 +280,59 @@ class RobotCam2(LifecycleComponent):
 
     # -- Periodic processing -------------------------------------------------------
 
+    # -- Camera streams ---------------------------------------------------------------
+
+    def _ensure_infra_off(self) -> None:
+        """Switch the unused infrared streams off; retried until it sticks.
+
+        Non-blocking as required in a step callback: readiness is polled via
+        ``service_is_ready()`` and the call goes out via ``call_async`` with a
+        done callback (ARCHITECTURE.md §3). The camera node may come up after
+        this component, hence the retries.
+        """
+        if self._infra_done or self._set_param_client is None:
+            return
+        if self._infra_attempts >= INFRA_MAX_ATTEMPTS:
+            return
+        now = self.get_clock().now()
+        if (self._infra_last_try is not None
+                and (now - self._infra_last_try).nanoseconds / 1e9 < INFRA_RETRY_PERIOD_S):
+            return
+        self._infra_last_try = now
+        if not self._set_param_client.service_is_ready():
+            return  # camera node not up yet; try again after the retry period
+        self._infra_attempts += 1
+
+        request = SetParameters.Request()
+        for name in INFRA_PARAMETERS:
+            parameter = RosParameter()
+            parameter.name = name
+            parameter.value = ParameterValue(type=ParameterType.PARAMETER_BOOL,
+                                             bool_value=False)
+            request.parameters.append(parameter)
+        future = self._set_param_client.call_async(request)
+        future.add_done_callback(self._on_infra_response)
+
+    def _on_infra_response(self, future) -> None:
+        try:
+            response = future.result()
+        except Exception as exc:
+            self.get_logger().warn(f"Infrarotbilder konnten nicht abgeschaltet werden: {exc}")
+            return
+        rejected = [r.reason for r in response.results if not r.successful]
+        if rejected:
+            # Not retried: a rejection means the wrong node (an L515 has no
+            # infra1/infra2) or a driver that refuses -- retrying will not help.
+            self._infra_done = True
+            self.get_logger().warn(
+                "Kamera hat das Abschalten der Infrarotbilder abgelehnt: "
+                + "; ".join(rejected) + " — ist camera_node die Roboterkamera?")
+            return
+        self._infra_done = True
+        self.get_logger().info("Infrarotbilder der Roboterkamera abgeschaltet.")
+
     def on_step_callback(self):
+        self._ensure_infra_off()
         # Color is the primary detection source; aligned depth (in the color frame)
         # gates background edges and gives the live belt distance. Both required.
         if self._color_msg.width == 0 or self._aligned_depth_msg.width == 0:

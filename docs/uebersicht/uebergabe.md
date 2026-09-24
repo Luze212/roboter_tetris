@@ -1,4 +1,4 @@
-# Übergabe — Stand 23.09.2026
+# Übergabe — Stand 24.09.2026
 
 Dieses Dokument ist der Einstieg, wenn die Arbeit **auf einem anderen Rechner**
 fortgesetzt wird. Es fasst zusammen, was gilt, was gemessen ist und was als
@@ -38,15 +38,32 @@ Follower — in `vision/` nicht doppelt korrigieren.
 
 **Alle Komponenten sind gebaut** und laufen in AICA. Die Inbetriebnahme am
 Aufbau ist im Gang — Stand und nächste Schritte: **`fahrplan-aufbau.md`**
-(„Stand nach Termin B“). Wie die Teile zusammenhängen: `uebersicht/systemgraph.md`.
+(„Stand nach Termin C“). Wie die Teile zusammenhängen: `uebersicht/systemgraph.md`.
 
 | | Komponente | Stand |
 |---|---|---|
-| ✅ läuft am Aufbau | `base_cam` (Übergangskalibrierung, B23 erledigt), `vectoring`, `priority_handler`, `data_tracker`, `robotiq_gripper`, Attractor → IK-Velocity-Controller | Datenpfad bis `data_tracker` geprüft (Nachtrag 12 / K4); Schätzung mit laufendem Band offen (Block 3) |
-| 🟡 gebaut, am Aufbau offen | `object_follower` (4a–4d), `interface_streamer`, `fake_objects.py` | Parameter angepasst (L10, L11, L14); erster Lauf am echten Roboter steht aus (Block 7) |
+| ✅ läuft am Aufbau | `base_cam` (Übergangskalibrierung, B23 erledigt), `vectoring`, `priority_handler`, `data_tracker`, `robotiq_gripper`, Attractor → IK-Velocity-Controller | Datenpfad bis `data_tracker` geprüft (Nachtrag 12 / K4); Schätzung mit laufendem Band bestätigt (L9, L10). Attractor von Hand auf K = 5 / 50 Hz (L18) |
+| 🟡 am Roboter gedrosselt bestanden | `object_follower` (4a, 4b, 4d bis zum Fehlgriff), `fake_objects.py` | Mit Fake-Klötzen bei 0,07 und 0,13 m/s: Folgen, Absenken, Greifen, Abbruch (L18). Offen: echter Klotz mit Ablage, Kontrolllauf `lead_time_s` 0,24 |
+| 🟡 gebaut, am Aufbau offen | `interface_streamer` | |
 | 🟡 misst, Erkennung unzuverlässig | `robot_cam_2` (weiter verfolgt), `robot_cam` (nicht mehr) | Banddistanz und Nah-Gate korrigiert, Hand-Auge neu (L11–L13); neuer Erkennungskern nötig |
 
-### ⚠️ Zuerst lesen: was sich am 22./23.09. verschoben hat
+### ⚠️ Zuerst lesen: was sich am 24.09. verschoben hat
+
+Nachtrag 13 / L15–L18:
+
+- **Der Follower hatte nie Signale** — seine Parameterprüfung scheiterte an den
+  Topic-Parametern von modulo (L17). Korrigiert; erst seitdem läuft er verdrahtet.
+- **Block 7 gedrosselt bestanden** (L18): voller Zyklus bis zum Fehlgriff mit
+  `fake_objects.py` (stempelt jetzt in ROS-Zeit). Der Attractor stand auf dem
+  AICA-Standard K = 1 (70 mm Nachlauf) → **K = 5 / 50 Hz von Hand**; `lead_time_s`
+  0,24. Die IK-Grenze gilt für den Betrag — gedrosselt nur mit langsamem Absenken.
+- **Rechner an der Grenze:** keine NVIDIA-GPU, Kameras auf 15 Bilder/s, die
+  500-Hz-Schleife läuft nur mit 84–86 % und brach einmal ein (External Control
+  stoppte). Das automatische Abschalten der Infrarotbilder hängte AICA auf (L16).
+- Arbeitsraum und Beobachtungspose sind Standardwert (L15); Follower-Parameter in
+  neun Gruppen mit Klartextnamen.
+
+### ⚠️ Was sich am 22./23.09. verschoben hat
 
 Nachträge 12 und 13 in `architektur/entscheidungen.md`:
 
@@ -71,7 +88,8 @@ Nachträge 12 und 13 in `architektur/entscheidungen.md`:
   daneben, L11); die Erkennung von `robot_cam_2` ist an flachen Klötzen noch
   unzuverlässig (L13) → erster Griff ohne Roboterkamera.
 - **Arbeitsraum und Greifzone festgelegt** (L14, `Safety/workspace_bounds.json`),
-  `min_grip_height_m` 0,021.
+  `min_grip_height_m` 0,021; Arbeitsraum und Beobachtungspose seit 24.09. als
+  Standardwert im Follower (L15).
 
 ### Was sich am 21.09. verschoben hat
 
@@ -101,7 +119,8 @@ Fundstelle in `architektur/entscheidungen.md`:
   sich der Follower nicht konfigurieren. Vorschläge für den virtuellen Roboter:
   Einrichtung §9.
 - **Freihöhe 0,49 m** statt 0,445 (Nachtrag 10 / J1) und **`t_descend_s` 2,0 s**,
-  gekoppelt an die Sinkgeschwindigkeit 0,15 m/s (J2).
+  gekoppelt an die Sinkgeschwindigkeit 0,15 m/s (J2). Seit 24.09. **1,2 s** für
+  `observe_z` 0,45 (L18).
 - **Neu in den Verträgen:** S3/S4/S10 erweitert, S4 mit Greifebene und Güte,
   S7 `outcome = 4` (vorher abgebrochen), S8 Zustandscodes, S10 `present`.
 
@@ -113,6 +132,7 @@ Fundstelle in `architektur/entscheidungen.md`:
 | 🔴 **C3** — Extrinsik der Basiskamera | Läuft als Projekt eines Kommilitonen. Die Basiskamera steht auf einem **beweglichen** Gestell, deshalb wird die Bestimmung automatisiert. **Überbrückt** durch die Übergangskalibrierung (Nachtrag 13 / L6) — wird die Kamera bewegt, gilt sie nicht mehr. |
 | ✅ **B23** — Basiskamera und Roboter im selben System | Erledigt 23.09.2026: fünf Antastpunkte, Rest ≤ 6 mm (Nachtrag 13 / L6). |
 | ✅ **Latenz im Follower** | `max_extrapolation_s` 0,6 s, Zeitgrenzen 1,0 s (Nachtrag 13 / L10). |
+| 🔴 **Einbrüche der 500-Hz-Schleife** | Rechner zeitweise voll; ein Einbruch stoppt External Control, der Arm bleibt stehen (L18). Oberfläche minimieren, Nebenprogramme beenden, Mitlesen leicht halten. |
 
 > **B1 ist nicht mehr rot.** Die Bandgeschwindigkeit wird geschätzt; B1 ist nur
 > noch die Gegenprobe mit der Stoppuhr.
@@ -183,8 +203,9 @@ Die Zeitdomäne erzwingt `base_cam` inzwischen selbst über den Parameter
 **Mitlesen belastet den Rechner.** Schon ein zusätzlicher Leseprozess drückt den
 500-Hz-Regelkreis zum Roboter (Nachtrag 13 / L3) — immer nur einer gleichzeitig.
 
-**Gespeicherte Blockparameter gehen vor.** Neue Standardwerte des Pakets gelten
-nur für neu eingefügte Blöcke.
+**Von Hand gesetzte Blockparameter gehen vor.** Neue Standardwerte des Pakets
+übernimmt nach dem Build auch ein bestehender Block — für jeden Parameter, der
+dort auf dem Standardwert steht.
 
 ---
 
@@ -256,8 +277,9 @@ System steht.
 Jede Stufe setzt die vorige voraus. Was gemessen wird, ersetzt einen
 dokumentierten Startwert; die Punkte stehen in `offene-punkte.md`.
 
-> **Stand 23.09.2026:** Stufe 1 und der Datenpfad aus Stufe 2 sind erledigt,
-> B23 ebenfalls. Was davon noch offen ist, führt `fahrplan-aufbau.md`.
+> **Stand 24.09.2026:** Stufen 1, 2 (bis B21), 5 erledigt; Stufe 3 übersprungen —
+> Stufe 6 lief direkt am echten Roboter mit `fake_objects.py` (L18). Was offen ist,
+> führt `fahrplan-aufbau.md`.
 
 **1. Laden und Registrierung** ✅ — Branch bauen, Systemabbild im Launcher neu
 erzeugen (Einrichtung §1), Anwendung laden: macht der Nutzer. Dann prüfen, ob
@@ -301,7 +323,8 @@ B11 nur beobachtet (Gelenke nicht mitgeschrieben).
 `is_zone_feasible` zeigt, ob die Zone lang genug ist. **B10:** Arbeitsraum nach
 `Safety/README.md` festlegen.
 
-**6. Follower am echten Roboter** — erst 4a, dann 4b mit **B4**
+**6. Follower am echten Roboter** — 🟡 4a, 4b, 4d bis zum Fehlgriff mit `fake_objects.py`
+bestanden (L18). Erst 4a, dann 4b mit **B4**
 (`lead_time_s` einmessen), **D23** (Montagewinkel der Backen). Dann 4d mit dem
 Referenzklotz: **erster Testgriff** bestätigt die 245 mm (B15), **D22** messen
 (Absenken, Greifen, Heben) und `t_descend_s` nachziehen, **B22** beobachten (bleibt

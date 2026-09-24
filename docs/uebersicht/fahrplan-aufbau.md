@@ -1,6 +1,6 @@
 # Fahrplan — Arbeit am Roboter mit Claude
 
-**Stand 23.09.2026.** Wie die Zeit am Aufbau aufgeteilt wird, wer was tut und
+**Stand 24.09.2026.** Wie die Zeit am Aufbau aufgeteilt wird, wer was tut und
 woran jeder Block als erledigt gilt. Die fachliche Reihenfolge und ihre Gründe
 stehen in `uebergabe.md` §6; dieses Dokument ist die **Arbeitsfassung** davon, mit
 Rollen, Dauer, Mitlese-Verfahren und Abbruchregeln.
@@ -25,28 +25,43 @@ Block wird sofort nach seinem Ende dokumentiert** — nicht gesammelt am Schluss
 **Entscheidungen des Tages:** Greifzone und Wartebereich **außerhalb des Bildes
 der Basiskamera** (L4); die Strecke dahinter überbrückt die Roboterkamera.
 
+## Stand nach Termin C (24.09.2026)
+
+| Block | Ergebnis |
+|---|---|
+| Rechenlast | Kameras auf 15 Bilder/s; `base_cam` unverändert 8,6 Messungen/s. **Keine NVIDIA-GPU** im Rechner (L16). Infrarot der Roboterkamera abschalten hängte AICA auf — `camera_node` leer (L16) |
+| Follower | Legte **keine Signale** an (Parameterprüfung), korrigiert (L17). Arbeitsraum und Beobachtungspose sind Standardwert (L15) |
+| 7 | ✅ **Gedrosselt bestanden (L18)** mit `fake_objects.py`: Folgen, Absenken, Greifen (Fehlgriff ins Leere), Abbruch, Heben — bei 0,07 m/s (IK 0,10) und 0,13 m/s (IK 0,30). Attractor auf K = 5 / 50 Hz; `err_laengs` −2,5 bzw. −5 mm → `lead_time_s` 0,24 |
+| ⚠️ | **Einbruch der 500-Hz-Schleife** (4/500 Hz, ~1 s) beim Kontrolllauf → External Control stoppte. Schleife auch in Ruhe nur 84–86 % (L18) |
+
 ### Weiter am nächsten Termin
 
-0. **Build** mit den Standardwerten von L14 (Greifzone, `min_grip_height_m`);
-   `priority_handler` und `object_follower` neu einfügen.
-1. **Anwendung schlank halten:** keine unkonfigurierten Kamerablöcke, kein
-   `interface_streamer`, 3D-Ansicht minimiert; `vectoring`/`priority_handler`
-   20 Hz, `data_tracker` 2 Hz. Neue Standardwerte gelten nur für neu eingefügte
-   Blöcke.
-2. **`object_follower`** mit den Werten aus Einrichtung §9 (Arbeitsraum,
-   `observe_*` −0,816 / +0,35 / 0,45 / 90°) und `t_descend_s` 1,2 im
-   `priority_handler`; Gewichte der Roboterkamera 0.
-3. **Block 7, erster Lauf am echten Roboter** — gedrosselt (IK 0,10 m/s), Hand am
-   Not-Aus, Zielquelle `fake_objects.py` bei 0,05 m/s statt Basiskamera, zuerst ohne
-   Absenken (`stable_cycles` hoch): Aufrichten, Wartepose, Folgen, `err_laengs`.
-4. Dann Basiskamera und echtes Band (IK ≥ 0,30 m/s), erster Testgriff am
-   Referenzklotz; Ablagepose dabei gegenlesen (B9).
+0. **Build** mit L15–L18 (Standardwerte `lead_time_s` 0,24, `attractor_v_max_mps` 0,30,
+   `t_descend_s` 1,2; Parametergruppen). Vorher ChatGPT, Discord u. Ä. beenden,
+   AICA-Oberfläche während der Läufe minimieren.
+1. **AICA-Blöcke von Hand** (nicht im Paket): Attractor `linear_gains` [5.0], `rate`
+   50; IK-Controller `max_linear_velocity` 0,30; `rate` Follower 50,
+   `priority_handler`/`vectoring` 20, `data_tracker` 2. **Verdrahtung prüfen:**
+   `target_pose` → Attractor (nicht IK-Controller), `picked_id` → `priority_handler`,
+   `gripper_close` → Greifer. `camera_node` von `robot_cam_2` leer.
+2. **Kontrolllauf `lead_time_s` 0,24** mit `fake_objects.py --velocity -0.13`, Band
+   leer: erwartet `err_laengs` ≈ 0 statt −5 mm.
+3. **Erster echter Griff:** Basiskamera konfigurieren und aktivieren, Referenzklotz
+   50 × 50 × 100 aufs laufende Band. Erstmals mit Klotz im Greifer: Heben, **Ablage**
+   (−0,316 / +0,476 / 0,42, B9 gegenlesen), öffnen, zurück. Greifhöhe prüft die
+   245 mm und die Bandhöhe ±5 mm (B17).
+4. **Rechenlast** weiter beobachten; bleiben Einbrüche, Rate des Hardware-Interface
+   (250 statt 500 Hz) prüfen — vorher recherchieren. `event_engine` wächst, AICA
+   zwischendurch neu starten.
 5. Offen am Schreibtisch: neuer Erkennungskern für die Roboterkamera (L13),
-   `fake_objects.py` mit realer Rate und Latenz.
+   `fake_objects.py` mit realer Latenz; Erreichbarkeit im `priority_handler` ohne
+   Einschwingzeit des Followers (~1,5 s, L18).
 
 Rohdaten: `architektur/bilder/2026-09-23-b23-punkte.json`, `…-handauge-ansichten.json`. Werkzeuge: §3; neu in
 `signal_reader.py` ist die Auswertung des Signalalters bei jedem Vertragssignal.
-Mitlesen belastet den Rechner spürbar — **immer nur ein Leseprozess gleichzeitig.**
+Mitlesen belastet den Rechner spürbar — **immer nur ein Leseprozess gleichzeitig**, die
+Flanschpose (500 Hz) nicht in Python mitdekodieren, während eines Laufs keine
+`ros2`-Befehle absetzen (L18).
 
 ---
 
@@ -214,6 +229,9 @@ Basiskamera verteilt (auch außerhalb der alten Messregion −1000…−500 mm):
 | **Abnahme** | Eine Variante liefert an mehreren Klotzlagen die richtige Position. Sonst bleibt 4c aus (Z10) — **das blockiert Block 7 nicht.** |
 
 ### Block 7 — Follower am echten Roboter · 60+ min · Voraussetzung Block 5
+
+> **24.09.2026:** 4a/4b und 4d bis zum Fehlgriff mit `fake_objects.py` bestanden
+> (L18). Offen: Kontrolllauf `lead_time_s`, Basiskamera und echter Klotz mit Ablage.
 
 | | |
 |---|---|

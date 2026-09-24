@@ -25,6 +25,6 @@
     "notes": "Marge 10 mm nur in z (Backenspitze ueber dem Band). Die Bandhoehe 53.6 mm hat +-5 mm systematische Unsicherheit (B17) -- beim ersten Testgriff pruefen."
   },
   "runtime_parameters": {
-    "note": "Laufzeitwirksam sind die AICA-Parameter ws_x_min/ws_x_max/ws_y_min/ws_y_max/ws_z_min/ws_z_max des object_follower (bewusst ohne Default, Nachtrag 8 / F3) -- beim Anlegen der Anwendung von Hand aus dieser Datei uebernehmen."
+    "note": "Laufzeitwirksam sind die AICA-Parameter ws_x_min/ws_x_max/ws_y_min/ws_y_max/ws_z_min/ws_z_max des object_follower. Seit 24.09.2026 sind diese Werte dort als Standardwert eingetragen (follower_logic.FollowerParams und component_descriptions, Nachtrag 13 / L15); ein Test prueft die Gleichheit mit dieser Datei. Aendert sich diese Datei, beide Stellen nachziehen. Von Hand gesetzte Werte eines Blocks gehen dem Standardwert vor."
   }
 }

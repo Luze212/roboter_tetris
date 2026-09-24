@@ -4,16 +4,16 @@ Dieser Ordner ist bewusst von der Kalibrierung (`../Calibration/`), der Objekter
 
 ## Quelle der Grenzwerte
 
-`workspace_bounds.json` ist die versionierbare Ablage für die Arbeitsraum-Grenzen. Sie ist die dokumentierte Quelle der Wahrheit, nicht die Laufzeit-Konfiguration — wirksam zur Laufzeit sind die gespiegelten AICA-Parameter (`workspace_x_min`/`x_max`/`y_min`/`y_max`/`z_min`/`z_max`) in der jeweiligen bewegungsauslösenden Komponente, analog zu `cal_x`/`cal_y`/`cal_z` aus der Extrinsik-Kalibrierung.
+`workspace_bounds.json` ist die versionierbare Ablage für die Arbeitsraum-Grenzen. Sie ist die dokumentierte Quelle der Wahrheit, nicht die Laufzeit-Konfiguration — wirksam zur Laufzeit sind die gespiegelten AICA-Parameter (`ws_x_min`/`ws_x_max`/`ws_y_min`/`ws_y_max`/`ws_z_min`/`ws_z_max` im `object_follower`), analog zu `cal_x`/`cal_y`/`cal_z` aus der Extrinsik-Kalibrierung.
 
-Aktuell ist die Datei mit `status: "placeholder_not_yet_defined"` markiert, alle Werte sind `null`. Solange `basis.method` nicht gesetzt ist, dürfen die Werte **nicht** in eine Komponente als Sicherheitsgrenze übernommen werden.
+Seit 23.09.2026 `status: "defined"` — am Aufbau abgefahren (`docs/architektur/entscheidungen.md` Nachtrag 13 / L14). Seit 24.09.2026 sind die Werte zugleich **Standardwert** im `object_follower` (`follower_logic.FollowerParams` und `component_descriptions`, L15); `test_follower_logic.py` prüft die Gleichheit mit dieser Datei. Von Hand gesetzte Werte eines Blocks in der AICA-Anwendung gehen dem Standardwert vor.
 
 ## Vorgehen
 
 1. Grundlage festlegen: entweder die Hersteller-Reichweite des Roboters (Datenblatt) minus Sicherheitsmarge, oder eine Vermessung am konkreten Aufbau (Förderband-/Ablagebereich, Hindernisse).
 2. Die sechs Grenzwerte (`x_min`/`x_max`/`y_min`/`y_max`/`z_min`/`z_max`, Meter, im Frame `reference_frame`) in `workspace_bounds.json` eintragen.
 3. Unter `validation` Datum, Verantwortliche:n und die verwendete Sicherheitsmarge dokumentieren. `status` erst nach dieser Festlegung auf `defined` setzen.
-4. Die Werte in die entsprechenden AICA-Parameter der bewegungsauslösenden Komponente(n) übernehmen.
+4. Die Werte in die AICA-Parameter übernehmen **und** die Standardwerte in `FollowerParams` und `component_descriptions/roboter_tetris_object_follower.json` nachziehen — sonst schlägt der Gleichheitstest fehl.
 
 ## Änderungsregel
 

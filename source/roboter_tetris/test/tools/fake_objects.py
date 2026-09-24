@@ -322,8 +322,13 @@ def main(argv=None) -> int:
             if args.duration and t > args.duration:
                 raise SystemExit
             msg = Float64MultiArray()
-            # S1 carries the frame timestamp; here that is simply run time.
-            msg.data = belt.signal_at(t)
+            # The scene runs in seconds since start, but S1 carries the image
+            # time in ROS time like base_cam: the follower ages every target
+            # against its own clock and rejected run-time stamps as ~56 years
+            # old (24.09.2026, Nachtrag 13 / L17).
+            data = belt.signal_at(t)
+            data[0] = self.get_clock().now().nanoseconds / 1e9
+            msg.data = data
             self._pub.publish(msg)
 
     rclpy.init()

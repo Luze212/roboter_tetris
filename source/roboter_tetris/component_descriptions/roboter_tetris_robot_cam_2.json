@@ -200,6 +200,14 @@
       "parameter_type": "bool",
       "default_value": "false",
       "dynamic": true
+    },
+    {
+      "display_name": "Kamera-Node (Infrarot aus)",
+      "description": "Node-Name des RealSense-Blocks der Roboterkamera, z. B. /realsense_camera_2 (Knotennamen wechseln je Anwendung - über serial_no 241122074842 prüfen). Ist er gesetzt, schaltet die Komponente dort enable_infra1 und enable_infra2 ab: Die D435i schickt sonst zwei ungenutzte Infrarotbilder und richtet die Tiefe zusätzlich auf sie aus. Am Aufbau gemessen: event_engine 123 -> 106 % CPU, ausgerichtete Tiefe 12,9 -> 14,6 Bilder/s (Nachtrag 13 / L16). Der Parameter enable_infra des AICA-Blocks erreicht diese Ströme nicht. Leerer String = Funktion aus (Standard): Kurz nach dem Start gesetzt, hängte das den Kameratreiber und damit AICA auf (L16).",
+      "parameter_name": "camera_node",
+      "parameter_type": "string",
+      "default_value": "",
+      "dynamic": false
     }
   ]
 }

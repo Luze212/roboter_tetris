@@ -41,13 +41,16 @@ class SelectorParams:
     zone_y_min: float = -0.22
     zone_y_max: float = 0.40
     #: Binding speed limit of the approach: the lower of attractor and IK
-    #: controller (A1) -- by default the IK controller's 0.25 m/s.
-    attractor_v_max_mps: float = 0.25
+    #: controller (A1). 0.30 since 24.09.2026: the IK controller runs at 0.30
+    #: for the belt (setup guide §2, Nachtrag 13 / L18). Throttled runs: set lower.
+    attractor_v_max_mps: float = 0.30
     #: Attractor gain K; settling takes about 3/K (setup guide: K ~ 5).
     attractor_gain: float = 5.0
     #: (observe_z - grip height) / descend_speed_mps of the follower, plus
-    #: settling: 0.26 m / 0.15 m/s -> 1.7 s -> 2.0 (Nachtrag 10 / J2).
-    t_descend_s: float = 2.0
+    #: settling (Nachtrag 10 / J2). Was 2.0 for observe_z 0.60; with 0.45 since
+    #: L14/L15: 0.11...0.14 m / 0.15 m/s + settling -> 1.2, measured ~1.0 s at
+    #: the robot on 24.09.2026 (Nachtrag 13 / L18).
+    t_descend_s: float = 1.2
     t_grasp_s: float = 1.0
     t_lift_s: float = 0.5
     grasp_time_margin: float = 1.2

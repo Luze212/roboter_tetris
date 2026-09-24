@@ -29,19 +29,22 @@ ROBOT_STATE_MAX_AGE_S = 0.2
 
 #: Operator-facing description of every parameter; the JSON says the same.
 DESCRIPTIONS = {
-    "ws": "Arbeitsraum des Flansches in world (m), B10 - nicht die Greifzone. KEIN "
-          "DEFAULT: laut Safety/README erst mit dokumentierter Festlegung eintragen.",
+    "ws": "Arbeitsraum des Flansches in world (m), B10 - nicht die Greifzone. Default "
+          "= Safety/workspace_bounds.json, am Aufbau festgelegt (Nachtrag 13 / L14). "
+          "Pflicht: leer -> configure scheitert.",
     "observe": "Beobachtungspose des Flansches in world (m), B8. Orientierung fest "
-               "senkrecht. KEIN DEFAULT. Auch die Höhe, auf der gefolgt wird.",
+               "senkrecht. Auch die Höhe, auf der gefolgt wird. Default: Bandmitte am "
+               "Anfang der Greifzone, tief für Folgen ohne Roboterkamera (L14).",
     "observe_yaw_deg": "Gierwinkel der Beobachtungspose (Grad): Richtung der "
-                       "Werkzeug-x-Achse in world. KEIN DEFAULT (B8).",
+                       "Werkzeug-x-Achse in world. 90 = Backen quer zum Band (B8).",
     "transfer_height_m": "Freihöhe des Flansches (m) für Transfer und Abbruchpfad: Band "
                          "53,6 + stehender Klotz 100 + untere Hälfte eines gehaltenen "
                          "Klotzes 50 + Griffpunkt 235 + Luft 50 mm (D12, Nachtrag 10 / J1).",
     "pose_tolerance_m": "Ab diesem Abstand (m) gilt eine stehende Zielpose als erreicht.",
     "max_target_jump_m": "Sicherheitsgate: springt die Zielpose innerhalb eines Zustands "
                          "weiter (m), sind die Daten falsch - Abbruch. (D15)",
-    "lead_time_s": "Vorhalt als Zeit (s), Theorie 1/K. In 4b über err_laengs einmessen (B4).",
+    "lead_time_s": "Vorhalt als Zeit (s), Theorie 1/K = 0,2 bei K = 5; am Roboter 0,24 "
+                   "gemessen (Nachtrag 13 / L18). Am echten Band über err_laengs prüfen (B4).",
     "latency_compensation_s": "Zusätzlicher Vorhersagehorizont (s) (D7).",
     "max_extrapolation_s": "Deckel der Vorhersage (s), Gate-Prüfung 3 (D14). Muss über "
                            "dem Alter von S4 vor der nächsten Messung liegen - gemessen "
@@ -105,6 +108,11 @@ _NON_NEGATIVE = ("lead_time_s", "latency_compensation_s", "min_grip_height_m",
 _FREE = ("gripper_yaw_offset_deg", "handeye_x", "handeye_y", "handeye_z",
          "handeye_roll_deg", "handeye_pitch_deg", "handeye_yaw_deg", "place_x",
          "place_y", "place_z", "place_yaw_deg", "belt_surface_z_m")
+#: The parameters this component checks. modulo validates its own ones through
+#: the same callback -- the "<signal>_topic" strings of every input and output,
+#: and the inherited rate. Checking those as numbers failed on the strings, so no
+#: signal was ever created (found 24.09.2026, Nachtrag 13 / L17).
+_OWN = frozenset(f.name for f in fields(FollowerParams)) | {"robot_state_max_age_s"}
 
 
 def _description(name: str) -> str:
@@ -127,10 +135,7 @@ class ObjectFollower(LifecycleComponent):
 
         # -- Parameters: one per FollowerParams field, plus the shell's own ------
         for f in fields(FollowerParams):
-            if f.name in REQUIRED:
-                parameter = sr.Parameter(f.name, sr.ParameterType.DOUBLE)
-            else:
-                parameter = sr.Parameter(f.name, f.default, _parameter_type(f.default))
+            parameter = sr.Parameter(f.name, f.default, _parameter_type(f.default))
             self.add_parameter(parameter, _description(f.name))
         self.add_parameter(
             sr.Parameter("robot_state_max_age_s", ROBOT_STATE_MAX_AGE_S,
@@ -179,6 +184,8 @@ class ObjectFollower(LifecycleComponent):
 
     def on_validate_parameter_callback(self, parameter: sr.Parameter) -> bool:
         name = parameter.get_name()
+        if name not in _OWN:
+            return True                       # modulo's own (topics, rate)
         if parameter.is_empty():
             if name in REQUIRED:
                 return True                   # checked as a set in on_configure
