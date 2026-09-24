@@ -1,7 +1,9 @@
 # Systemaufbau als AICA-Graph
 
-**Stand 23.09.2026 — alle Komponenten gebaut** und in AICA geladen; Datenpfad bis
-`data_tracker` am Aufbau geprüft, Follower und Roboterkamera noch nicht gefahren.
+**Stand 24.09.2026 — alle Komponenten gebaut** und in AICA geladen. Der
+Regelpfad mit Basiskamera bis zum UR10e ist am laufenden Band bestätigt:
+sieben greifbare Klötze wurden gegriffen und abgelegt. Die Roboterkamera bleibt
+dabei optional und noch nicht produktiv zugeschaltet.
 Grundlage: `architektur/entscheidungen.md` (Themen 1–7, Nachträge 1–13),
 `architektur/datenvertraege.md` (S1–S10).
 
@@ -72,12 +74,12 @@ Blätter: Von ihnen führt keine Leitung zurück in den Regelpfad.
 
 | Komponente | Rate | Eingänge | Ausgänge | Logik ohne ROS | Stand |
 |---|---|---|---|---|---|
-| `base_cam` | Kamera | color, depth, info | `objects` (S1), `debug_image` | `vision/*` | läuft am Aufbau; S1 und Tracker-Eingriff 2.4 neu |
+| `base_cam` | Kamera | color, depth, info | `objects` (S1), `debug_image` | `vision/*` | läuft im Pickpfad; ROI seit L21: x 342, Breite 618 px |
 | `robot_cam_2` (`robot_cam` nicht mehr) | Kamera | color, depth, info | `object_position` (S2), `debug_image` | `vision/robot_detection*` | Banddistanz aus dem Bildmedian, am Aufbau offen (B6) |
-| `vectoring` | 20 Hz | `objects` | `tracks` (S3) | `track_estimation.py` | gebaut |
-| `priority_handler` | 20 Hz | `tracks`, `picked_id`, `robot_state` | `target` (S4), `not_pickable` (S5) | `target_selection.py` | gebaut, Greifzone festgelegt (B19) |
+| `vectoring` | 20 Hz | `objects` | `tracks` (S3) | `track_estimation.py` | am Band bestätigt; Pool und Status-4-Vorhersage tragen bis zur Greifzone |
+| `priority_handler` | 20 Hz | `tracks`, `picked_id`, `robot_state` | `target` (S4), `not_pickable` (S5) | `target_selection.py` | im Pickpfad bestätigt; Zone = abgefahrener Arbeitsraum (L21) |
 | `data_tracker` | 2 Hz | `tracks`, `not_pickable`, `picked_id` | `world_state` (S10) | `world_bookkeeping.py` | gebaut |
-| `object_follower` | 100 Hz | `target`, `object_position`, `robot_state`, `gripper_motion_done`, `gripper_has_object` | `target_pose` (S6), `gripper_close`, `picked_id` (S7), `follower_status` (S8) | `follower_logic.py` | gebaut, alle vier Stufen |
+| `object_follower` | 100 Hz | `target`, `object_position`, `robot_state`, `gripper_motion_done`, `gripper_has_object` | `target_pose` (S6), `gripper_close`, `picked_id` (S7), `follower_status` (S8) | `follower_logic.py` | Greifen und Ablage im Lauf bestätigt (ohne Roboterkamera) |
 | `robotiq_gripper` | ereignisgetrieben | `gripper_close` | `motion_done`, `has_object` (S9) | `GripperMotionState` | läuft am Aufbau; zwei Ausgänge neu |
 | `interface_streamer` | 5 Hz | 2 × `debug_image`, `world_state`, `follower_status` | `interface_image` | `interface_layout.py` | gebaut |
 
@@ -143,7 +145,7 @@ Werte, die in zwei Komponenten zusammenpassen müssen:
 | `attractor_gain`, `attractor_v_max_mps` (`priority_handler`) | Attractor-Gain; kleineres `max_linear_velocity` aus Attractor und IK-Controller | Anfahrzeit in der Erreichbarkeitsprüfung |
 | `t_descend_s` (`priority_handler`) | `(observe_z − Greifhöhe) / descend_speed_mps` des Followers | Lage der Greifebene (Nachtrag 10 / J2) |
 | `min_graspable_height_m` (`priority_handler`) | `2 · min_grip_height_m` des Followers | kein Klotz, den der Follower nicht fassen kann |
-| Greifzone `zone_*` (`priority_handler`) | Messregion von `base_cam`; Arbeitsraum `ws_*` des Followers | Zone liegt in der Region und im Arbeitsraum (B19, N2) |
+| Greifzone `zone_*` (`priority_handler`) | erreichbarer Bildausschnitt von `base_cam`; Arbeitsraum `ws_*` des Followers | Seit L21 identisch mit dem abgefahrenen Arbeitsraum auf dem Band; ROI deckt sie quer ab. Die Zone liegt längs hinter dem Basiskamerabild, die Status-4-Vorhersage überbrückt die Strecke. |
 | `expiry_after_done_s` (`data_tracker`) | Dauer Heben + Transfer + Ablegen | sonst kommt `picked` nicht mehr an (Nachtrag 7 / T1) |
 
 Eigentum: Die Greifzone gehört nur dem `priority_handler`, der Arbeitsraum nur dem

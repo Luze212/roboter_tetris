@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="940" viewBox="0 0 1500 940">
+  <style>
+    text { font-family: Arial, sans-serif; fill: #17212b; }
+    .title { font-size: 30px; font-weight: bold; }
+    .heading { font-size: 22px; font-weight: bold; }
+    .label { font-size: 20px; }
+    .small { font-size: 17px; }
+    .note { font-size: 16px; fill: #4b5563; }
+    .dim { font-size: 17px; fill: #2563a8; }
+  </style>
+  <rect width="1500" height="940" fill="white"/>
+  <text x="70" y="58" class="title">Vorläufige Draufsicht des Versuchsaufbaus</text>
+  <text x="70" y="88" class="note">Draufsicht mit Bezugssystemen für Kalibrierung und Anwendung</text>
+  <rect x="260" y="145" width="450" height="600" rx="6" fill="#e7eef4" stroke="#305b78" stroke-width="3"/>
+  <text x="410" y="180" class="heading">Förderband</text>
+  <rect x="442" y="102" width="86" height="28" rx="3" fill="#d6dce1" stroke="#4b5563" stroke-width="2"/>
+  <line x1="485" y1="130" x2="485" y2="145" stroke="#4b5563" stroke-width="2"/>
+  <line x1="528" y1="116" x2="770" y2="116" stroke="#4b5563" stroke-width="2"/>
+  <text x="785" y="122" class="small">Base-Kamera, ca. 0,85 m über Band</text>
+  <line x1="485" y1="235" x2="485" y2="650" stroke="#e87520" stroke-width="7"/>
+  <polygon points="485,682 468,647 502,647" fill="#e87520"/>
+  <text x="515" y="448" class="label" fill="#c85410">Bandlaufrichtung</text>
+  <text x="515" y="475" class="small">bei Y+ gegen Laufrichtung</text>
+  <circle cx="895" cy="555" r="94" fill="#dbe8d6" stroke="#46734a" stroke-width="3"/>
+  <text x="790" y="680" class="heading">UR10e</text>
+  <text x="790" y="706" class="small">linke Bandseite</text>
+  <rect x="880" y="290" width="220" height="94" rx="4" fill="#f5dfbd" stroke="#9b6622" stroke-width="3"/>
+  <text x="905" y="328" class="heading">Ablagekiste</text>
+  <text x="905" y="354" class="small">Mittelpunkt: (-0,310; 0,477; 0,483)</text>
+  <line x1="710" y1="145" x2="785" y2="145" stroke="#4b5563" stroke-width="2"/>
+  <text x="800" y="151" class="small">Bandanfang, mittig: y = 1,140</text>
+  <line x1="710" y1="745" x2="785" y2="745" stroke="#4b5563" stroke-width="2"/>
+  <text x="800" y="751" class="small">Bandende: y = -0,367</text>
+  <line x1="260" y1="795" x2="710" y2="795" stroke="#2563a8" stroke-width="2"/>
+  <line x1="260" y1="781" x2="260" y2="809" stroke="#2563a8" stroke-width="2"/>
+  <line x1="710" y1="781" x2="710" y2="809" stroke="#2563a8" stroke-width="2"/>
+  <text x="376" y="832" class="dim">Bandbreite ca. 0,795 m</text>
+  <line x1="210" y1="145" x2="210" y2="745" stroke="#2563a8" stroke-width="2"/>
+  <line x1="196" y1="145" x2="224" y2="145" stroke="#2563a8" stroke-width="2"/>
+  <line x1="196" y1="745" x2="224" y2="745" stroke="#2563a8" stroke-width="2"/>
+  <text x="70" y="440" class="dim">Bandlänge ca. 1,507 m</text>
+  <circle cx="485" cy="205" r="4" fill="#1d70b8"/>
+  <line x1="485" y1="205" x2="395" y2="205" stroke="#1d70b8" stroke-width="3"/>
+  <polygon points="375,205 405,192 405,218" fill="#1d70b8"/>
+  <line x1="485" y1="205" x2="485" y2="295" stroke="#1d70b8" stroke-width="3"/>
+  <polygon points="485,315 472,285 498,285" fill="#1d70b8"/>
+  <text x="372" y="190" class="small">X+</text>
+  <text x="500" y="294" class="small">Y+</text>
+  <text x="300" y="230" class="note">conveyor_frame</text>
+  <circle cx="895" cy="555" r="4" fill="#1d70b8"/>
+  <line x1="895" y1="555" x2="1030" y2="555" stroke="#1d70b8" stroke-width="3"/>
+  <polygon points="1050,555 1020,542 1020,568" fill="#1d70b8"/>
+  <line x1="895" y1="555" x2="895" y2="440" stroke="#1d70b8" stroke-width="3"/>
+  <polygon points="895,420 882,450 908,450" fill="#1d70b8"/>
+  <text x="1025" y="540" class="small">X+</text>
+  <text x="910" y="448" class="small">Y+</text>
+  <text x="1035" y="583" class="note">robot_base</text>
+  <text x="70" y="895" class="note">Die Z-Achse beider Bezugssysteme zeigt von der Bandebene nach oben und ist in der Draufsicht nicht dargestellt.</text>
+</svg>

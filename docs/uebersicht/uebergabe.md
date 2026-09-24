@@ -43,16 +43,18 @@ Aufbau ist im Gang — Stand und nächste Schritte: **`fahrplan-aufbau.md`**
 | | Komponente | Stand |
 |---|---|---|
 | ✅ läuft am Aufbau | `base_cam` (Übergangskalibrierung, B23 erledigt), `vectoring`, `priority_handler`, `data_tracker`, `robotiq_gripper`, Attractor → IK-Velocity-Controller | Datenpfad bis `data_tracker` geprüft (Nachtrag 12 / K4); Schätzung mit laufendem Band bestätigt (L9, L10). Attractor von Hand auf K = 5 / 50 Hz (L18) |
-| ✅ greift im Lauf | `object_follower` (4a, 4b, 4d), `fake_objects.py` | Gedrosselt mit Fake bestanden (L18); **erste echte Griffe mit Ablage am 24.09.** (L19), `err_laengs` ≈ +1 mm. 4c (Roboterkamera) offen |
+| ✅ greift im Lauf | `object_follower` (4a, 4b, 4d) mit `base_cam` | **Sieben von sieben greifbaren Klötzen** bei etwa 0,13 m/s gegriffen und abgelegt (L19/L20), `err_laengs` +0,3 … +2 mm. 4c (Roboterkamera) offen. |
 | 🟡 gebaut, am Aufbau offen | `interface_streamer` | |
 | 🟡 misst, Erkennung unzuverlässig | `robot_cam_2` (weiter verfolgt), `robot_cam` (nicht mehr) | Banddistanz und Nah-Gate korrigiert, Hand-Auge neu (L11–L13); neuer Erkennungskern nötig |
 
 ### ⚠️ Zuerst lesen: was sich am 24.09. verschoben hat
 
-Nachtrag 13 / L15–L19:
+Nachtrag 13 / L15–L21:
 
-- **Erste echte Griffe im Lauf, zwei von zwei** (L19): Basiskamera, 0,13 m/s,
-  greifen, heben, ablegen. Ablagepose und 245 mm bestätigt.
+- **Pick-on-the-fly ist am Aufbau bestätigt:** erst zwei von zwei (L19), nach
+  Nutzlast- und Beschleunigungskorrektur insgesamt **sieben von sieben
+  greifbare Klötze** (L20): Basiskamera, etwa 0,13 m/s, greifen, heben,
+  ablegen. Ablagepose und 245 mm sind bestätigt.
 
 - **Der Follower hatte nie Signale** — seine Parameterprüfung scheiterte an den
   Topic-Parametern von modulo (L17). Korrigiert; erst seitdem läuft er verdrahtet.
@@ -326,13 +328,13 @@ B11 nur beobachtet (Gelenke nicht mitgeschrieben).
 `is_zone_feasible` zeigt, ob die Zone lang genug ist. **B10:** Arbeitsraum nach
 `Safety/README.md` festlegen.
 
-**6. Follower am echten Roboter** — 🟡 4a, 4b, 4d bis zum Fehlgriff mit `fake_objects.py`
-bestanden (L18). Erst 4a, dann 4b mit **B4**
-(`lead_time_s` einmessen), **D23** (Montagewinkel der Backen). Dann 4d mit dem
-Referenzklotz: **erster Testgriff** bestätigt die 245 mm (B15), **D22** messen
-(Absenken, Greifen, Heben) und `t_descend_s` nachziehen, **B22** beobachten (bleibt
-die Ziel-ID beim Greifen?), **B18** Toleranzen, **B9** Ablagepose bei laufendem
-Programm gegenlesen.
+**6. Follower am echten Roboter** ✅ für den Basiskamera-Pfad — 4a, 4b und 4d
+sind mit laufendem Band bestätigt. `lead_time_s = 0,24`, die Ablagepose (B9) und
+245 mm Flansch → Backenspitze tragen; nach korrigierter Nutzlast und
+`command_rate_limit = 2,0` auch am Bandrand (L19/L20). Als nächste Abnahme bleiben
+mehrere dicht aufeinanderfolgende Klötze (Priorisierung), Farben, Grenzfälle der
+Greifhöhe, Dauerlauf/Stabilität des 500-Hz-Regelkreises sowie B18/D23. B21 und die
+kleinen Erkennungsoptimierungen der Basiskamera werden gezielt nachgezogen.
 
 **7. 4c aufschalten** — erst nach B6 und B24: `weight_across`, dann
 `weight_along` schrittweise auf 1, `w_wirksam` im Übersichtsbild mitlesen.

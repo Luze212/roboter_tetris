@@ -20,7 +20,7 @@ Block wird sofort nach seinem Ende dokumentiert** — nicht gesammelt am Schluss
 | 2 | ✅ **B23 erledigt.** Kamera schaut senkrecht, Parallaxe in der Detektion korrigiert, neue Extrinsik als Standardwert; Position ≤ 6 mm auch für 100-mm-Klötze. Höhe 11,5 mm zu niedrig (L6) |
 | 3 | ✅ **Pool −127,9 mm/s** (Stoppuhr 125–133), alle Klötze nach ~1 s final, hinter dem Bild als Status 4 bis ans Bandende (L9, L10). **Ziel 3 bestätigt** |
 | 6 | 🟡 **Hand-Auge neu eingemessen und bestätigt** (2–4 mm, L11, L13). Erkennung von `robot_cam_2` an flachen Klötzen unzuverlässig (bis 32 mm) → neuer Erkennungskern am Schreibtisch; erster Griff ohne Roboterkamera |
-| 5 | ✅ **Arbeitsraum und Greifzone festgelegt** (L14): ws x −1,0 … −0,30, y −0,32 … +0,48, z 0,3086 … 0,60; Zone y +0,40 … −0,22 |
+| 5 | ✅ **Arbeitsraum festgelegt** (L14): ws x −1,0 … −0,30, y −0,32 … +0,48, z 0,3086 … 0,60; die frühere engere Greifzone wurde am Folgetag durch Zone = Arbeitsraum ersetzt (L21). |
 
 **Entscheidungen des Tages:** Greifzone und Wartebereich **außerhalb des Bildes
 der Basiskamera** (L4); die Strecke dahinter überbrückt die Roboterkamera.
@@ -39,8 +39,9 @@ der Basiskamera** (L4); die Strecke dahinter überbrückt die Roboterkamera.
 
 ### Weiter am nächsten Termin
 
-0. **Build** mit L15–L18 (Standardwerte `lead_time_s` 0,24, `attractor_v_max_mps` 0,30,
-   `t_descend_s` 1,2; Parametergruppen). Vorher ChatGPT, Discord u. Ä. beenden,
+0. **Build** mit L15–L21 (insbesondere Standardwerte `lead_time_s` 0,24,
+   `attractor_v_max_mps` 0,30, `t_descend_s` 1,2, Greifzone = Arbeitsraum sowie
+   `base_cam`-ROI x 342 / Breite 618). Vorher ChatGPT, Discord u. Ä. beenden,
    AICA-Oberfläche während der Läufe minimieren.
 1. **AICA-Blöcke von Hand** (nicht im Paket): Attractor `linear_gains` [5.0], `rate`
    50; IK-Controller `max_linear_velocity` 0,30; `rate` Follower 50,
@@ -48,12 +49,10 @@ der Basiskamera** (L4); die Strecke dahinter überbrückt die Roboterkamera.
    `target_pose` → Attractor (nicht IK-Controller), `picked_id` → `priority_handler`,
    `gripper_close` → Greifer. `camera_node` von `robot_cam_2` leer.
 2. ~~Kontrolllauf `lead_time_s`~~ — erledigt durch den echten Griff (L19).
-3. ✅ **Erster echter Griff (L19)** — nächster Schritt: mehrere Klötze, kurz
-   hintereinander (Priorisierung), Farben, flache 50-mm-Klötze, Dauerlauf.
-   Ursprünglich: Basiskamera konfigurieren und aktivieren, Referenzklotz
-   50 × 50 × 100 aufs laufende Band. Erstmals mit Klotz im Greifer: Heben, **Ablage**
-   (−0,316 / +0,476 / 0,42, B9 gegenlesen), öffnen, zurück. Greifhöhe prüft die
-   245 mm und die Bandhöhe ±5 mm (B17).
+3. ✅ **Basiskamera-Pickpfad bestätigt (L19/L20):** sieben von sieben greifbare
+   Klötze wurden im Lauf abgelegt; Ablagepose und 245 mm sind bestätigt. Nächster
+   Schritt: mehrere Klötze kurz hintereinander (Priorisierung), Farben,
+   Grenzfälle der Greifhöhe und Dauerlauf.
 4. **Rechenlast** weiter beobachten; bleiben Einbrüche, Rate des Hardware-Interface
    (250 statt 500 Hz) prüfen — vorher recherchieren. `event_engine` wächst, AICA
    zwischendurch neu starten.

@@ -1,6 +1,6 @@
 # Projektkontext Robotetris
 
-**Stand 23.09.2026.** Rahmenbedingungen, Abgrenzungen und Arbeitsweise.
+**Stand 24.09.2026.** Rahmenbedingungen, Abgrenzungen und Arbeitsweise.
 Gedacht als Einstieg für jede Sitzung, die ohne Vorkontext startet — vor den
 technischen Dokumenten zu lesen.
 
@@ -21,8 +21,8 @@ und durchlaufen den Arbeitsbereich.
 |---|---|---|---|
 | 1 | Ansteuerung des UR10e mit AICA | AICA-Kette Attractor → IK-Velocity-Controller | **erledigt** |
 | 2 | Entwicklung eines schnellen Kalibrierungsverfahrens | Kommilitone, **getrenntes Projekt** (`Calibration/*`). Wir sind Abnehmer; offen ist nur die Übergabeform (C6). | läuft |
-| 3 | Verfahren zur **Geschwindigkeitsschätzung** und Positionsberechnung der Gegenstände | `base_cam` (Position), `vectoring` (Geschwindigkeit je Klotz und gepoolt) | Position läuft am Aufbau, gegen den Roboter ≤ 6 mm (B23 erledigt); Schätzung **gebaut**, mit laufendem Band offen (Block 3, B21) |
-| 4 | Algorithmus zur **Priorisierung** des zuerst zu greifenden Gegenstandes und zur **Bahnplanung** für das kontrollierte Greifen | `priority_handler` (Auswahl, Erreichbarkeit, Greifebene); `object_follower` mit den AICA-Bausteinen (Bahn) | **gebaut**, am Aufbau offen |
+| 3 | Verfahren zur **Geschwindigkeitsschätzung** und Positionsberechnung der Gegenstände | `base_cam` (Position), `vectoring` (Geschwindigkeit je Klotz und gepoolt) | **am laufenden Band bestätigt:** Pool −127,9 mm/s bei 125–133 mm/s Gegenprobe; Tracks werden hinter dem Bild vorhergesagt weitergeführt (L9/L10). B21 bleibt als gezielte Randprüfung offen. |
+| 4 | Algorithmus zur **Priorisierung** des zuerst zu greifenden Gegenstandes und zur **Bahnplanung** für das kontrollierte Greifen | `priority_handler` (Auswahl, Erreichbarkeit, Greifebene); `object_follower` mit den AICA-Bausteinen (Bahn) | **am Aufbau bestätigt:** sieben von sieben greifbaren Klötzen bei laufendem Band gegriffen und abgelegt; Mehrfachbelegung, Farben, Dauerlauf und Roboterkamera-Korrektur bleiben offen (L19–L21). |
 
 **Zusätzlich, als eigenes Ziel:** den Prozess nachvollziehbar darstellen —
 `data_tracker` (ein Blatt ohne Rückwirkung auf den Regelpfad) und
@@ -41,7 +41,9 @@ ihren Parametern zeigt **`uebersicht/systemgraph.md`**.
 > (Attractor, IK-Velocity-Controller) gilt als Lösung der Vorgabe.
 
 Der eigentliche Kern ist der **Pickvorgang im Lauf** — Ziele 3 und 4 zusammen.
-**Genau daran ist das Vorgängerprojekt gescheitert.**
+**Genau daran ist das Vorgängerprojekt gescheitert.** Der neue Regelpfad hat
+ihn am 24.09.2026 mit der Basiskamera und etwa 0,13 m/s Bandgeschwindigkeit
+nachweislich erfüllt (sieben von sieben greifbaren Klötzen abgelegt, L19/L20).
 
 ## 2. Was das Vorgängerprojekt erreicht hat
 
@@ -92,19 +94,20 @@ inzwischen eigenständig geklärt (kein Greifer im URDF, geregelt wird der Flans
 
 ## 3. Was heute funktioniert
 
-**Stand 23.09.2026: Alle Komponenten sind gebaut** und laufen in AICA; der
-Datenpfad `base_cam` → `vectoring` → `priority_handler` → `data_tracker` ist am
-Aufbau geprüft. Noch nicht gefahren sind der Follower und die Roboterkamera.
-Stand und Reihenfolge: `uebersicht/fahrplan-aufbau.md`.
+**Stand 24.09.2026: Alle Komponenten sind gebaut** und laufen in AICA. Der
+vollständige Regelpfad `base_cam` → `vectoring` → `priority_handler` →
+`object_follower` → Attractor → IK-Controller hat am Aufbau sieben greifbare
+Klötze während des Bandlaufs gegriffen und abgelegt. Die Roboterkamera ist dafür
+weiterhin nicht zugeschaltet; Stand und Restprogramm: `uebersicht/fahrplan-aufbau.md`.
 
 | Komponente | Stand |
 |---|---|
 | `robotiq_gripper` | **funktionsfähig** am Aufbau; seit 2.3 mit `motion_done`/`has_object` |
-| `base_cam` | **funktionsfähig**, erkennt Klötze zuverlässig; seit 2.1/2.4 Vertrag S1 und gemessene Längsposition. Seit 23.09.2026 Übergangskalibrierung in `world` und korrigierte Parallaxe: ≤ 6 mm zu den Antastpunkten des Roboters (B23 erledigt, Nachtrag 13) |
-| `vectoring` | gebaut — Geschwindigkeitsschätzung je Klotz und gepoolt (Ziel 3) |
-| `priority_handler` | gebaut — Zielauswahl, Erreichbarkeit, Greifebene (Ziel 4); Greifzone seit 23.09.2026 festgelegt (B19), wählt auch vorhergesagte Klötze hinter dem Bild |
+| `base_cam` | **funktionsfähig im Pickpfad**: Übergangskalibrierung in `world`, korrigierte Parallaxe und ≤ 6 mm zu Antastpunkten (B23). Seit L21 deckt `roi_x = 342`, `roi_width = 618` den erreichbaren Bandbereich ab; kleine Optimierungen für flache und randnahe Klötze bleiben offen. |
+| `vectoring` | **am Band bestätigt** — Geschwindigkeitsschätzung je Klotz und gepoolt; finale Tracks laufen hinter dem Bild als Status 4 weiter (L9/L10). |
+| `priority_handler` | **im Pickpfad bestätigt** — Zielauswahl, Erreichbarkeit, Greifebene; Greifzone seit L21 gleich dem abgefahrenen Arbeitsraum und wählt auch vorhergesagte Klötze hinter dem Bild. |
 | `data_tracker` | gebaut — Klotzliste für die Anzeige |
-| `object_follower` | gebaut, alle vier Stufen — Start, Folgen, Roboterkamera als Korrektur, Greifzyklus mit Ablage |
+| `object_follower` | **im Lauf bestätigt** — Start, Folgen, Greifzyklus und Ablage mit Basiskamera; `lead_time_s = 0,24` bei Attractor K = 5. Roboterkamera-Korrektur bleibt aus. |
 | `interface_streamer` | gebaut — Übersichtsbild für RViz |
 | `robot_cam` / `robot_cam_2` | implementiert und unit-getestet, **am Aufbau am 15.09.2026 durchgefallen** (B6). `robot_cam` farbbasiert (Band ausmaskieren), `robot_cam_2` kantenbasiert mit Tiefenkanten-Fusion. Identische I/O, im Graphen austauschbar. ⚠️ Beide scheitern **nicht an der Erkennung, sondern an der Auswahl** — Einzelheiten: `architektur/robot-cam-befunde.md` §9. **Auswahlkorrektur seit 2.2 umgesetzt**; zweiter Anlauf 22.09. scheiterte an der Banddistanz (K3), seit 23.09. aus dem Bildmedian. **Weiter nur `robot_cam_2`** (Nachtrag 13 / L5). |
 | `move_to_pose_test`, `true_signal`, `toggle_signal` | Testhilfen; `toggle_signal` ersetzt am virtuellen Roboter die Greifer-Rückmeldung |

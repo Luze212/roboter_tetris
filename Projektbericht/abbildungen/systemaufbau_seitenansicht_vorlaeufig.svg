@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="760" viewBox="0 0 1500 760">
+  <style>
+    text { font-family: Arial, sans-serif; fill: #17212b; }
+    .title { font-size: 30px; font-weight: bold; }
+    .heading { font-size: 22px; font-weight: bold; }
+    .label { font-size: 19px; }
+    .small { font-size: 17px; }
+    .note { font-size: 16px; fill: #4b5563; }
+    .dim { font-size: 17px; fill: #2563a8; }
+  </style>
+  <rect width="1500" height="760" fill="white"/>
+  <text x="70" y="58" class="title">Seitenansicht der relevanten Höhen im Versuchsaufbau</text>
+  <text x="70" y="88" class="note">Darstellung im globalen Bezugssystem robot_base</text>
+
+  <!-- einfacher Kamerarahmen -->
+  <line x1="250" y1="150" x2="250" y2="525" stroke="#697782" stroke-width="8"/>
+  <line x1="850" y1="150" x2="850" y2="525" stroke="#697782" stroke-width="8"/>
+  <line x1="250" y1="150" x2="850" y2="150" stroke="#697782" stroke-width="8"/>
+  <rect x="505" y="165" width="90" height="38" rx="4" fill="#d6dce1" stroke="#4b5563" stroke-width="3"/>
+  <line x1="550" y1="203" x2="550" y2="220" stroke="#4b5563" stroke-width="3"/>
+  <text x="630" y="190" class="heading">Base-Kamera</text>
+  <text x="630" y="216" class="small">ca. 0,85 m über Band</text>
+
+  <!-- Höhenlinien, bewusst vor den Beschriftungen beendet -->
+  <line x1="290" y1="510" x2="875" y2="510" stroke="#2563a8" stroke-width="3"/>
+  <line x1="290" y1="405" x2="875" y2="405" stroke="#6d9bc1" stroke-width="2" stroke-dasharray="10 8"/>
+  <line x1="290" y1="300" x2="875" y2="300" stroke="#6d9bc1" stroke-width="2" stroke-dasharray="10 8"/>
+  <text x="915" y="307" class="label">obere Kollisionsgrenze: z = 0,665 m</text>
+  <text x="915" y="412" class="label">sinnvolle Arbeitshöhe: z = 0,480 m</text>
+  <text x="915" y="517" class="label">untere Arbeitsgrenze: z = 0,305 m</text>
+
+  <!-- Förderband -->
+  <rect x="210" y="510" width="700" height="52" rx="5" fill="#e7eef4" stroke="#305b78" stroke-width="3"/>
+  <text x="470" y="595" class="heading">Förderband</text>
+
+  <!-- Z-Achse -->
+  <line x1="1180" y1="510" x2="1180" y2="345" stroke="#1d70b8" stroke-width="4"/>
+  <polygon points="1180,325 1167,355 1193,355" fill="#1d70b8"/>
+  <text x="1200" y="352" class="label">Z+</text>
+  <text x="1130" y="548" class="note">robot_base</text>
+
+  <text x="70" y="690" class="note">Die obere Kollisionsgrenze berücksichtigt die Base-Kamera. Der Greifer ist in dieser Ansicht nicht dargestellt.</text>
+</svg>
