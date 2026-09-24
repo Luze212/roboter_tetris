@@ -22,7 +22,7 @@ frühere Festlegung berührt; an der alten Stelle steht dann ein Verweis.
 | Nachtrag 10 | Bau `object_follower` 4c/4d: J1 Freihöhe, J2 Absenkzeit, J3–J8 |
 | Nachtrag 11 | Bau `interface_streamer`: V1–V3 |
 | Nachtrag 12 | Inbetriebnahme am Aufbau (22.09.): K1–K6, u. a. 180° `base`/`world`, falsche Gier der Altkalibrierung |
-| **Nachtrag 13** | **Audit und Aufbau (23.09.):** L1 Audit, L2 Datenrate/Latenz, L3 Hardware-Takt, L4 Greifer im Bild, L5 Roboterkamera, L6 B23 abgeschlossen (Neigung, Parallaxe, neue Extrinsik), L7 Bandgeschwindigkeit, L8 Standardwerte, L9 Block 3 und Pool-Mindestgeschwindigkeit, L10 Weiterführung hinter dem Bild, L11 Roboterkamera und Hand-Auge, L12 Nah-Gate ohne fehlende Tiefe, L13 Erkennung der Roboterkamera, L14 Arbeitsraum und Greifzone, L15 Standardwerte für Arbeitsraum und Beobachtungspose (24.09.), L16 Kameras 15 Bilder/s, Infrarot aus (24.09.), L17 Follower ohne Signale, Fake-Zeitstempel (24.09.), L18 Block 7 gedrosselt bestanden (24.09.) |
+| **Nachtrag 13** | **Audit und Aufbau (23.09.):** L1 Audit, L2 Datenrate/Latenz, L3 Hardware-Takt, L4 Greifer im Bild, L5 Roboterkamera, L6 B23 abgeschlossen (Neigung, Parallaxe, neue Extrinsik), L7 Bandgeschwindigkeit, L8 Standardwerte, L9 Block 3 und Pool-Mindestgeschwindigkeit, L10 Weiterführung hinter dem Bild, L11 Roboterkamera und Hand-Auge, L12 Nah-Gate ohne fehlende Tiefe, L13 Erkennung der Roboterkamera, L14 Arbeitsraum und Greifzone, L15 Standardwerte für Arbeitsraum und Beobachtungspose (24.09.), L16 Kameras 15 Bilder/s, Infrarot aus (24.09.), L17 Follower ohne Signale, Fake-Zeitstempel (24.09.), L18 Block 7 gedrosselt bestanden (24.09.), **L19 erste echte Griffe im Lauf** (24.09.), L20 Schutzstopp am Bandrand: Nutzlast und Beschleunigung (24.09.), L21 Greifzone = Arbeitsraum, Bildausschnitt der Basiskamera (24.09.) |
 
 ⚠️ Namensgleichheit: **F1–F3 in Nachtrag 2** und **F1–F6 in Nachtrag 8** sind
 verschiedene Punkte — im Text immer mit Nachtragsnummer zitiert.
@@ -3244,7 +3244,7 @@ Bereich), **z min 0,3086** (geschlossene Backenspitze 10 mm über dem Band:
   Follower nie dorthin (Zone, Klemmung beim Anfahren); nur der Transfer auf
   Freihöhe führt hinein. Festgehalten in `Safety/workspace_bounds.json`
   (`status: defined`).
-- **Greifzone** (`priority_handler`, Standardwert): x −0,95 … −0,68,
+- **Greifzone** (`priority_handler`, Standardwert; ⚠️ seit 24.09. = Arbeitsraum, L21): x −0,95 … −0,68,
   **y +0,40 … −0,22** — 5 cm unter dem Arbeitsraumrand fürs Anfahren, 10 cm über dem
   Bandende fürs Mitfahren nach dem Greifen.
 - **`min_grip_height_m` 0,015 → 0,021:** Sonst läge die Greifhöhe flacher Klötze
@@ -3381,3 +3381,94 @@ Wächter hätte den Fake beim Verlassen des erwarteten Quaders beendet (löste n
 `descend_speed_mps` 0,15 und `t_descend_s` 1,2 zurück, dann Basiskamera und echtes
 Band. Beobachtung: Der `priority_handler` wählte Klotz 2 mit 1,06 s Restzeit — die
 Einschwingzeit des Followers (~1,5 s) steckt nicht in der Erreichbarkeit.
+
+### L19 — Erste echte Griffe im Lauf: zwei von zwei (24.09.2026)
+
+Basiskamera aktiv, Band ≈ 0,13 m/s, IK-Controller 0,30 m/s, Attractor K = 5 / 50 Hz,
+Follower `lead_time_s` 0,24, `descend_speed_mps` 0,15, `stable_cycles` 10,
+`timeout_track_s` 3, `priority_handler` `t_descend_s` 1,2. Je ein Klotz von Hand
+am Bandanfang aufgelegt. **Genau der Pick im Lauf ist der Punkt, an dem das
+Vorgängerprojekt gescheitert ist.**
+
+| | Klotz 1 (50 × 50 × 100, hochkant) | Klotz 2 (50 × 75 × 25, auf der Schmalseite, 75 hoch) |
+|---|---|---|
+| Lage quer | x −0,770 | x −0,694 (Bandrand) |
+| gewählt | 4,5 s vor der Greifebene | 4,9 s vor der Greifebene |
+| `err_laengs` / `err_quer` beim Absenken und Greifen | +0,3 … +1,0 / ±0,2 mm | +0,6 … +1,1 / ±0,1 mm |
+| Greifhöhe Flansch | 336,6 mm (→ Klotz ≈ 96 mm) | 325,7 mm (→ ≈ 74 mm) |
+| Ergebnis | gegriffen, gehoben, **abgelegt** (outcome 0) | gegriffen an der breiten Fläche, **abgelegt** |
+| Wahl → abgelegt | ~9 s | ~9 s |
+
+- **Beobachtung am Aufbau (Nutzer):** Beide Griffe sahen richtig aus, beide Klötze
+  liegen auf der Ablageposition. Damit bestätigt: **B9** (Ablagepose), **245 mm**
+  Flansch → Backenspitze und Bandhöhe im Rahmen, **B4** `lead_time_s` 0,24 mit echter
+  Kameralatenz (Rest ≈ +1 mm statt −5 mm mit 0,20 im Fake).
+- **Klotz 2 flach liegend (25 mm hoch):** keine Reaktion — so gewollt, er liegt unter
+  der Greifbarkeitsgrenze 30 mm (B15). Im Log fehlt allerdings die Meldung „nicht
+  greifbar“; ob er als Track ankam, ist nicht belegt → beim nächsten Mal `tracks`
+  mitlesen.
+- Beim Anfahren je einmal „Vorhersage gedeckelt: S4 0,60 / 0,61 s alt“ — knapp über
+  dem Deckel 0,6 s, ohne Folgen. Die 500-Hz-Schleife lief mit 74–78 %, ohne Einbruch.
+
+**Nächste Schritte:** mehrere Klötze nacheinander und kurz hintereinander
+(Priorisierung, Ziel 4), Farben, flache 50-mm-Klötze (Grenzfall Greifhöhe),
+Dauerlauf auf Stabilität der Regelschleife.
+
+### L20 — Schutzstopp am Bandrand: falsche Nutzlast, Anfahren ohne Beschleunigungsgrenze (24.09.2026)
+
+Nach zwei weiteren fehlerfreien Griffen (Ziel 3 und 5) löste ein Klotz am Bandrand
+gleich zu Beginn von ANFAHREN einen **Schutzstopp der UR-Steuerung** aus: **C157A2**
+„Roboter konnte dem Pfad nicht folgen (Kollision oder falsche Einstellung)“ und
+**C162A0** (Hinweis: falsche Nutzlastmasse/Schwerpunkt kann zu Sicherheitsstopps
+führen). Keine Kollision. Mit der Frame-Steuerung waren dieselben Stellungen
+problemlos angefahren worden.
+
+- **Ursache (sehr wahrscheinlich, beides zusammen):**
+  1. **Nutzlast am UR 2,8 kg eingetragen, gemessen 1,3 kg** (Assistent „Messen“,
+     Greifer leer, Roboterkamera dran): Schwerpunkt **CX 12 / CY 24 / CZ 45 mm**
+     (alter Schwerpunkt unbekannt). Mit falschem Modell hält die Steuerung starke
+     Beschleunigungen für eine Störung.
+  2. **Anfahren als Sprung:** Mit der Wahl springt das Ziel von der Beobachtungspose
+     zum Anfahrpunkt; der Attractor fordert K × Abstand (K = 5), gekappt auf
+     0,30 m/s — und der IK-Controller hatte **keine Beschleunigungsgrenze**
+     (`command_rate_limit` = ∞). Bei der Frame-Steuerung (K = 1, schrittweise Ziele)
+     gab es diesen Sprung nie. Am Bandrand ist er am größten.
+- **Abhilfe (Nutzer, am Aufbau):** Nutzlast **1,3 kg** mit gemessenem Schwerpunkt in
+  der Installation gespeichert; IK-Controller **`command_rate_limit` 2,0** — die
+  größte Änderung des Befehls pro Sekunde (modulo `RobotControllerInterface`), beim
+  IK-Controller also Gelenkbeschleunigung in rad/s².
+- **Wiederholung:** drei Griffe, alle abgelegt, kein Stopp — darunter der Bandrand
+  **x −0,94** (Anfahrt 13 cm quer), `err_laengs` +0,3 … +2 mm. Seit dem ersten echten
+  Griff damit **7 von 7** greifbaren Klötzen abgelegt (L19, L20).
+- Die Nutzlast gilt für das leere Werkzeug; gegriffene Klötze (0,1–0,2 kg) liegen
+  in der Toleranz der Steuerung.
+
+### L21 — Greifzone gleich Arbeitsraum; Bildausschnitt der Basiskamera an den Roboter angepasst (24.09.2026)
+
+Beobachtung (Nutzer): Es lagen mehr Klötze auf dem Band, als erkannt wurden, vor allem
+an den Seiten. Ausgewertet an zwei Einzelbildern (Band steht) mit der Erkennung von
+`base_cam` offline:
+
+- **Das Band ist im Bild ~0,8 m breit** (u ≈ 335 … 1185, world x ≈ −0,49 … −1,25). Der
+  Ausschnitt u 360 … 1160 schnitt es am **roboternahen Rand** an; ein Klotz dort
+  (u 352 … 408, x −0,536) berührte den Ausschnittrand und wurde nach der Randregel
+  verworfen. Mit `roi_x` 342 wird er erkannt (75 mm hoch, 50 × 30).
+- **Ein Klotz bei x −0,961 wurde erkannt, lag aber außerhalb der Greifzone**
+  (x −0,95 … −0,68) — der `priority_handler` wählte ihn nie.
+- **Ein flach liegender 25-mm-Klotz** liegt roh nur 11–15 mm über dem Band (Unterschätzung
+  der Oberkante, L6) und fällt unter `min_obj_height` 15 mm — mal erkannt, mal nicht.
+  Greifbar ist er ohnehin nicht (< 30 mm). Offen: `min_obj_height` 10, vorher am leeren
+  Band auf Falschmeldungen prüfen.
+
+**Entscheidung (Nutzer):** Die Greifzone bekommt keinen eigenen Sicherheitsabstand mehr —
+der steckt schon in den abgefahrenen Werten. **Zone x −1,0 … −0,53, y −0,32 … +0,445**
+(Standardwert). Der **Bildausschnitt** reicht vom Bandrand am Roboter bis zur
+Arbeitsraumgrenze x −1,0: **`roi_x` 342, `roi_width` 618** (u 342 … 960; u 960 = x −1,03
+auf Höhe einer 100-mm-Oberkante, damit ein Klotz mit Mitte bei −1,0 ganz im Ausschnitt
+liegt). Klötze jenseits von x −1,0 sind nicht erreichbar und fallen jetzt heraus; der
+kleinere Ausschnitt spart Rechenzeit.
+
+Zu beobachten: Die Wartestellung am Zonenanfang liegt jetzt bei y +0,445, 8–10 cm vor dem
+Bildbeginn der Basiskamera (y ≈ +0,52 … 0,54). Der Greifer steht dort hoch
+(> `max_obj_height_mm` über dem Band) und wird nicht als Klotz gemeldet — beim ersten
+Lauf gegenlesen.

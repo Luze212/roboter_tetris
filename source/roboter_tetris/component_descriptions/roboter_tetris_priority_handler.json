@@ -60,34 +60,34 @@
   "parameters": [
     {
       "display_name": "Greifzone x min (m) [zone_x_min]",
-      "description": "Untere x-Grenze der Greifzone in world. Festgelegt 23.09.2026 (B19, Nachtrag 13 / L14): im Arbeitsraum, außerhalb des Bildes der Basiskamera; y +0,40 ... -0,22 bei Bandende -0,32.",
+      "description": "Untere x-Grenze der Greifzone in world. Seit 24.09.2026 gleich dem von Hand abgefahrenen Arbeitsraum (x -1,0 ... -0,53, y -0,32 ... +0,445), ohne zusätzlichen Abstand - der steckt schon in den Werten (Nachtrag 13 / L21).",
       "parameter_name": "zone_x_min",
       "parameter_type": "double",
-      "default_value": "-0.95",
+      "default_value": "-1.0",
       "dynamic": true
     },
     {
       "display_name": "Greifzone x max (m) [zone_x_max]",
-      "description": "Obere x-Grenze der Greifzone in world. Festgelegt 23.09.2026 (B19, Nachtrag 13 / L14): im Arbeitsraum, außerhalb des Bildes der Basiskamera; y +0,40 ... -0,22 bei Bandende -0,32.",
+      "description": "Obere x-Grenze der Greifzone in world. Seit 24.09.2026 gleich dem von Hand abgefahrenen Arbeitsraum (x -1,0 ... -0,53, y -0,32 ... +0,445), ohne zusätzlichen Abstand - der steckt schon in den Werten (Nachtrag 13 / L21).",
       "parameter_name": "zone_x_max",
       "parameter_type": "double",
-      "default_value": "-0.68",
+      "default_value": "-0.53",
       "dynamic": true
     },
     {
       "display_name": "Greifzone y min (m) [zone_y_min]",
-      "description": "Untere y-Grenze der Greifzone in world. Festgelegt 23.09.2026 (B19, Nachtrag 13 / L14): im Arbeitsraum, außerhalb des Bildes der Basiskamera; y +0,40 ... -0,22 bei Bandende -0,32.",
+      "description": "Untere y-Grenze der Greifzone in world. Seit 24.09.2026 gleich dem von Hand abgefahrenen Arbeitsraum (x -1,0 ... -0,53, y -0,32 ... +0,445), ohne zusätzlichen Abstand - der steckt schon in den Werten (Nachtrag 13 / L21).",
       "parameter_name": "zone_y_min",
       "parameter_type": "double",
-      "default_value": "-0.22",
+      "default_value": "-0.32",
       "dynamic": true
     },
     {
       "display_name": "Greifzone y max (m) [zone_y_max]",
-      "description": "Obere y-Grenze der Greifzone in world. Festgelegt 23.09.2026 (B19, Nachtrag 13 / L14): im Arbeitsraum, außerhalb des Bildes der Basiskamera; y +0,40 ... -0,22 bei Bandende -0,32.",
+      "description": "Obere y-Grenze der Greifzone in world. Seit 24.09.2026 gleich dem von Hand abgefahrenen Arbeitsraum (x -1,0 ... -0,53, y -0,32 ... +0,445), ohne zusätzlichen Abstand - der steckt schon in den Werten (Nachtrag 13 / L21).",
       "parameter_name": "zone_y_max",
       "parameter_type": "double",
-      "default_value": "0.40",
+      "default_value": "0.445",
       "dynamic": true
     },
     {

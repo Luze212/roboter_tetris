@@ -86,11 +86,15 @@ class BaseCam(LifecycleComponent):
 
         # -- Geometry / detection parameters (defaults from config_cam_static.yml;
         #    neutral where the C++ binary did not apply the config value) --------
-        self.add_parameter(sr.Parameter("roi_x", 360, sr.ParameterType.INT),
+        # ROI x 342...960 since 24.09.2026 (Nachtrag 13 / L21): from the belt edge
+        # near the robot (u ~335) to the far limit of the workspace (x -1.0; u 960
+        # keeps a block centred there whole). With 360 the belt edge near the
+        # robot was cut and blocks there touched the ROI border -> discarded.
+        self.add_parameter(sr.Parameter("roi_x", 342, sr.ParameterType.INT),
                            "ROI x-Offset in px (0/0/0/0 = Vollbild)")
         self.add_parameter(sr.Parameter("roi_y", 60, sr.ParameterType.INT),
                            "ROI y-Offset in px")
-        self.add_parameter(sr.Parameter("roi_width", 800, sr.ParameterType.INT),
+        self.add_parameter(sr.Parameter("roi_width", 618, sr.ParameterType.INT),
                            "ROI Breite in px")
         self.add_parameter(sr.Parameter("roi_height", 580, sr.ParameterType.INT),
                            "ROI Höhe in px")

@@ -32,6 +32,9 @@ der Basiskamera** (L4); die Strecke dahinter überbrückt die Roboterkamera.
 | Rechenlast | Kameras auf 15 Bilder/s; `base_cam` unverändert 8,6 Messungen/s. **Keine NVIDIA-GPU** im Rechner (L16). Infrarot der Roboterkamera abschalten hängte AICA auf — `camera_node` leer (L16) |
 | Follower | Legte **keine Signale** an (Parameterprüfung), korrigiert (L17). Arbeitsraum und Beobachtungspose sind Standardwert (L15) |
 | 7 | ✅ **Gedrosselt bestanden (L18)** mit `fake_objects.py`: Folgen, Absenken, Greifen (Fehlgriff ins Leere), Abbruch, Heben — bei 0,07 m/s (IK 0,10) und 0,13 m/s (IK 0,30). Attractor auf K = 5 / 50 Hz; `err_laengs` −2,5 bzw. −5 mm → `lead_time_s` 0,24 |
+| **4d** | ✅ **Erste echte Griffe im Lauf (L19):** 100-mm- und 75-mm-Klotz mit Basiskamera bei 0,13 m/s gegriffen und abgelegt, `err_laengs` ≈ +1 mm; Ablagepose (B9) und 245 mm bestätigt |
+| ⚠️→✅ | **Schutzstopp am Bandrand** (C157A2/C162A0): Nutzlast 2,8 → 1,3 kg gemessen, IK `command_rate_limit` 2,0 → Bandrand x −0,94 gegriffen; 7 von 7 abgelegt (L20) |
+| Erkennung | Band im Bild ~0,8 m breit; Ausschnitt schnitt den roboternahen Rand an, Zone kleiner als der Arbeitsraum → **Zone = Arbeitsraum, `roi_x` 342 / `roi_width` 618** (L21, Standardwert) |
 | ⚠️ | **Einbruch der 500-Hz-Schleife** (4/500 Hz, ~1 s) beim Kontrolllauf → External Control stoppte. Schleife auch in Ruhe nur 84–86 % (L18) |
 
 ### Weiter am nächsten Termin
@@ -44,9 +47,10 @@ der Basiskamera** (L4); die Strecke dahinter überbrückt die Roboterkamera.
    `priority_handler`/`vectoring` 20, `data_tracker` 2. **Verdrahtung prüfen:**
    `target_pose` → Attractor (nicht IK-Controller), `picked_id` → `priority_handler`,
    `gripper_close` → Greifer. `camera_node` von `robot_cam_2` leer.
-2. **Kontrolllauf `lead_time_s` 0,24** mit `fake_objects.py --velocity -0.13`, Band
-   leer: erwartet `err_laengs` ≈ 0 statt −5 mm.
-3. **Erster echter Griff:** Basiskamera konfigurieren und aktivieren, Referenzklotz
+2. ~~Kontrolllauf `lead_time_s`~~ — erledigt durch den echten Griff (L19).
+3. ✅ **Erster echter Griff (L19)** — nächster Schritt: mehrere Klötze, kurz
+   hintereinander (Priorisierung), Farben, flache 50-mm-Klötze, Dauerlauf.
+   Ursprünglich: Basiskamera konfigurieren und aktivieren, Referenzklotz
    50 × 50 × 100 aufs laufende Band. Erstmals mit Klotz im Greifer: Heben, **Ablage**
    (−0,316 / +0,476 / 0,42, B9 gegenlesen), öffnen, zurück. Greifhöhe prüft die
    245 mm und die Bandhöhe ±5 mm (B17).

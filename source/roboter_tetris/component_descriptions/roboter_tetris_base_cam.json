@@ -59,10 +59,10 @@
   "parameters": [
     {
       "display_name": "ROI X (px)",
-      "description": "Bildausschnitt: x-Offset in px. ROI 0/0/0/0 = Vollbild.",
+      "description": "Bildausschnitt: x-Offset in px. ROI 0/0/0/0 = Vollbild. Standard seit 24.09.2026: x 342 ... 960 px = Bandrand am Roboter bis Arbeitsraumgrenze x -1,0 (Nachtrag 13 / L21).",
       "parameter_name": "roi_x",
       "parameter_type": "int",
-      "default_value": "360",
+      "default_value": "342",
       "dynamic": true
     },
     {
@@ -75,10 +75,10 @@
     },
     {
       "display_name": "ROI Breite (px)",
-      "description": "Bildausschnitt: Breite in px",
+      "description": "Bildausschnitt: Breite in px Standard seit 24.09.2026: x 342 ... 960 px = Bandrand am Roboter bis Arbeitsraumgrenze x -1,0 (Nachtrag 13 / L21).",
       "parameter_name": "roi_width",
       "parameter_type": "int",
-      "default_value": "800",
+      "default_value": "618",
       "dynamic": true
     },
     {

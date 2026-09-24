@@ -43,13 +43,16 @@ Aufbau ist im Gang — Stand und nächste Schritte: **`fahrplan-aufbau.md`**
 | | Komponente | Stand |
 |---|---|---|
 | ✅ läuft am Aufbau | `base_cam` (Übergangskalibrierung, B23 erledigt), `vectoring`, `priority_handler`, `data_tracker`, `robotiq_gripper`, Attractor → IK-Velocity-Controller | Datenpfad bis `data_tracker` geprüft (Nachtrag 12 / K4); Schätzung mit laufendem Band bestätigt (L9, L10). Attractor von Hand auf K = 5 / 50 Hz (L18) |
-| 🟡 am Roboter gedrosselt bestanden | `object_follower` (4a, 4b, 4d bis zum Fehlgriff), `fake_objects.py` | Mit Fake-Klötzen bei 0,07 und 0,13 m/s: Folgen, Absenken, Greifen, Abbruch (L18). Offen: echter Klotz mit Ablage, Kontrolllauf `lead_time_s` 0,24 |
+| ✅ greift im Lauf | `object_follower` (4a, 4b, 4d), `fake_objects.py` | Gedrosselt mit Fake bestanden (L18); **erste echte Griffe mit Ablage am 24.09.** (L19), `err_laengs` ≈ +1 mm. 4c (Roboterkamera) offen |
 | 🟡 gebaut, am Aufbau offen | `interface_streamer` | |
 | 🟡 misst, Erkennung unzuverlässig | `robot_cam_2` (weiter verfolgt), `robot_cam` (nicht mehr) | Banddistanz und Nah-Gate korrigiert, Hand-Auge neu (L11–L13); neuer Erkennungskern nötig |
 
 ### ⚠️ Zuerst lesen: was sich am 24.09. verschoben hat
 
-Nachtrag 13 / L15–L18:
+Nachtrag 13 / L15–L19:
+
+- **Erste echte Griffe im Lauf, zwei von zwei** (L19): Basiskamera, 0,13 m/s,
+  greifen, heben, ablegen. Ablagepose und 245 mm bestätigt.
 
 - **Der Follower hatte nie Signale** — seine Parameterprüfung scheiterte an den
   Topic-Parametern von modulo (L17). Korrigiert; erst seitdem läuft er verdrahtet.
@@ -317,7 +320,7 @@ Debug-Bild ablesen), dann **B8** (Beobachtungshöhe, trägt `observe_z`) und D18
 **B24:** stempelt die D435i in der Rechneruhr?
 
 **5. Greifzone** ✅ — **B19 + B10** am 23.09.2026 von Hand abgefahren: Arbeitsraum
-in `Safety/workspace_bounds.json`, Zone y +0,40 … −0,22 als Standardwert im
+in `Safety/workspace_bounds.json`, Zone (seit 24.09. = Arbeitsraum, L21) als Standardwert im
 `priority_handler` — außerhalb des Bildes der Basiskamera (Nachtrag 13 / L4, L14).
 B11 nur beobachtet (Gelenke nicht mitgeschrieben).
 `is_zone_feasible` zeigt, ob die Zone lang genug ist. **B10:** Arbeitsraum nach

@@ -101,6 +101,9 @@ Erkenntnis in fünf Dateien schreiben.
 | Erster Lauf am echten Roboter, Attractor-Verstärkung, Vorhalt, Einbrüche der 500-Hz-Schleife | ebd. Nachtrag 13 / L18; `uebersicht/fahrplan-aufbau.md` „Stand nach Termin C“ |
 | Kamerabildrate, Infrarot der Roboterkamera, keine GPU | ebd. Nachtrag 13 / L16; `uebersicht/einrichtung-projektanwendung.md` §3 |
 | Warum der Follower anfangs keine Signale hatte | ebd. Nachtrag 13 / L17 |
+| Erste echte Griffe im Lauf (Messwerte, was bestätigt ist) | ebd. Nachtrag 13 / L19 |
+| Schutzstopp der UR-Steuerung, Nutzlast, Beschleunigungsgrenze | ebd. Nachtrag 13 / L20; `uebersicht/einrichtung-projektanwendung.md` §2 |
+| Warum Klötze am Bandrand fehlten; Greifzone und Bildausschnitt | ebd. Nachtrag 13 / L21 |
 | Wie der Follower startet (Abbruchpfad) und warum Arbeitsraum und Beobachtungspose keine Defaults haben | ebd. Nachtrag 8 / F3, F4 |
 | Wie `lead_time_s` eingemessen wird (B4) und was `outcome = 4` heißt | ebd. Nachtrag 9 / G7, G2 |
 | Wie die Roboterkamera wirkt und wie der Greifzyklus abläuft, warum die Freihöhe 0,49 m ist | ebd. Nachtrag 10 / J1–J8 |

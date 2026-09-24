@@ -106,6 +106,8 @@ Komponentenbeschreibungen im AICA-Image (`v2.0.5-jazzy`, core v5.0.0).
 | `SignalPointAttractor` | `angular_gains` | `[1.0]` | darf abweichen; zu klein lässt das Handgelenk beim Absenken nachdrehen (F1) |
 | `SignalPointAttractor` | `max_linear_velocity` | 0,5 m/s | 2–3 × Bandgeschwindigkeit — bei gemessenen **≈ 0,13 m/s** (Stoppuhr, Nachtrag 13 / L7) also 0,26–0,39 m/s |
 | **`IKVelocityController`** | **`max_linear_velocity`** | **0,25 m/s** | **Die bindende Grenze.** Sie klemmt unabhängig vom Attractor. Wird nur der Attractor angehoben, bleibt die Anhebung wirkungslos. Beim gemessenen Band (≈ 0,13 m/s) sind 0,25 m/s knapp das Doppelte; für das Folgen mit laufendem Band auf ≥ 0,30 m/s. ⚠️ Die Sicherheitsregel „erster Lauf mit 0,10 m/s“ (Fahrplan §2) holt ein 0,13-m/s-Band **nie** ein — gedrosselt nur mit `fake_objects.py` bei kleiner Geschwindigkeit fahren. |
+| `IKVelocityController` | **`command_rate_limit`** | ∞ | **2,0** (rad/s², Gelenkbeschleunigung). Ohne Grenze springt der Arm beim Anfahren aus dem Stand auf 0,30 m/s — Schutzstopp C157A2 am Bandrand (Nachtrag 13 / L20) |
+| UR-Steuerung (Pendant, Installation) | Nutzlast | 2,8 kg | **1,3 kg**, Schwerpunkt 12 / 24 / 45 mm — gemessen 24.09.2026 (L20) |
 | `IKVelocityController` | `pinv_damping` | 0,0 | Reserve gegen explodierende Gelenkgeschwindigkeiten nahe Singularitäten (B11) |
 | `SignalPointAttractor` | `linear_precision` | 0,01 m | Schwelle für `is_in_range`; nur für stehende Ziele relevant (`WARTEN`, `ABLEGEN`) |
 
@@ -282,7 +284,8 @@ Nachtrag 5.
 | Ablagepose Flansch | x = **−316,49** · y = **+476,21** · z = **+419,71** mm | B9 |
 | Ablage-Orientierung (w,x,y,z) | 0,006857 · 0,680692 · 0,732524 · −0,004575 | B9 |
 | **Arbeitsraum `ws_*`** (festgelegt 23.09.2026) | x −1,0 … −0,30 · y −0,32 … +0,48 · z 0,3086 … 0,60 m | B10, `Safety/workspace_bounds.json`, §9 |
-| Greifzone (`priority_handler`) | x −0,95 … −0,68 · y +0,40 … −0,22 m | B19, Standardwert |
+| Greifzone (`priority_handler`) | x −1,0 … −0,53 · y −0,32 … +0,445 m (= abgefahrener Arbeitsraum, seit 24.09.; vorher −0,95 … −0,68 · +0,40 … −0,22) | B19, Standardwert (L21) |
+| Bildausschnitt `base_cam` | `roi_x` 342, `roi_width` 618 (u 342 … 960), `roi_y` 60, `roi_height` 580 | Bandrand am Roboter bis Arbeitsraumgrenze x −1,0; Standardwert (L21) |
 | Bandrichtung | praktisch die **y-Achse** | M10 |
 | Bandebenheit | quer 0,39°, längs 0,01° | M9 |
 | Band von Rolle zu Rolle in `world` | y ≈ **+1,08 … −0,375 m** (~1,5 m) | Nachtrag 13 / L7 |
@@ -320,7 +323,7 @@ Block, in dem sie nicht von Hand überschrieben sind.
 | `ws_x_min` / `ws_x_max` | −1,000 / −0,300 | abgefahren bis −0,530; erweitert für die Ablage (x −0,316) |
 | `ws_y_min` / `ws_y_max` | −0,320 / +0,480 | Bandende / abgefahren bis +0,445, erweitert für die Ablage (y +0,476) |
 | `ws_z_min` / `ws_z_max` | 0,3086 / 0,600 | Backenspitze 10 mm über dem Band / darüber Singularität |
-| `observe_x` / `observe_y` | −0,816 / **+0,35** | Bandmitte, am Anfang der Greifzone (y +0,40 … −0,22) |
+| `observe_x` / `observe_y` | −0,816 / **+0,35** | Bandmitte, vor dem Anfang der Greifzone (y +0,445 … −0,32) |
 | `observe_z` | **0,45** | ohne Roboterkamera tief folgen; mit Roboterkamera höher (B8) |
 | `observe_yaw_deg` | 90° | Backen quer zur Bandrichtung, nahe der Ablage-Orientierung (94°) |
 | `priority_handler`: `t_descend_s` | **1,2** | (0,45 − 0,31) / 0,15 m/s + Einschwingen; passt zu `observe_z` 0,45 (J2) |

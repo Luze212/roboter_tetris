@@ -31,15 +31,14 @@ MIN_BELT_SPEED_MPS = 0.01
 
 @dataclass
 class SelectorParams:
-    # Grasp zone in world (B19, 23.09.2026, Nachtrag 13 / L14). x: the belt
-    # surface the robot touched (-0.70 ... -0.93, M9). y: inside the workspace
-    # driven by hand (-0.32 ... +0.445), outside the base camera image -- 5 cm
-    # below its upper edge for the approach, 10 cm above the belt end for moving
-    # on with the belt after the grip.
-    zone_x_min: float = -0.95
-    zone_x_max: float = -0.68
-    zone_y_min: float = -0.22
-    zone_y_max: float = 0.40
+    # Grasp zone in world = the workspace driven by hand (B10/B19): x -1.0 ...
+    # -0.53, y -0.32 ... +0.445. The margins of L14 (5 cm / 10 cm in y, x only
+    # -0.95 ... -0.68) are gone since 24.09.2026 (Nachtrag 13 / L21): the values
+    # driven by hand already hold the safety distance (user).
+    zone_x_min: float = -1.0
+    zone_x_max: float = -0.53
+    zone_y_min: float = -0.32
+    zone_y_max: float = 0.445
     #: Binding speed limit of the approach: the lower of attractor and IK
     #: controller (A1). 0.30 since 24.09.2026: the IK controller runs at 0.30
     #: for the belt (setup guide §2, Nachtrag 13 / L18). Throttled runs: set lower.
