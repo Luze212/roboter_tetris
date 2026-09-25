@@ -23,9 +23,9 @@ Das Warum hinter den Entscheidungen und die verbindlichen Schnittstellen.
 
 | Dokument | Inhalt | |
 |---|---|---|
-| `entscheidungen.md` | Alle Architekturentscheidungen mit Begründung: Themen 1–7, Nachträge 1–13. Neuere Nachträge gehen vor, wo sie frühere Festlegungen berühren. Nachtrag 6: Projektvorgaben; 7–11: Bau der Komponenten; 12–13: Inbetriebnahme am Aufbau bis zum finalen Build | **normativ** |
+| `entscheidungen.md` | Alle Architekturentscheidungen mit Begründung: Themen 1–7, Nachträge 1–13. Neuere Nachträge gehen vor, wo sie frühere Festlegungen berühren. Nachtrag 6: Projektvorgaben; 7–11: Bau der Komponenten; 12–13: Inbetriebnahme am Aufbau bis zum finalen Build, danach die Kalibrierung der Basiskamera (L27) | **normativ** |
 | `datenvertraege.md` | Signalspezifikation S1–S10: Felder, Strides, Einheiten | **normativ** |
-| `bilder/` | Messbilder und Rohdaten der Kalibrierung (22./23.09.2026) | |
+| `bilder/` | Messbilder und Rohdaten: Kalibrierung L6 (22./23.09.2026), Kalibrierung mit dem Roboter und Tiefe gegen Farbe der L515 (25.09.2026) | |
 
 ## `archiv/` — abgeschlossen, nicht mehr gepflegt
 
@@ -91,6 +91,7 @@ ist daraus abgeleitet. Änderungen an einem Signal werden **zuerst** in
 | Warum die Anzeige ASCII schreibt und wann sie „veraltet“ zeigt | ebd. Nachtrag 11 / V1–V3 |
 | Warum Basiskamera und Roboter das Band an verschiedenen Stellen sahen (180°) | ebd. Nachtrag 8 / F1, Nachtrag 12 / K5 |
 | Woher die Kalibrierung der Basiskamera stammt, warum sie senkrecht schaut, was die Parallaxe war | ebd. Nachtrag 13 / L6 |
+| Wie die Basiskamera mit dem Roboter kalibriert wird und warum das Ergebnis noch nicht gilt (Tiefe gegen Farbe) | ebd. Nachtrag 13 / L27; `uebersicht/einrichtung-projektanwendung.md` §10 |
 | Warum alle Python-Komponenten einen Prozess teilen und was das für die Messrate heißt | ebd. Nachtrag 13 / L2 |
 | Warum Greifzone und Wartebereich außerhalb des Bildes der Basiskamera liegen | ebd. Nachtrag 13 / L4 |
 | Wie Klötze hinter dem Bild weitergeführt werden (Status 4) | ebd. Nachtrag 13 / L10; `architektur/datenvertraege.md` S3 |

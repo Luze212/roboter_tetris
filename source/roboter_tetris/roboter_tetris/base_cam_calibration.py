@@ -17,6 +17,9 @@ package -- and with it base_cam -- only when it is copied into the repository
 built again: every calibration in force is a file under version control.
 """
 
+import json
+import os
+
 import cv2
 import numpy as np
 from cv_bridge import CvBridge
@@ -94,6 +97,7 @@ class BaseCamCalibration(LifecycleComponent):
         self._flange = None          # (receive time s, 4x4)
         self._last_stamp = None
         self._written = False
+        self._raw_written = False
         self._frame_reported = False
 
     # -- Parameters ---------------------------------------------------------------
@@ -139,11 +143,15 @@ class BaseCamCalibration(LifecycleComponent):
             self.get_logger().error(f"base_cam_calibration: {exc}")
             return False
         stored, line = load_camera_calibration(values["calibration_file"])
-        (self.get_logger().info if stored is not None else self.get_logger().warn)(
-            f"base_cam_calibration: {line}")
+        # one call site per severity: rclpy refuses a site whose severity changes
+        if stored is not None:
+            self.get_logger().info(f"base_cam_calibration: {line}")
+        else:
+            self.get_logger().warn(f"base_cam_calibration: {line}")
         self._run = CalibrationRun(params, stored, matrix_from_cal(*L6_CAL))
         self._target_pose = sr.CartesianPose("target_pose", S6_REFERENCE_FRAME)
         self._written = False
+        self._raw_written = False
         self._last_stamp = None
         for name in ("is_running", "is_finished", "has_failed", "camera_moved"):
             self.set_predicate(name, False)
@@ -221,10 +229,11 @@ class BaseCamCalibration(LifecycleComponent):
                 self._last_stamp = stamp
                 try:
                     color = self._bridge.imgmsg_to_cv2(self._color_msg, "bgr8")
-                    detections = self._detector(cv2.cvtColor(color, cv2.COLOR_BGR2GRAY))
+                    gray = cv2.cvtColor(color, cv2.COLOR_BGR2GRAY)
+                    detections = self._detector(gray)
                     if run.wants_frames():
                         depth = self._depth_m() if run.needs_depth else None
-                        frame = Frame(stamp[0] + stamp[1] / 1e9, detections, depth)
+                        frame = Frame(stamp[0] + stamp[1] / 1e9, detections, depth, gray)
                     if debug:
                         self._publish_debug(color, detections, run)
                 except Exception as exc:
@@ -235,11 +244,15 @@ class BaseCamCalibration(LifecycleComponent):
             self._target_pose.set_position(*(float(v) for v in target[:3, 3]))
             self._target_pose.set_orientation(list(quaternion_from_matrix(target[:3, :3])))
         for line in run.pop_events():
-            log = self.get_logger().error if line.startswith("FEHLER") else self.get_logger().info
-            log(f"base_cam_calibration: {line}")
+            if line.startswith("FEHLER"):
+                self.get_logger().error(f"base_cam_calibration: {line}")
+            else:
+                self.get_logger().info(f"base_cam_calibration: {line}")
 
         if run.state == FERTIG and run.result is not None and not self._written:
             self._write(run)
+        if not run.running and not self._raw_written:
+            self._write_raw(run)
         self.set_predicate("is_running", run.running)
         self.set_predicate("is_finished", run.state == FERTIG)
         self.set_predicate("has_failed", run.state == FEHLER)
@@ -258,8 +271,24 @@ class BaseCamCalibration(LifecycleComponent):
         self.get_logger().info(
             f"base_cam_calibration: Ergebnis geschrieben: {path} - "
             + ", ".join(f"{k} {v:.4f}" for k, v in cal.items())
-            + ". Übernahme: ins Repo nach roboter_tetris/Extrinsics/base_cam_extrinsics.json "
-              "kopieren, Paket bauen, Systemabbild neu erzeugen.")
+            + ". Das ist die Lage der Farbkamera - noch nicht in base_cam übernehmen: das "
+              "Tiefenbild der L515 ist gegen das Farbbild verkippt (siehe Rohdaten).")
+
+    def _write_raw(self, run) -> None:
+        """Raw samples next to the result, whatever the outcome: a refused run
+        can be evaluated without driving it again."""
+        self._raw_written = True
+        data = run.raw_data()
+        if data is None:
+            return
+        path = os.path.splitext(self.get_parameter("output_file").get_value())[0] + "_rohdaten.json"
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+        except OSError as exc:
+            self.get_logger().error(f"base_cam_calibration: {path} nicht schreibbar: {exc}")
+            return
+        self.get_logger().info(f"base_cam_calibration: Rohdaten geschrieben: {path}")
 
     def _publish_debug(self, color, detections, run) -> None:
         image = color.copy()

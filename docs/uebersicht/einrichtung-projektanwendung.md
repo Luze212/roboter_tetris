@@ -199,7 +199,7 @@ daneben.
 | Band von Rolle zu Rolle | y ≈ +1,08 … −0,375 m | Nachtrag 13 / L7 |
 | Bandgeschwindigkeit | geschätzt −127,9 mm/s; per Stoppuhr 125–133 mm/s | Ziel 3 (L9, L10) |
 | UR-Nutzlast | 1,3 kg, Schwerpunkt 12 / 24 / 45 mm | L20 |
-| Extrinsik Basiskamera (`cal_x`, `_y`, `_z`, `_roll`, `_pitch`, `_yaw`) | −0,7787 · 0,7934 · 0,9163 · 179,46° · 0,45° · 179,76° | Übergangskalibrierung in `world`, Standardwert; Abweichung höchstens 6 mm (L6) |
+| Extrinsik Basiskamera | −0,7787 · 0,7934 · 0,9163 · 179,46° · 0,45° · 179,76° | Übergangskalibrierung in `world` (L6); steht in `Extrinsics/base_cam_extrinsics.json` (Parameter „Kalibrierdatei“) und als Rückfall in `cal_*`; Abweichung höchstens 6 mm |
 | `belt_surface_z_mm` / `top_depth_bias_mm` (`base_cam`) | 53,6 / 11,5 | Standardwerte (L6) |
 | Bild der Basiskamera | y ≈ 0,46 … 1,03 m | L7 |
 | Prozesszeiten | Einschwingen 0,23–0,33 s · Absenken 0,78–0,93 s (0,25 m/s) · Greifen 0,63–0,83 s · Ablegen 1,3–2,2 s (0,5 m/s) | `priority_handler` `t_settle_s` 0,4, `t_descend_s` 0,9, `t_grasp_s` 0,8, Faktor 1,0; Greifebene y ≈ +0,02 (L24) |
@@ -245,3 +245,27 @@ tragen den Namen ebenfalls in Klammern.
 
 Zum Einmessen des Vorhalts `err_laengs` in `follower_status` mitlesen: Im Mittel
 null heißt, `lead_time_s` passt zur Verstärkung des Attractors.
+
+## 10. Kalibrierung der Basiskamera
+
+Eigene Anwendung, getrennt vom normalen Programm: Inhalt von
+`docs/uebersicht/anwendung-kalibrierung-basiskamera.yaml` in eine neue AICA-Anwendung
+(Code-Ansicht) einfügen und speichern. Hintergrund und Stand: `entscheidungen.md` L27.
+**Die Ergebnisse gelten vorerst nicht für `base_cam`**, bis zur Tiefenkorrektur bleibt L6.
+
+1. Anwendung starten, **Greiferbacken frei**: Der Greifer fährt beim Laden einmal auf und zu.
+2. Knopf 1 fährt die Startpose an (Frame „Kalibrierstart“: Werkzeug waagerecht, Board-Mitte
+   unter der Kamera auf z 0,40); Knopf 2 hält sie.
+3. Board mit Gummihülle am **kurzen Rand** flach zwischen die Backen halten, bedruckte Seite
+   oben, Knopf 3 (Greifer zu). Knopf 4 öffnet.
+4. Knopf 5 startet Stufe 1: etwa 2 s Prüfung ohne Bewegung (Board, Kamerahöhe, Plan), dann
+   45 Posen in 3–4 min, zurück in die Startpose. Knopf 6 bricht ab, der Roboter hält die
+   letzte Zielpose.
+5. Ergebnis `/tmp/base_cam_extrinsics.json` und Rohdaten
+   `/tmp/base_cam_extrinsics_rohdaten.json` im Container, Werte und Güte im Log.
+6. Knopf 7 prüft ohne Bewegung, ob sich die Kamera bewegt hat (braucht Referenzmarken).
+
+Standard-Posenplan: nur Verschiebung ±8 cm und Drehung um die Hochachse ±20°, Flansch
+höchstens 24 cm von der Startpose; in der Anwendung Untergrenze `min_flange_z_m` 0,34
+und Greifkraft 100 %.
+

@@ -20,7 +20,7 @@ oder schräg.
 | Nr. | Ziel | Umsetzung | Ergebnis am Aufbau |
 |---|---|---|---|
 | 1 | Ansteuerung des UR10e mit AICA | AICA-Kette Signal Point Attractor → IK Velocity Controller | erfüllt |
-| 2 | Entwicklung eines schnellen Kalibrierungsverfahrens | getrenntes Projekt eines Kommilitonen (`Calibration/*`); dieses Paket ist Abnehmer der Werte | Basiskamera läuft mit einer Übergangskalibrierung, Abweichung höchstens 6 mm |
+| 2 | Entwicklung eines schnellen Kalibrierungsverfahrens | eigenes Verfahren für die Basiskamera: Der Roboter hält ein AprilGrid ins Bild (`base_cam_calibration`, L27); das Projekt des Kommilitonen (`Calibration/*`) bleibt getrennt | Verfahren läuft am Aufbau, wiederholbar auf unter 1 mm; noch nicht aktiv, weil das Tiefenbild der L515 gegen das Farbbild verkippt ist. Bis dahin Übergangskalibrierung L6, höchstens 6 mm |
 | 3 | Verfahren zur **Geschwindigkeitsschätzung** und Positionsberechnung | `base_cam` (Position), `vectoring` (Geschwindigkeit je Klotz und für das Band) | Position gegen den Roboter höchstens 6 mm; Band geschätzt −127,9 mm/s gegen 125–133 mm/s per Stoppuhr |
 | 4 | Algorithmus zur **Priorisierung** und **Bahnplanung** für das kontrollierte Greifen | `priority_handler` (Auswahl, Erreichbarkeit, Greifebene); `object_follower` mit den AICA-Bausteinen (Bahn) | greift im Lauf mit rund 1 mm Längsfehler; bei dichter Folge etwa ein Klotz je 7 s; flache und gedrehte Klötze; Dauerlauf zuverlässig |
 
@@ -81,10 +81,11 @@ Kette ohne Kamera treiben.
 
 Der Ordner gehört dem Kommilitonen, der die Kamerakalibrierung automatisiert. Die
 dortigen Komponenten (`board_detection`, `auto_calibration`) und Dateien werden
-nicht verändert. Dieses Paket ist **Abnehmer** der Ergebnisse (Intrinsik,
-Extrinsik der Basiskamera); die Werte werden als AICA-Parameter gespiegelt, wie in
-`Calibration/README.md` beschrieben. Bis dahin trägt `base_cam` die am Aufbau
-gemessene Übergangskalibrierung als Standardwert (Nachtrag 13 / L6).
+nicht verändert; `Calibration/calibration.json` ist überholt. Die Basiskamera
+kalibriert dieses Paket seit 25.09.2026 selbst (`basecam_extrinsics.py`,
+`calibration_run.py`, `base_cam_calibration.py`, L27). Die gültige Kalibrierung
+liegt in `Extrinsics/base_cam_extrinsics.json` und trägt bis auf Weiteres die
+Übergangskalibrierung (Nachtrag 13 / L6).
 
 ### `roboter_tetris/vision/*` — Bildverarbeitung
 
@@ -199,5 +200,5 @@ Im Komponentenplan und im Systemgraph durchgängig verwendet:
 - `Safety/workspace_bounds.json` ist am Aufbau abgefahren und festgelegt
   (`status: defined`); der Follower trägt dieselben Werte als Standard, ein Test
   prüft die Gleichheit.
-- `Calibration/calibration.json` enthält Werte des Vorgängerprojekts, markiert als
-  `legacy_initial_values`.
+- `Calibration/calibration.json` enthält Werte des Vorgängerprojekts und ist überholt;
+  die gültige Kalibrierung steht in `Extrinsics/base_cam_extrinsics.json` (L27).

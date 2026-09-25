@@ -281,8 +281,11 @@ class BaseCam(LifecycleComponent):
         value = self.get_parameter("calibration_file").get_value() or ""
         record, line = load_camera_calibration(value)
         self._file_cam_to_robot = None if record is None else record.world_T_cam
-        broken = record is None and value.strip()
-        (self.get_logger().warn if broken else self.get_logger().info)(f"base_cam: {line}")
+        # one call site per severity: rclpy refuses a site whose severity changes
+        if record is None and value.strip():
+            self.get_logger().warn(f"base_cam: {line}")
+        else:
+            self.get_logger().info(f"base_cam: {line}")
         # Fresh tracking state per activation; parameters stay as configured.
         self._tracker = VisionTracker()
         self._filtered_velocity_y = 0.0

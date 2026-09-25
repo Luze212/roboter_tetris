@@ -115,7 +115,24 @@ def test_stage1_runs_through_and_finds_the_camera():
     assert sorted(run.result.references) == [100, 101, 102, 103]
     for tag, truth in _reference_world().items():
         assert np.max(np.linalg.norm(run.result.references[tag] - truth, axis=1)) < 0.004
-    assert run.result.method == "stufe1" and run.result.grid == SPEC.to_dict()
+    assert run.result.method == "stufe1_farbkamera" and run.result.grid == SPEC.to_dict()
+
+
+def test_raw_data_keeps_what_the_solution_saw_also_after_a_refusal():
+    import json
+    def slipping(run):
+        return Y_TRUE @ make_transform(np.eye(3), (0.002, 0, 0)) if run.progress[0] >= 20 else Y_TRUE
+    run = CalibrationRun(RunParams(), None, X_TRUE)
+    _run(run, flange_T_board=slipping)
+    raw = json.loads(json.dumps(run.raw_data()))                 # must be plain JSON
+    assert run.state == FEHLER and len(raw["samples"]["kalibrieren"]) == 40
+    first = raw["samples"]["kalibrieren"][0]
+    assert np.array(first["flange"]).shape == (4, 4) and len(first["obj"]) == len(first["img"])
+    assert raw["report"]["rutschen_mm"] > 1.0 and raw["grid"] == SPEC.to_dict()
+    # depth at every pose: the board region of the depth image, and the belt at the start
+    assert all(smp["depth_plane"] is not None and len(smp["depth_grid"]) > 100
+               for smp in raw["samples"]["kalibrieren"])
+    assert len(raw["belt_depth_grid"]) > 1000 and raw["camera_z_from_depth"] is not None
 
 
 def test_stage1_finds_the_board_layout_itself():
@@ -128,7 +145,7 @@ def test_stage1_finds_the_board_layout_itself():
 
 def test_stage1_refuses_a_start_too_low_and_never_moves():
     low = START.copy()
-    low[2, 3] -= 0.05
+    low[2, 3] -= 0.15
     run = CalibrationRun(RunParams(), None, X_TRUE)
     targets, events = _run(run, start=low)
     assert run.state == FEHLER
@@ -155,7 +172,7 @@ def test_stage1_board_slipping_in_the_jaws_writes_nothing_and_returns():
 
 def test_start_height_of_the_default_plan():
     # the operator needs this number when driving the start pose
-    assert required_start_height(PlanParams()) == pytest.approx(0.371, abs=0.002)
+    assert required_start_height(PlanParams()) == pytest.approx(0.294, abs=0.002)
 
 
 # -- stage 2 and check ----------------------------------------------------------
@@ -198,3 +215,25 @@ def test_bad_parameters_stop_before_anything_happens():
     assert run.state == FEHLER and "Betriebsart" in run.pop_events()[0]
     overlap = RunParams(reference_first_id=50)
     assert any("überschneiden" in m for m in overlap.problems())
+
+
+def test_flange_floor_lifts_poses_and_keeps_their_turns():
+    from roboter_tetris.basecam_extrinsics import plan_poses, plan_problems
+    floor = START[2, 3] - 0.06
+    tilted = dict(max_tilt_deg=20.0, max_pitch_deg=12.0)
+    free = plan_poses(START, PlanParams(**tilted))
+    lifted = plan_poses(START, PlanParams(min_flange_z_m=floor, **tilted))
+    assert min(p.world_T_flange[2, 3] for p in free) < floor - 0.05
+    assert min(p.world_T_flange[2, 3] for p in lifted) == pytest.approx(floor)
+    for b in lifted:                               # same turns, order may differ
+        assert any(np.allclose(a.world_T_flange[:3, :3], b.world_T_flange[:3, :3]) for a in free)
+    assert plan_problems(START, lifted, PlanParams(min_flange_z_m=floor, **tilted)) == []
+
+
+def test_stage1_with_the_flange_floor_still_finds_the_camera():
+    run = CalibrationRun(RunParams(plan=PlanParams(min_flange_z_m=START[2, 3] - 0.06)), None, X_TRUE)
+    _, events = _run(run)
+    assert run.state == FERTIG, events
+    shift, angle = _error(X_TRUE, run.result.world_T_cam)
+    assert shift < 0.5 and angle < 0.03
+

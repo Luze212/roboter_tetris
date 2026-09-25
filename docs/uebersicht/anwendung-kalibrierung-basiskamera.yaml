@@ -101,6 +101,10 @@ components:
       rate:
         value: 20
         type: double
+      force:
+        # volle Kraft in Prozent (0-100): das Board darf im Griff nicht kippen
+        value: 100
+        type: double
     inputs:
       gripper_close: /kalibrierung/greifer_zu
   greifer_zu:
@@ -177,6 +181,10 @@ components:
       mode:
         value: stufe1
         type: string
+      min_flange_z_m:
+        # Handgelenk: von der Startpose aus höchstens ~6 cm tiefer (25.09.2026)
+        value: 0.34
+        type: double
     inputs:
       color_image: /realsense_camera/color_image_raw
       color_camera_info: /realsense_camera/color_camera_info
@@ -184,33 +192,6 @@ components:
       robot_state: /hardware/robot_state_broadcaster/cartesian_state
     outputs:
       target_pose: /kalibrierung/zielpose
-      debug_image: /kalibrierung/debug_image
-  kalibrierung_stufe2:
-    component: roboter_tetris::BaseCamCalibration
-    display_name: Kalibrierung Stufe 2 (ohne Bewegung)
-    events:
-      transitions:
-        on_load:
-          lifecycle:
-            component: kalibrierung_stufe2
-            transition: configure
-        on_configure:
-          lifecycle:
-            component: kalibrierung_stufe2
-            transition: activate
-    parameters:
-      rate:
-        value: 20
-        type: double
-      mode:
-        value: stufe2
-        type: string
-    inputs:
-      color_image: /realsense_camera/color_image_raw
-      color_camera_info: /realsense_camera/color_camera_info
-      depth_image: /realsense_camera/aligned_depth_to_color_image_raw
-      robot_state: /hardware/robot_state_broadcaster/cartesian_state
-    outputs:
       debug_image: /kalibrierung/debug_image
   kalibrierung_pruefen:
     component: roboter_tetris::BaseCamCalibration
@@ -289,71 +270,65 @@ hardware:
 graph:
   positions:
     on_start:
-      x: -800
+      x: -780
       y: 0
     stop:
-      x: -800
+      x: -780
       y: 100
     buttons:
       button_start:
-        x: -800
-        y: 240
+        x: -780
+        y: 260
       button_halten:
-        x: -800
-        y: 340
+        x: -780
+        y: 360
       button_zu:
-        x: -800
-        y: 440
+        x: -780
+        y: 480
       button_auf:
-        x: -800
-        y: 540
+        x: -780
+        y: 580
       button_stufe1:
-        x: -800
-        y: 660
+        x: -780
+        y: 700
       button_stufe1_ende:
-        x: -800
-        y: 760
-      button_stufe2:
-        x: -800
-        y: 880
+        x: -780
+        y: 800
       button_pruefen:
-        x: -800
-        y: 980
-      button_entladen:
-        x: -800
-        y: 1080
+        x: -780
+        y: 920
+      button_pruefen_ende:
+        x: -780
+        y: 1020
     components:
       realsense_camera:
-        x: -400
-        y: -600
-      frame_to_signal:
-        x: -400
-        y: 240
-      greifer_zu:
-        x: -400
-        y: 460
-      greifer_auf:
-        x: -400
-        y: 620
+        x: -360
+        y: -400
       kalibrierung_stufe1:
-        x: 100
-        y: -700
-      kalibrierung_stufe2:
-        x: 100
-        y: -300
+        x: 280
+        y: -400
       kalibrierung_pruefen:
-        x: 100
-        y: 100
+        x: 280
+        y: 300
+      frame_to_signal:
+        x: 820
+        y: -400
       signal_point_attractor:
-        x: 700
-        y: 200
+        x: 1440
+        y: -400
+      greifer_zu:
+        x: 820
+        y: 300
+      greifer_auf:
+        x: 820
+        y: 620
       robotiq_gripper:
-        x: 100
-        y: 500
+        x: 1440
+        y: 300
     hardware:
       hardware:
-        x: 1200
-        y: 0
+        x: 2100
+        y: -400
   buttons:
     button_start:
       display_name: 1 Zur Startpose fahren (Roboter bewegt sich!)
@@ -391,19 +366,13 @@ graph:
       on_click:
         unload:
           component: kalibrierung_stufe1
-    button_stufe2:
-      display_name: 7 Stufe 2 (ohne Bewegung)
-      on_click:
-        load:
-          component: kalibrierung_stufe2
     button_pruefen:
-      display_name: 8 Prüfen (ohne Bewegung)
+      display_name: 7 Prüfen (ohne Bewegung)
       on_click:
         load:
           component: kalibrierung_pruefen
-    button_entladen:
-      display_name: 9 Stufe 2 / Prüfen entladen
+    button_pruefen_ende:
+      display_name: 8 Prüfen beenden
       on_click:
         unload:
-          - component: kalibrierung_stufe2
-          - component: kalibrierung_pruefen
+          component: kalibrierung_pruefen

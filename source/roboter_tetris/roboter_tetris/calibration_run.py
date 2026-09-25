@@ -36,9 +36,11 @@ import numpy as np
 from .basecam_extrinsics import (
     DEFAULT_CALIBRATION_FILE, CheckLimits, Detections, ExtrinsicsRecord, GridSpec, PlanParams, Sample,
     average_detections, average_transforms, belt_displacement_mm, belt_plane_check,
-    belt_sample_points, board_slip, camera_moved, depth_points, fit_plane, grid_points,
+    belt_sample_points, board_depth_plane, board_slip, camera_height_from_depth, camera_moved,
+    depth_grid, depth_points, fit_plane, grid_points,
     identify_layout, layout_candidates, plan_poses, plan_problems, reference_corners_world,
-    rotation_angle_deg, solve_from_references, solve_pnp, solve_stage1, validate,
+    refine_grid_corners, refine_tag_corners, rotation_angle_deg, solve_from_references,
+    solve_pnp, solve_stage1, validate,
 )
 
 MODES = ("stufe1", "stufe2", "pruefen")
@@ -120,15 +122,24 @@ PARAMETERS = (
     ("reference_first_id", 100,
      "Referenzmarken am Bandgestell: kleinste ID. Tags ab dieser ID gelten als Referenz."),
     ("reference_size_mm", 70.0, "Referenzmarken: Kantenlänge (schwarzer Rand außen) in mm."),
-    ("max_shift_m", 0.15, "Posenplan: Verschiebung der Board-Mitte um die Startpose, je Richtung (m)."),
+    ("max_shift_m", 0.08, "Posenplan: Verschiebung der Board-Mitte um die Startpose, je Richtung (m)."),
     ("height_step_m", 0.08, "Posenplan: Höhenänderung nach oben und unten (m)."),
-    ("max_tilt_deg", 25.0, "Posenplan: seitliches Kippen um die Werkzeugachse (Grad)."),
-    ("max_pitch_deg", 12.0,
+    ("max_tilt_deg", 0.0,
+     "Posenplan: seitliches Kippen um die Werkzeugachse (Grad). 0 = aus: das Board bewegt sich "
+     "im Griff, sobald es gekippt wird; die Kamerahöhe kommt dann aus dem Tiefenbild."),
+    ("max_pitch_deg", 0.0,
      "Posenplan: Nicken quer zur Werkzeugachse (Grad). Der Flansch schwingt dabei um "
      "Abstand x sin(Winkel) nach unten - bestimmt die Mindesthöhe der Startpose."),
-    ("max_yaw_deg", 35.0, "Posenplan: Drehung um die Hochachse (Grad)."),
+    ("max_yaw_deg", 20.0, "Posenplan: Drehung um die Hochachse (Grad). Schwenkt den Flansch um "
+     "die Board-Mitte mit - klein halten."),
     ("passes", 2, "Posenplan: Durchgänge zu je 20 Posen. Mehr Posen mitteln den Posenfehler des Roboters."),
     ("min_clearance_m", 0.10, "Mindestabstand von Board, Flansch und Greifer zum Band (m)."),
+    ("min_flange_z_m", 0.0,
+     "Unterste Flanschhöhe in world (m), 0 = aus. Tiefere Posen werden auf diese Höhe "
+     "angehoben, ihre Drehungen bleiben. Am Aufbau 0,34 (Handgelenk, 25.09.2026)."),
+    ("max_flange_offset_m", 0.25,
+     "Größte waagerechte Abweichung des Flansches von der Startpose (m); darüber verweigert "
+     "der Plan den Lauf."),
     ("belt_z_m", 0.0536, "Bandoberfläche in world (m), B17."),
     ("settle_s", 1.0, "Wartezeit nach dem Ankommen, in der der Flansch ruhen muss (s)."),
     ("frames_per_pose", 8, "Bilder, die je Pose gemittelt werden."),
@@ -152,7 +163,9 @@ def run_params(values: Dict[str, object]) -> RunParams:
     plan = PlanParams(max_shift_m=float(v["max_shift_m"]), height_step_m=float(v["height_step_m"]),
                       max_tilt_deg=float(v["max_tilt_deg"]), max_pitch_deg=float(v["max_pitch_deg"]),
                       max_yaw_deg=float(v["max_yaw_deg"]), passes=int(v["passes"]),
-                      belt_z_m=float(v["belt_z_m"]), min_clearance_m=float(v["min_clearance_m"]))
+                      belt_z_m=float(v["belt_z_m"]), min_clearance_m=float(v["min_clearance_m"]),
+                      min_flange_z_m=float(v["min_flange_z_m"]),
+                      max_flange_offset_m=float(v["max_flange_offset_m"]))
     return RunParams(mode=str(v["mode"]).strip(), settle_s=float(v["settle_s"]),
                      frames_per_pose=int(v["frames_per_pose"]),
                      reference_first_id=int(v["reference_first_id"]),
@@ -172,11 +185,16 @@ class Camera:
 
 @dataclass
 class Frame:
-    """One camera frame, as the component hands it in."""
+    """One camera frame, as the component hands it in.
+
+    ``detections`` are the coarse corners of the tag detector; with ``gray``
+    (the unsharpened image) the run sets them exactly before they count.
+    """
 
     stamp: float
     detections: Detections
     depth_m: Optional[np.ndarray] = None
+    gray: Optional[np.ndarray] = None
 
 
 @dataclass
@@ -184,6 +202,7 @@ class _Capture:
     frames: List[Frame] = field(default_factory=list)
     flanges: List[np.ndarray] = field(default_factory=list)
     skipped: bool = False
+    depth: Optional[np.ndarray] = None
 
 
 def _split(detections: Detections, spec: GridSpec, reference_first_id: int):
@@ -221,10 +240,13 @@ class CalibrationRun:
         self._state_since = 0.0
         self._still: List[Tuple[float, np.ndarray]] = []
         self._samples: Dict[str, List[Sample]] = {"kalibrieren": [], "pruefen": [], "wiederholen": []}
+        self._grids: Dict[str, List[np.ndarray]] = {"kalibrieren": [], "pruefen": [], "wiederholen": []}
         self._missing = 0
         self._spec = params.grid
         self._ref_frames: List[Detections] = []
         self._depth: Optional[np.ndarray] = None
+        self._camera_z: Optional[float] = None
+        self._belt_plane = None
         self._moved_robot = False
         self._return_then_fail = False
         self._static_detections: Detections = {}
@@ -256,7 +278,11 @@ class CalibrationRun:
 
     @property
     def needs_depth(self) -> bool:
-        """One depth image is enough (belt plane); the component converts only then."""
+        """Stage 1 takes one depth image per pose (the board against the colour
+        image, and the belt at the start); the other modes one in all. The
+        component converts the depth image only then."""
+        if self.moves_robot and self.state == AUFNAHME and self._capture is not None:
+            return self._capture.depth is None
         return self._depth is None and self.wants_frames()
 
     def pop_events(self) -> List[str]:
@@ -327,9 +353,13 @@ class CalibrationRun:
         if not cap.skipped:  # exposed while the capture was being set up
             cap.skipped = True
             return
+        frame = self._refined(frame)
         cap.frames.append(frame)
-        if self._depth is None and frame.depth_m is not None:
-            self._depth = frame.depth_m
+        if frame.depth_m is not None:
+            if self._depth is None:
+                self._depth = frame.depth_m
+            if cap.depth is None:
+                cap.depth = frame.depth_m
         _, refs = _split(frame.detections, self._spec, self.params.reference_first_id)
         if refs:
             self._ref_frames.append(refs)
@@ -341,10 +371,22 @@ class CalibrationRun:
         if self.state == START:
             self._plan(now, detections)
         elif self.moves_robot:
-            self._store_sample(now, detections, mean_flange)
+            self._store_sample(now, detections, mean_flange, cap.depth)
         else:
             self._enter(RECHNEN, now)
             self._static_detections = detections
+
+    def _refined(self, frame: Frame) -> Frame:
+        """Exact corners: grid tags through the board pose, reference tags singly.
+        Before the layout is known (START) the grid stays coarse."""
+        if frame.gray is None or self._camera is None:
+            return frame
+        board, refs = _split(frame.detections, self._spec, self.params.reference_first_id)
+        if self.state != START:
+            board, _ = refine_grid_corners(frame.gray, self._spec, board,
+                                           self._camera.K, self._camera.D)
+        refs = refine_tag_corners(frame.gray, refs)
+        return Frame(frame.stamp, {**board, **refs}, frame.depth_m, None)
 
     def _plan(self, now: float, detections: Detections) -> None:
         p, cam = self.params, self._camera
@@ -353,8 +395,10 @@ class CalibrationRun:
             self._fail(f"Board nicht im Bild der Basiskamera ({len(board)} Tags, "
                        f"mindestens {p.min_tags})")
             return
+        # coarse corners here: the right layout fits to about a pixel, the next
+        # best by tens of pixels (1.2 against 30 px at the setup)
         ranked = identify_layout(board, layout_candidates(p.grid), cam.K, cam.D)
-        if not ranked or ranked[0][0] > 1.0:
+        if not ranked or ranked[0][0] > 5.0:
             self._fail("Board-Layout passt nicht (Zeilen, Spalten, Taggröße, Wörterbuch prüfen)")
             return
         if len(ranked) > 1 and ranked[1][0] < 3.0 * ranked[0][0]:
@@ -363,7 +407,8 @@ class CalibrationRun:
         self._spec = ranked[0][1]
         if self._spec != p.grid:
             self._events.append(f"Board-Layout erkannt: {self._spec.rows} Zeilen x "
-                                f"{self._spec.cols} Spalten, Ursprung {self._spec.origin}")
+                                f"{self._spec.cols} Spalten, Ursprung {self._spec.origin}, "
+                                f"Tags um {self._spec.tag_rotation_deg} Grad gedreht")
         obj, img = grid_points(self._spec, board)
         cam_T_board, _ = solve_pnp(obj, img, cam.K, cam.D)
         w, h = self._spec.size_m
@@ -374,6 +419,19 @@ class CalibrationRun:
             self._fail(f"Board-Mitte liegt {pivot:.2f} m vor dem Flansch entlang der "
                        "Werkzeugachse - erwartet 0,15 ... 0,7 m. Greift der Greifer das Board?")
             return
+        if p.plan.max_tilt_deg == 0 and p.plan.max_pitch_deg == 0:
+            # turns about the vertical only: the camera height comes from the belt
+            if self._depth is None:
+                self._fail("kein Tiefenbild - die Kamerahöhe ist ohne Kippen nur daraus bestimmbar")
+                return
+            try:
+                self._camera_z, self._belt_plane = camera_height_from_depth(
+                    self._depth, cam.K, self.reference_T[2, 3] - p.plan.belt_z_m, p.plan.belt_z_m)
+            except ValueError as exc:
+                self._fail(f"Kamerahöhe: {exc}")
+                return
+            self._events.append(f"Kamerahöhe aus dem Tiefenbild: z = {self._camera_z:.4f} m "
+                                f"(bisher {self.reference_T[2, 3]:.4f})")
         plan = replace(p.plan, pivot_along_tool_m=pivot)
         poses = plan_poses(self._start, plan)
         problems = plan_problems(self._start, poses, plan)
@@ -422,7 +480,7 @@ class CalibrationRun:
         if self._timed_out(now):
             self._fail(f"Roboter kommt an Pose {self._index + 1} nicht zur Ruhe")
 
-    def _store_sample(self, now: float, detections: Detections, flange) -> None:
+    def _store_sample(self, now: float, detections: Detections, flange, depth) -> None:
         pose = self._poses[self._index]
         board, _ = _split(detections, self._spec, self.params.reference_first_id)
         obj, img = grid_points(self._spec, board)
@@ -433,7 +491,9 @@ class CalibrationRun:
                 self._fail(f"{self._missing} Posen ohne ausreichende Sicht aufs Board")
                 return
         else:
-            self._samples[pose.role].append(Sample(flange, obj, img))
+            plane = None if depth is None else board_depth_plane(depth, self._camera.K, img)
+            self._samples[pose.role].append(Sample(flange, obj, img, plane))
+            self._grids[pose.role].append(np.zeros((0, 3)) if depth is None else depth_grid(depth, img))
         self._index += 1
         self._next_pose(now)
 
@@ -452,6 +512,42 @@ class CalibrationRun:
 
     # -- solving --------------------------------------------------------------
 
+    def raw_data(self) -> Optional[dict]:
+        """Everything the solution saw, for evaluation after the run -- also when
+        a quality gate refused the result. None before the first sample."""
+        if not any(self._samples.values()) or self._camera is None:
+            return None
+        cam = self._camera
+        return {
+            "created": _now_iso(),
+            "mode": self.params.mode,
+            "camera": {"K": cam.K.tolist(), "D": np.ravel(cam.D).tolist(), "size": list(cam.size)},
+            "grid": self._spec.to_dict(),
+            "start": None if self._start is None else self._start.tolist(),
+            "reference_T": self.reference_T.tolist(),
+            "samples": {role: [{"flange": smp.world_T_flange.tolist(), "obj": smp.obj.tolist(),
+                                "img": smp.img.tolist(),
+                                "depth_plane": None if smp.depth_plane is None else {
+                                    "normal": smp.depth_plane.normal.tolist(),
+                                    "offset": smp.depth_plane.offset,
+                                    "rms_mm": smp.depth_plane.rms_mm,
+                                    "count": smp.depth_plane.count},
+                                # u, v in px, depth in mm (0.1 mm)
+                                "depth_grid": [[int(u), int(v), round(1000.0 * z, 1)]
+                                               for u, v, z in grid]}
+                               for smp, grid in zip(items, self._grids[role])]
+                        for role, items in self._samples.items()},
+            "belt_depth_grid": [] if self._depth is None else [
+                [int(u), int(v), round(1000.0 * float(self._depth[v, u]), 1)]
+                for v in range(0, self._depth.shape[0], 16)
+                for u in range(0, self._depth.shape[1], 16) if self._depth[v, u] > 0],
+            "camera_z_from_depth": self._camera_z,
+            "references_px": {str(i): c.tolist()
+                              for i, c in average_detections(self._ref_frames).items()}
+                             if self._ref_frames else {},
+            "report": self.report,
+        }
+
     def _solve(self) -> None:
         try:
             if self.moves_robot:
@@ -467,12 +563,15 @@ class CalibrationRun:
                                   roi=self.params.roi)
 
     def _plane_report(self, world_T_cam: np.ndarray) -> Dict[str, float]:
-        if self._depth is None:
+        if self._belt_plane is not None:
+            plane = self._belt_plane
+        elif self._depth is None:
             return {}
-        try:
-            plane = fit_plane(depth_points(self._depth, self._camera.K, self.params.roi))
-        except ValueError:
-            return {}
+        else:
+            try:
+                plane = fit_plane(depth_points(self._depth, self._camera.K, self.params.roi))
+            except ValueError:
+                return {}
         tilt, height = belt_plane_check(world_T_cam, plane, self.params.plan.belt_z_m)
         return {"ebene_neigung_grad": round(tilt, 3), "ebene_hoehe_mm": round(height, 2),
                 "ebene_rest_mm": round(plane.rms_mm, 2)}
@@ -485,7 +584,7 @@ class CalibrationRun:
     def _solve_stage1(self) -> None:
         p, cam = self.params, self._camera
         cal = self._samples["kalibrieren"]
-        result = solve_stage1(cal, cam.K, cam.D)
+        result = solve_stage1(cal, cam.K, cam.D, prior=self.reference_T, camera_z_m=self._camera_z)
         X = result.world_T_cam
         check = validate(result, self._samples["pruefen"], cam.K, cam.D)
         slip_mm = slip_deg = float("nan")
@@ -510,6 +609,7 @@ class CalibrationRun:
             "gegen_vorher_band_mm": round(shift, 2),
             "gegen_vorher_grad": round(angle, 3),
             "referenzmarken": len(references),
+            "kamerahoehe_aus_tiefe": self._camera_z is not None,
             **self._plane_report(X),
         }
         gates = []
@@ -524,8 +624,10 @@ class CalibrationRun:
             self._fail("Gütegrenzen verletzt, nichts geschrieben: " + "; ".join(gates))
             return
         self.result = ExtrinsicsRecord(
-            world_T_cam=X, method="stufe1", created=_now_iso(),
+            world_T_cam=X, method="stufe1_farbkamera", created=_now_iso(),
             quality={**self.report, "startverfahren": result.init_method,
+                     "hinweis": "Lage der Farbkamera. Für base_cam erst zusammen mit einer "
+                                "Korrektur des Tiefenbilds (Tiefe gegen Farbe ~1 Grad, 25.09.2026).",
                      "intrinsik": self._intrinsics()},
             reference_size_m=p.reference_size_m if references else 0.0,
             references=references, grid=self._spec.to_dict())

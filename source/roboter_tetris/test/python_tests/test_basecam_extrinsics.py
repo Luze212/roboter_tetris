@@ -8,6 +8,7 @@ alone -- that is the proof of the method before the robot moves.
 
 import json
 import math
+import os
 
 import cv2
 import numpy as np
@@ -15,11 +16,12 @@ import pytest
 
 from roboter_tetris.basecam_extrinsics import (
     CheckLimits, ExtrinsicsRecord, GridSpec, PlanParams, Sample, average_detections,
+    camera_height_from_depth,
     axis_rotation, belt_displacement_mm, belt_plane_check, belt_sample_points, board_slip,
     cal_from_matrix, camera_moved, depth_points, fit_plane, grid_points, identify_layout,
     invert, layout_candidates, load_record, make_tag_detector, make_transform,
     matrix_from_cal, plan_poses, plan_problems, record_from_dict, record_to_dict,
-    reference_corners_world, required_start_height, rotation_angle_deg, save_record, solve_from_references,
+    reference_corners_world, refine_grid_corners, required_start_height, rotation_angle_deg, save_record, solve_from_references,
     solve_pnp, solve_stage1, validate,
 )
 from roboter_tetris.vision.detection import build_cam_to_robot
@@ -71,9 +73,13 @@ def _sample(world_T_flange, rng, noise_px=0.15, flange_T_board=Y_TRUE):
     return Sample(world_T_flange, np.vstack(obj), img + rng.normal(0, noise_px, img.shape))
 
 
-def _samples(seed=1):
+# The general case with tilt (the default turns about the vertical only).
+TILTED = PlanParams(max_tilt_deg=20.0, max_pitch_deg=12.0)
+
+
+def _samples(seed=1, params=TILTED):
     rng = np.random.default_rng(seed)
-    plan = plan_poses(START, PlanParams())
+    plan = plan_poses(START, params)
     return {role: [_sample(p.world_T_flange, rng) for p in plan if p.role == role]
             for role in ("kalibrieren", "pruefen", "wiederholen")}
 
@@ -96,15 +102,19 @@ def test_cal_matches_base_cam_convention():
 
 def test_grid_geometry_kalibr_layout():
     pitch = 0.026
+    upright = GridSpec(tag_rotation_deg=0)
     assert SPEC.size_m == pytest.approx((0.280, 0.176))
-    assert np.allclose(SPEC.tag_corners(0)[3], [0, 0, 0])            # bottom-left
-    assert np.allclose(SPEC.tag_corners(0)[1], [0.02, 0.02, 0])       # top-right
-    assert np.allclose(SPEC.tag_corners(1)[3], [pitch, 0, 0])         # along the row
-    assert np.allclose(SPEC.tag_corners(11)[3], [0, pitch, 0])        # next row up
-    assert np.allclose(SPEC.tag_corners(76)[1], [0.280, 0.176, 0])
-    top = GridSpec(origin="top_left")
+    assert np.allclose(upright.tag_corners(0)[3], [0, 0, 0])          # bottom-left
+    assert np.allclose(upright.tag_corners(0)[1], [0.02, 0.02, 0])     # top-right
+    assert np.allclose(upright.tag_corners(1)[3], [pitch, 0, 0])       # along the row
+    assert np.allclose(upright.tag_corners(11)[3], [0, pitch, 0])      # next row up
+    assert np.allclose(upright.tag_corners(76)[1], [0.280, 0.176, 0])
+    top = GridSpec(origin="top_left", tag_rotation_deg=0)
     assert np.allclose(top.tag_corners(0)[3], [0, 6 * pitch, 0])
     assert SPEC.tag_corners(77) is None and SPEC.tag_corners(-1) is None
+    # calib.io: OpenCV reads the tags turned by 180 degrees (setup, 25.09.2026)
+    assert SPEC.tag_rotation_deg == 180
+    assert np.allclose(SPEC.tag_corners(0), np.roll(upright.tag_corners(0), 2, axis=0))
 
 
 def _render_grid(spec, ppm=2000, margin=60):
@@ -118,7 +128,10 @@ def _render_grid(spec, ppm=2000, margin=60):
             marker = cv2.aruco.generateImageMarker(tag_dict, tag, side)
         else:
             marker = cv2.aruco.drawMarker(tag_dict, tag, side)
-        x0, y0 = spec.tag_corners(tag)[0][:2]  # top-left corner, board frame
+        # turned as the spec says, placed at the tag's top-left in the board
+        marker = np.rot90(marker, -(spec.tag_rotation_deg // 90))
+        corners = spec.tag_corners(tag)
+        x0, y0 = corners[:, 0].min(), corners[:, 1].max()
         u = margin + int(round(x0 * ppm))
         v = margin + int(round((h_m - y0) * ppm))
         img[v:v + side, u:u + side] = marker
@@ -128,24 +141,62 @@ def _render_grid(spec, ppm=2000, margin=60):
     return img, Kr, d
 
 
-def test_detection_finds_every_tag_and_the_pose():
-    img, Kr, d = _render_grid(SPEC)
+@pytest.mark.parametrize("turn", [180, 0])
+def test_detection_finds_every_tag_and_the_pose(turn):
+    spec = GridSpec(tag_rotation_deg=turn)
+    img, Kr, d = _render_grid(spec)
     detections = make_tag_detector()(img)
     assert sorted(detections) == list(range(77))
-    obj, px = grid_points(SPEC, detections)
-    T, err = solve_pnp(obj, px, Kr, np.zeros(5))
-    assert err < 0.3
+    detections, err = refine_grid_corners(img, spec, detections, Kr, np.zeros(5))
+    assert err < 0.3 and len(detections) == 77
+    obj, px = grid_points(spec, detections)
+    T, _ = solve_pnp(obj, px, Kr, np.zeros(5))
     expected = make_transform(np.diag([1.0, -1.0, -1.0]), (0, 0, d))
     shift_mm, angle = _pose_error(expected, T)
     assert shift_mm < 0.5 and angle < 0.1
 
 
-def test_identify_layout_only_the_true_layout_fits():
-    img, Kr, _ = _render_grid(SPEC)
+@pytest.mark.parametrize("turn", [180, 0])
+def test_identify_layout_only_the_true_layout_fits(turn):
+    spec = GridSpec(tag_rotation_deg=turn)
+    img, Kr, _ = _render_grid(spec)
     detections = make_tag_detector()(img)
     ranked = identify_layout(detections, layout_candidates(SPEC), Kr, np.zeros(5))
-    assert ranked[0][1] == SPEC and ranked[0][0] < 0.3
+    assert len(ranked) == 16
+    assert ranked[0][1] == spec and ranked[0][0] < 1.0              # coarse corners
     assert all(err > 10 * ranked[0][0] for err, _ in ranked[1:])
+
+
+# -- the real board at the setup (25.09.2026) ------------------------------------
+# A crop of one colour frame of the base camera, board held about 0.55 m below
+# it. Intrinsics as the camera reported them, principal point moved by the crop.
+_REAL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data",
+                     "aprilgrid_basiskamera_2026-09-25.png")
+_REAL_K = np.array([[897.831, 0.0, 647.054 - 470], [0.0, 897.539, 362.306 - 265], [0, 0, 1.0]])
+_REAL_D = np.array([0.129869, -0.440544, -0.000885, -0.00064, 0.402135])
+
+
+def test_real_board_is_read_and_its_corners_set_exactly():
+    gray = cv2.imread(_REAL, cv2.IMREAD_GRAYSCALE)
+    detections = make_tag_detector()(gray)
+    board = {i: c for i, c in detections.items() if i < 77}
+    assert len(board) >= 50                          # plain OpenCV settings: 1
+    assert len(detections) == len(board)             # no false id
+    ranked = identify_layout(board, layout_candidates(SPEC), _REAL_K, _REAL_D)
+    assert ranked[0][1] == SPEC                      # 7 x 11, bottom_left, turned 180
+    assert ranked[1][0] > 5 * ranked[0][0]           # 3.2 against 30 px
+    refined, err = refine_grid_corners(gray, SPEC, board, _REAL_K, _REAL_D)
+    assert err < 0.3 and len(refined) >= 50          # coarse corners: about 2 px
+    obj, px = grid_points(SPEC, refined)
+    T, _ = solve_pnp(obj, px, _REAL_K, _REAL_D)
+    assert T[2, 3] == pytest.approx(0.555, abs=0.01)
+
+
+def test_refinement_leaves_a_wrong_layout_alone():
+    gray = cv2.imread(_REAL, cv2.IMREAD_GRAYSCALE)
+    board = {i: c for i, c in make_tag_detector()(gray).items() if i < 77}
+    same, err = refine_grid_corners(gray, GridSpec(tag_rotation_deg=0), board, _REAL_K, _REAL_D)
+    assert err == float("inf") and same is board
 
 
 def test_average_detections_drops_rare_tags():
@@ -165,17 +216,22 @@ def test_plan_covers_rotations_and_stays_in_bounds():
     assert roles[-1] == "wiederholen" and np.allclose(plan[-1].world_T_flange, plan[0].world_T_flange)
     assert np.allclose(plan[0].world_T_flange, START)
     turns = [rotation_angle_deg(p.world_T_flange[:3, :3] @ START[:3, :3].T) for p in plan]
-    assert max(turns) > 30.0                      # real rotation diversity
+    assert max(turns) > 20.0                      # rotation about several axes
     pivot = lambda T: T[:3, :3] @ [0, 0, params.pivot_along_tool_m] + T[:3, 3]
     for p in plan:
         off = pivot(p.world_T_flange) - pivot(START)
         assert abs(off[0]) <= params.max_shift_m + 1e-9 and abs(off[1]) <= params.max_shift_m + 1e-9
         assert abs(off[2]) <= params.height_step_m + 1e-9
     assert plan_problems(START, plan, params) == []
+    offsets = [np.linalg.norm(p.world_T_flange[:2, 3] - START[:2, 3]) for p in plan]
+    assert max(offsets) < params.max_flange_offset_m
+    steps = [np.linalg.norm(b.world_T_flange[:3, 3] - a.world_T_flange[:3, 3])
+             for a, b in zip(plan, plan[1:])]
+    assert max(steps) < 0.30                      # nearest pose next, no sweeps
 
 
 def test_required_start_height_is_the_limit():
-    params = PlanParams()
+    params = TILTED
     level = required_start_height(params)
     assert 0.3 < level < 0.4
     for z, ok in ((level + 0.002, True), (level - 0.02, False)):
@@ -213,7 +269,7 @@ def test_stage1_averages_robot_pose_errors_on_the_belt():
     that dominates at the setup. With the default plan the belt stays within 1 mm."""
     rng = np.random.default_rng(8)
     cal = []
-    for p in plan_poses(START, PlanParams()):
+    for p in plan_poses(START, TILTED):
         if p.role != "kalibrieren":
             continue
         s = _sample(p.world_T_flange, rng, noise_px=0.2)
@@ -224,6 +280,37 @@ def test_stage1_averages_robot_pose_errors_on_the_belt():
     result = solve_stage1(cal, K, D)
     belt = belt_sample_points(X_TRUE, K, IMAGE, BELT_Z, roi=ROI)
     assert belt_displacement_mm(X_TRUE, result.world_T_cam, belt) < 1.0
+
+
+def test_default_plan_turns_about_the_vertical_only():
+    plan = plan_poses(START, PlanParams())
+    for p in plan:
+        R = p.world_T_flange[:3, :3] @ START[:3, :3].T
+        assert abs(R[2, 2] - 1.0) < 1e-9                  # tool axis stays level
+    assert max(rotation_angle_deg(p.world_T_flange[:3, :3] @ START[:3, :3].T) for p in plan) \
+        == pytest.approx(20.0)
+
+
+def test_vertical_turns_need_the_camera_height_and_then_find_the_camera():
+    s = _samples(params=PlanParams())["kalibrieren"]
+    with pytest.raises(ValueError, match="Kamerahöhe"):
+        solve_stage1(s, K, D)
+    prior = make_transform(axis_rotation((1, 1, 0), 0.8), (0.01, -0.01, 0.005)) @ X_TRUE
+    result = solve_stage1(s, K, D, prior=prior, camera_z_m=X_TRUE[2, 3] + 0.001)
+    belt = belt_sample_points(X_TRUE, K, IMAGE, BELT_Z, roi=ROI)
+    moved = (result.world_T_cam @ invert(X_TRUE) @ np.c_[belt, np.ones(len(belt))].T)[:3].T - belt
+    assert 1000 * np.max(np.linalg.norm(moved[:, :2], axis=1)) < 0.5     # position on the belt
+    assert 1000 * np.max(np.abs(moved[:, 2])) < 2.0                        # height: from the depth
+    assert result.world_T_cam[2, 3] == pytest.approx(X_TRUE[2, 3] + 0.001, abs=1e-9)
+
+
+def test_camera_height_from_the_belt_in_the_depth_image():
+    depth = _belt_depth(X_TRUE)
+    depth[200:520, 400:900] -= 0.35          # board and arm, 35 cm above the belt
+    z, plane = camera_height_from_depth(depth, K, X_TRUE[2, 3] - BELT_Z, BELT_Z)
+    assert z == pytest.approx(X_TRUE[2, 3], abs=0.0005)
+    with pytest.raises(ValueError, match="nicht gefunden"):
+        camera_height_from_depth(depth, K, 1.5, BELT_Z)       # nothing at that distance
 
 
 def test_stage1_survives_outliers():
@@ -273,6 +360,14 @@ def test_belt_plane_matches_calibration():
     plane = fit_plane(depth_points(_belt_depth(X_TRUE), K, stride=8))
     tilt, height = belt_plane_check(X_TRUE, plane, BELT_Z)
     assert tilt < 0.05 and abs(height) < 0.5 and plane.rms_mm < 1.5
+
+
+def test_belt_plane_ignores_arm_and_board_above_it():
+    depth = _belt_depth(X_TRUE)
+    depth[200:520, 400:900] -= 0.35          # board and arm, 35 cm above the belt
+    plane = fit_plane(depth_points(depth, K, stride=8))
+    tilt, height = belt_plane_check(X_TRUE, plane, BELT_Z)
+    assert tilt < 0.1 and abs(height) < 1.0
 
 
 def test_belt_plane_reveals_wrong_tilt():

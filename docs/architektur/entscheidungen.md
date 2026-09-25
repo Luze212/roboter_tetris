@@ -3806,3 +3806,50 @@ Transferhöhe 0,49 m bestätigt (D12); die Sprungerkennung bleibt bei 0,05 m.
 **Nachweis:** Tests für Modus 1 halten `use_block_orientation=False` fest, ein Test
 prüft den neuen Standard; die Referenzaufzeichnung mit den alten Werten festgehalten
 ist mit L25 Takt für Takt identisch — geändert haben sich nur Standardwerte.
+
+### L27 — Kalibrierung der Basiskamera: eigenes Verfahren, Stufe 1 am Aufbau (25.09.2026)
+
+**Ausgang.** Der Branch `Calibration-Working` des Kommilitonen kalibriert vor allem die
+Roboterkamera (Hand-Auge, Board auf dem Band). Die Basiskamera hängt dort am Ende einer
+Kette, ihre Ergebnisse wurden nur in den Container geschrieben und gingen verloren
+(einziger Lauf mit Basiskamera, 12.09.: Position 13 mm neben L6, Drehung nicht erhalten).
+**Entscheidung (Nutzer):** eigenes Verfahren in diesem Paket, **nur für die Basiskamera**.
+`Calibration/*` bleibt unberührt, `Calibration/calibration.json` ist überholt. **Alle Daten
+liegen im Repo:** Die gültige Kalibrierung ist `Extrinsics/base_cam_extrinsics.json`, die
+`base_cam` über den Parameter „Kalibrierdatei“ liest. Eine neue Kalibrierung wird aus dem
+Container ins Repo kopiert und eingebaut. Die Datei trägt bis auf Weiteres exakt die
+L6-Werte, leer oder unlesbar gelten `cal_*`.
+
+**Verfahren.** Stufe 1 (`base_cam_calibration`, Betriebsart `stufe1`): Der Greifer hält
+ein AprilGrid in das Bild der Basiskamera, der Block fährt einen Posenplan ab und löst
+Kamera → `world` und Board → Flansch gemeinsam. Stufe 2 (`stufe2`, `pruefen`): ohne
+Bewegung aus Referenzmarken am Bandgestell. Code: `basecam_extrinsics.py` (Mathematik),
+`calibration_run.py` (Ablauf), Anwendung `docs/uebersicht/anwendung-kalibrierung-basiskamera.yaml`,
+Bedienung in `einrichtung-projektanwendung.md` §10.
+
+**Am Aufbau festgelegt** (Begründungen im Code):
+- Board: calib.io-AprilGrid 7 × 11, 36h11. OpenCV liest die Tags um 180° gedreht. Die
+  Tags werden nach Schärfen gelesen und die Ecken über die Board-Lage fein nachgesetzt
+  (0,2 px statt 2 px).
+- **Die Greifer-Hardware darf nicht verändert werden** (auch von anderen genutzt). Eine
+  Gummihülle am Board klemmt es fest. Trotzdem bewegt sich das Board im Griff, sobald es
+  gekippt wird (Lauf 1: 0,5°). Deshalb **verschiebt der Plan nur und dreht um die
+  Hochachse**; die dann nicht beobachtbare Kamerahöhe kommt aus dem Band im Tiefenbild.
+- Posenplan klein: Flansch höchstens 24 cm von der Startpose, **Untergrenze z 0,34 m**
+  (Handgelenk, `min_flange_z_m` in der Anwendung). Greifkraft in der Anwendung 100 %.
+- Jeder Lauf schreibt Rohdaten, auch wenn eine Gütegrenze greift.
+
+**Ergebnis.** Läufe 2 und 3: 0,37 px, Prüfposen 0,5 mm, untereinander auf Bruchteile eines
+Millimeters gleich; Lage auf dem Band gegen L6 2–3 mm. **Befund: Das Tiefenbild der L515 ist
+gegen ihr Farbbild um 1,0–1,8° verkippt und liest 5–8 mm zu tief**, abhängig vom Bildort
+(13 Board-Aufnahmen, `architektur/bilder/2026-09-25-basiskamera-kalibrierung/`). `base_cam`
+kombiniert Farbpixel und Tiefe. Mit der Lage der Farbkamera allein wären die Klotzhöhen am
+Bildrand bis zu 9 mm falsch, und eine starre Ersatz-Kalibrierung reicht nicht. **L6 bleibt
+deshalb aktiv, die Kalibrierdatei ist unverändert.**
+
+**Nächste Schritte.** (1) Den Tiefenfehler aus den Messdaten über Bildort und Abstand
+modellieren, offline. Hinweis: Das Band selbst ist quer um 0,39° geneigt (§8 der
+Einrichtung); bisher wurde es als eben angenommen. (2) Eine Korrektur für `base_cam`
+vorschlagen (Freigabe). (3) Am Aufbau prüfen, Stufe 1 übernehmen, Abnahme wie bei L6 mit
+flachen und hohen Klötzen. **Offen:** ob Referenzmarken am Bandgestell angebracht werden
+dürfen; ohne sie entfällt Stufe 2, und Nachkalibrieren heißt Stufe 1 laufen lassen.

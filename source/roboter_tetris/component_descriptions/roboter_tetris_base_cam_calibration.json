@@ -158,7 +158,7 @@
       "description": "Posenplan: Verschiebung der Board-Mitte um die Startpose, je Richtung (m).",
       "parameter_name": "max_shift_m",
       "parameter_type": "double",
-      "default_value": "0.15",
+      "default_value": "0.08",
       "dynamic": false
     },
     {
@@ -171,10 +171,10 @@
     },
     {
       "display_name": "4 Plan: Kippen um Werkzeugachse (Grad) [max_tilt_deg]",
-      "description": "Posenplan: seitliches Kippen um die Werkzeugachse (Grad).",
+      "description": "Posenplan: seitliches Kippen um die Werkzeugachse (Grad). 0 = aus: das Board bewegt sich im Griff, sobald es gekippt wird; die Kamerahöhe kommt dann aus dem Tiefenbild.",
       "parameter_name": "max_tilt_deg",
       "parameter_type": "double",
-      "default_value": "25.0",
+      "default_value": "0.0",
       "dynamic": false
     },
     {
@@ -182,15 +182,15 @@
       "description": "Posenplan: Nicken quer zur Werkzeugachse (Grad). Der Flansch schwingt dabei um Abstand x sin(Winkel) nach unten - bestimmt die Mindesthöhe der Startpose.",
       "parameter_name": "max_pitch_deg",
       "parameter_type": "double",
-      "default_value": "12.0",
+      "default_value": "0.0",
       "dynamic": false
     },
     {
       "display_name": "4 Plan: Drehung Hochachse (Grad) [max_yaw_deg]",
-      "description": "Posenplan: Drehung um die Hochachse (Grad).",
+      "description": "Posenplan: Drehung um die Hochachse (Grad). Schwenkt den Flansch um die Board-Mitte mit - klein halten.",
       "parameter_name": "max_yaw_deg",
       "parameter_type": "double",
-      "default_value": "35.0",
+      "default_value": "20.0",
       "dynamic": false
     },
     {
@@ -207,6 +207,22 @@
       "parameter_name": "min_clearance_m",
       "parameter_type": "double",
       "default_value": "0.1",
+      "dynamic": false
+    },
+    {
+      "display_name": "4 Plan: Flansch-Untergrenze z (m) [min_flange_z_m]",
+      "description": "Unterste Flanschhöhe in world (m), 0 = aus. Tiefere Posen werden auf diese Höhe angehoben, ihre Drehungen bleiben. Am Aufbau 0,34 (Handgelenk, 25.09.2026).",
+      "parameter_name": "min_flange_z_m",
+      "parameter_type": "double",
+      "default_value": "0.0",
+      "dynamic": false
+    },
+    {
+      "display_name": "4 Plan: Flansch-Abweichung max. (m) [max_flange_offset_m]",
+      "description": "Größte waagerechte Abweichung des Flansches von der Startpose (m); darüber verweigert der Plan den Lauf.",
+      "parameter_name": "max_flange_offset_m",
+      "parameter_type": "double",
+      "default_value": "0.25",
       "dynamic": false
     },
     {

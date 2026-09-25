@@ -172,8 +172,11 @@ class GridSpec:
     Board frame: x along the columns, y along the rows, z = x cross y out of the
     printed face. ``origin`` names the board corner at tag ``first_id``; ids run
     along a row first. ``tag_size_m`` is the outer edge of the black tag border.
-    Which of the layouts a printed board has is checked on the first image with
-    :func:`identify_layout`.
+    ``tag_rotation_deg`` turns every tag against the grid: calib.io prints the
+    tags upright in the AprilTag library's sense, which OpenCV reads turned by
+    180 degrees -- measured on the board at the setup, 25.09.2026 (45 px error
+    with 0, 1.2 px with 180). Which layout a printed board has is checked on the
+    first image with :func:`identify_layout`.
     """
 
     rows: int = 7
@@ -182,6 +185,7 @@ class GridSpec:
     tag_spacing_m: float = 0.006
     first_id: int = 0
     origin: str = "bottom_left"  # or "top_left"
+    tag_rotation_deg: int = 180
 
     @property
     def pitch_m(self) -> float:
@@ -203,18 +207,30 @@ class GridSpec:
             row = self.rows - 1 - row
         elif self.origin != "bottom_left":
             raise ValueError(f"unbekannter Ursprung {self.origin!r}")
+        if self.tag_rotation_deg % 90:
+            raise ValueError(f"Tag-Drehung {self.tag_rotation_deg} kein Vielfaches von 90")
         x0, y0, s = col * self.pitch_m, row * self.pitch_m, self.tag_size_m
-        return np.array([[x0, y0 + s, 0.0], [x0 + s, y0 + s, 0.0],
-                         [x0 + s, y0, 0.0], [x0, y0, 0.0]])
+        upright = np.array([[x0, y0 + s, 0.0], [x0 + s, y0 + s, 0.0],
+                            [x0 + s, y0, 0.0], [x0, y0, 0.0]])
+        # detected corner k lies where the upright model has corner k + turns
+        return np.roll(upright, -(self.tag_rotation_deg // 90), axis=0)
 
     def to_dict(self) -> dict:
         return {"rows": self.rows, "cols": self.cols, "tag_size_m": self.tag_size_m,
                 "tag_spacing_m": self.tag_spacing_m, "first_id": self.first_id,
-                "origin": self.origin}
+                "origin": self.origin, "tag_rotation_deg": self.tag_rotation_deg}
 
 
-def make_tag_detector(dictionary: str = "DICT_APRILTAG_36h11"):
-    """Callable gray image -> :data:`Detections`, for OpenCV 4.6 and 4.7+."""
+def make_tag_detector(dictionary: str = "DICT_APRILTAG_36h11", sharpen: float = 2.0):
+    """Callable gray image -> :data:`Detections`, for OpenCV 4.6 and 4.7+.
+
+    Tuned on the base camera at the setup (25.09.2026): a 20 mm tag at 0.55 m
+    is about 30 px, 3.7 px per bit, and the L515 colour image is soft. Plain
+    settings read 1 of 77 tags. An unsharp mask (``sharpen``) and a finer
+    bit sampling read 57, without a false id. The corners found here are only
+    coarse (about 1 px inside, some snapped onto the AprilGrid's corner squares);
+    :func:`refine_grid_corners` and :func:`refine_tag_corners` set them exactly.
+    """
     if not hasattr(cv2.aruco, dictionary):
         raise ValueError(f"unbekanntes Tag-Wörterbuch {dictionary!r}")
     tag_dict = cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, dictionary))
@@ -223,8 +239,9 @@ def make_tag_detector(dictionary: str = "DICT_APRILTAG_36h11"):
         params = cv2.aruco.DetectorParameters_create()
     else:
         params = cv2.aruco.DetectorParameters()
-    params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
-    params.cornerRefinementWinSize = 3
+    params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_NONE
+    params.perspectiveRemovePixelPerCell = 14
+    params.perspectiveRemoveIgnoredMarginPerCell = 0.35
     if hasattr(cv2.aruco, "ArucoDetector"):
         detector = cv2.aruco.ArucoDetector(tag_dict, params)
         detect = detector.detectMarkers
@@ -233,6 +250,9 @@ def make_tag_detector(dictionary: str = "DICT_APRILTAG_36h11"):
             return cv2.aruco.detectMarkers(gray, tag_dict, parameters=params)
 
     def run(gray: np.ndarray) -> Detections:
+        if sharpen > 0:
+            blur = cv2.GaussianBlur(gray, (0, 0), 1.0)
+            gray = cv2.addWeighted(gray, 1.0 + sharpen, blur, -sharpen, 0)
         corners, ids, _ = detect(gray)
         if ids is None:
             return {}
@@ -240,6 +260,68 @@ def make_tag_detector(dictionary: str = "DICT_APRILTAG_36h11"):
                 for i, c in zip(ids.ravel(), corners)}
 
     return run
+
+
+_SUBPIX = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 0.005)
+
+
+def refine_grid_corners(gray: np.ndarray, spec: GridSpec, detections: Detections,
+                        K: np.ndarray, D: np.ndarray, max_move_px: float = 1.5,
+                        coarse_limit_px: float = 5.0) -> Tuple[Detections, float]:
+    """Set the corners of the grid tags exactly; returns them and the pixel RMS.
+
+    A coarse board pose from all detected corners (outliers dropped) predicts
+    every tag corner to about a pixel; ``cornerSubPix`` in the original image
+    then settles on the corner, where tag and AprilGrid square meet. A tag
+    whose corner moves more than ``max_move_px`` drops out. Not the grid (or a
+    wrong layout): the detections come back unchanged with RMS inf.
+    Measured at the setup: 2.15 px -> 0.16 px over 228 corners.
+    """
+    board = {i: c for i, c in detections.items() if spec.tag_corners(i) is not None}
+    obj, img = grid_points(spec, board)
+    if len(board) < 4:
+        return detections, float("inf")
+    keep = np.ones(len(obj), dtype=bool)
+    try:
+        for _ in range(3):
+            T, _ = solve_pnp(obj[keep], img[keep], K, D)
+            err = reprojection_errors(obj, img, T, K, D)
+            keep = err < max(2.5, 2.0 * float(np.median(err)))
+            if keep.sum() < 16:
+                return detections, float("inf")
+    except (ValueError, cv2.error):
+        return detections, float("inf")
+    if rms(err[keep]) > coarse_limit_px:
+        return detections, float("inf")
+    rvec = matrix_to_rotvec(T[:3, :3])
+    guess, _ = cv2.projectPoints(obj, rvec, T[:3, 3], K, D)
+    refined = guess.astype(np.float32).copy()
+    cv2.cornerSubPix(gray, refined, (3, 3), (-1, -1), _SUBPIX)
+    refined = refined.reshape(-1, 4, 2).astype(np.float64)
+    moved = np.linalg.norm(refined - guess.reshape(-1, 4, 2), axis=2)
+    out = {i: c for i, c in detections.items() if i not in board}
+    for tag_id, corners, shift in zip(sorted(board), refined, moved):
+        if np.all(shift <= max_move_px):
+            out[tag_id] = corners
+    obj2, img2 = grid_points(spec, {i: c for i, c in out.items() if i in board})
+    if len(obj2) < 16:
+        return detections, float("inf")
+    T2, err2 = solve_pnp(obj2, img2, K, D)
+    return out, err2
+
+
+def refine_tag_corners(gray: np.ndarray, detections: Detections,
+                       max_move_px: float = 2.0) -> Detections:
+    """Exact corners of single tags (reference tags): outer corners of a black
+    square on white, where ``cornerSubPix`` converges from the coarse corner."""
+    out = {}
+    for tag_id, corners in detections.items():
+        c = corners.astype(np.float32).reshape(-1, 1, 2).copy()
+        cv2.cornerSubPix(gray, c, (3, 3), (-1, -1), _SUBPIX)
+        c = c.reshape(4, 2).astype(np.float64)
+        if np.all(np.linalg.norm(c - corners, axis=1) <= max_move_px):
+            out[tag_id] = c
+    return out
 
 
 def average_detections(frames: Sequence[Detections], min_fraction: float = 0.8) -> Detections:
@@ -321,12 +403,14 @@ def identify_layout(detections: Detections, candidates: Sequence[GridSpec],
 
 
 def layout_candidates(spec: GridSpec) -> List[GridSpec]:
-    """The spec itself, rows/cols swapped, and both origins."""
+    """Every way the ids can lie: rows/cols swapped, both origins, four tag turns."""
     out = []
     for rows, cols in ((spec.rows, spec.cols), (spec.cols, spec.rows)):
         for origin in ("bottom_left", "top_left"):
-            out.append(GridSpec(rows, cols, spec.tag_size_m, spec.tag_spacing_m,
-                                spec.first_id, origin))
+            for turn in (spec.tag_rotation_deg, *(r for r in (0, 90, 180, 270)
+                                                  if r != spec.tag_rotation_deg)):
+                out.append(GridSpec(rows, cols, spec.tag_size_m, spec.tag_spacing_m,
+                                    spec.first_id, origin, turn))
     return out
 
 
@@ -339,16 +423,23 @@ class PlanParams:
     #: Board centre in the flange frame, along the tool axis: flange -> jaws
     #: (0.235 m, Z7) plus about half the board held out beyond them.
     pivot_along_tool_m: float = 0.37
-    max_shift_m: float = 0.15
+    #: Kept small on purpose: every turn about the board centre swings the
+    #: flange too, and with ±35 degrees and 15 cm it wandered 42 cm and came
+    #: near the reach limit (setup, 25.09.2026). 8 cm with ±20 degrees keep it
+    #: within 24 cm of the start.
+    max_shift_m: float = 0.08
     height_step_m: float = 0.08
-    #: Tilt about the tool axis (the board rolls sideways; flange and gripper
-    #: lie on that axis and stay put) and about the horizontal axis across it
-    #: (the board pitches; the flange swings by pivot * sin(pitch), 7.7 cm at
-    #: 12 degrees). Kept apart so the start need not be high above the belt --
-    #: height costs accuracy, since the belt lies further from the board.
-    max_tilt_deg: float = 25.0
-    max_pitch_deg: float = 12.0
-    max_yaw_deg: float = 35.0
+    #: Tilt about the tool axis (roll) and across it (pitch). Off by default:
+    #: the board hangs in the jaws by a few degrees and moves in the grip as
+    #: soon as gravity pulls from another side -- 0.5 degrees in the first run
+    #: at the setup (25.09.2026), and the grip may not be changed. Turning about
+    #: the vertical and shifting keep gravity where it is. Without tilt the
+    #: camera height is not observable; it comes from the belt in the depth
+    #: image instead (``camera_z_m`` of :func:`solve_stage1`). Simulated: 0.4 mm
+    #: position on the belt, height within about 2 mm.
+    max_tilt_deg: float = 0.0
+    max_pitch_deg: float = 0.0
+    max_yaw_deg: float = 20.0
     #: Passes over the pose pattern; each further pass is mirrored and turns the
     #: tilt axes by 90 degrees. The robot reports its pose with a small error per
     #: pose, not the camera its pixels -- that error dominates, and only more and
@@ -365,6 +456,12 @@ class PlanParams:
     #: (245 mm, CLAUDE.md §4).
     gripper_length_m: float = 0.245
     gripper_radius_m: float = 0.06
+    #: Lowest flange z in world (0 = off). A pose that would take the flange
+    #: lower is lifted to it, turns kept -- they carry the accuracy. At the setup
+    #: the wrist posture allows about 6 cm below the start pose (25.09.2026).
+    min_flange_z_m: float = 0.0
+    #: Largest horizontal distance of the flange from the start pose.
+    max_flange_offset_m: float = 0.25
 
 
 # Each entry: shift (x, y, z in world) in units of max_shift / max_shift /
@@ -432,7 +529,23 @@ def _plan_pose(start: np.ndarray, p: PlanParams, entry) -> Tuple[np.ndarray, flo
     shift = np.array([sx * p.max_shift_m, sy * p.max_shift_m, sz * p.height_step_m])
     # rotate about the board centre, then shift, all in world
     T = make_transform(R, pivot - R @ pivot + shift) @ start
+    if p.min_flange_z_m > 0 and T[2, 3] < p.min_flange_z_m:
+        T[2, 3] = p.min_flange_z_m
     return T, tilt_deg
+
+
+def _nearest_first(poses: List[PlannedPose]) -> List[PlannedPose]:
+    """Drive order: always the nearest pose next (1 rad counted as 0.3 m), from
+    the first. Short moves between poses instead of back-and-forth sweeps."""
+    left = list(poses[1:])
+    out = poses[:1]
+    while left:
+        last = out[-1].world_T_flange
+        k = min(range(len(left)), key=lambda i: (
+            np.linalg.norm(left[i].world_T_flange[:3, 3] - last[:3, 3])
+            + 0.3 * math.radians(rotation_angle_deg(left[i].world_T_flange[:3, :3] @ last[:3, :3].T))))
+        out.append(left.pop(k))
+    return out
 
 
 def plan_poses(start: np.ndarray, params: PlanParams) -> List[PlannedPose]:
@@ -447,6 +560,7 @@ def plan_poses(start: np.ndarray, params: PlanParams) -> List[PlannedPose]:
                 e = (s, tilt * 0.5, (az + 45 * (n - 1)) % 360, yaw)
             T, tilt = _plan_pose(start, params, e)
             out.append(PlannedPose(T, "kalibrieren", tilt))
+    out = _nearest_first(out)
     for e in _HOLDOUT_POSES:
         T, tilt = _plan_pose(start, params, e)
         out.append(PlannedPose(T, "pruefen", tilt))
@@ -471,6 +585,12 @@ def plan_problems(start: np.ndarray, poses: Sequence[PlannedPose],
             found.append(f"Pose {n}: Board-Kante {1000 * (floor - lowest):.0f} mm unter der Mindesthöhe")
         tip = T[:3, :3] @ np.array([0.0, 0.0, params.gripper_length_m]) + T[:3, 3]
         gripper = min(T[2, 3], tip[2]) - params.gripper_radius_m
+        offset = float(np.linalg.norm(T[:2, 3] - start[:2, 3]))
+        if offset > params.max_flange_offset_m:
+            found.append(f"Pose {n}: Flansch {100 * offset:.0f} cm von der Startpose "
+                         f"(höchstens {100 * params.max_flange_offset_m:.0f})")
+        if params.min_flange_z_m > 0 and T[2, 3] < params.min_flange_z_m - 1e-9:
+            found.append(f"Pose {n}: Flansch unter der Untergrenze {params.min_flange_z_m:.2f} m")
         if gripper < floor:
             found.append(f"Pose {n}: Greifer {1000 * (floor - gripper):.0f} mm unter der Mindesthöhe")
     return found
@@ -479,6 +599,10 @@ def plan_problems(start: np.ndarray, poses: Sequence[PlannedPose],
 def required_start_height(params: PlanParams) -> float:
     """Lowest world z of the board centre at the start pose for which the plan
     keeps every clearance (the start itself taken level)."""
+    if params.min_flange_z_m > 0:  # the floor lifts poses; the start must lie above it
+        return max(params.min_flange_z_m, params.belt_z_m + params.min_clearance_m
+                   + params.board_radius_m * math.sin(math.radians(
+                       max(params.max_tilt_deg, params.max_pitch_deg))))
     tilt = math.sin(math.radians(max(params.max_tilt_deg, params.max_pitch_deg)))
     pitch = math.sin(math.radians(params.max_pitch_deg))
     below = max(params.board_radius_m * tilt,
@@ -497,6 +621,9 @@ class Sample:
     world_T_flange: np.ndarray
     obj: np.ndarray  # Nx3 board points
     img: np.ndarray  # Nx2 pixels
+    #: The board surface as the depth image sees it (camera frame, base_cam's
+    #: deprojection); None without a depth image at this pose.
+    depth_plane: Optional["Plane"] = None
 
 
 @dataclass
@@ -564,17 +691,22 @@ _INIT_METHODS = (("Park", cv2.CALIB_HAND_EYE_PARK), ("Tsai", cv2.CALIB_HAND_EYE_
                  ("Daniilidis", cv2.CALIB_HAND_EYE_DANIILIDIS))
 
 
-def initial_guess(samples: Sequence[Sample], K, D) -> Tuple[np.ndarray, np.ndarray, str]:
-    """Closed-form start: calibrateHandEye in the eye-to-hand form.
+def initial_guess(samples: Sequence[Sample], K, D,
+                  prior: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray, str]:
+    """Start values: calibrateHandEye in the eye-to-hand form, or the prior.
 
     Fed with flange_T_world instead of world_T_flange, OpenCV's "cam2gripper"
     is world_T_cam, since inv(F_i) @ X @ C_i = Y must hold for every pose.
-    The method with the lowest pixel error wins.
+    Without tilt the closed forms are degenerate; then the calibration in
+    force (``prior``) is the better start. The lowest pixel error wins.
     """
     views = [solve_pnp(s.obj, s.img, K, D)[0] for s in samples]
     flange_T_world = [invert(s.world_T_flange) for s in samples]
     masks = [np.ones(len(s.obj), dtype=bool) for s in samples]
     best = None
+    if prior is not None:
+        Y = average_transforms([Fi @ prior @ C for Fi, C in zip(flange_T_world, views)])
+        best = (rms(_residuals(prior, Y, samples, masks, K, D)), prior.copy(), Y, "bisherige Kalibrierung")
     for name, method in _INIT_METHODS:
         try:
             R, t = cv2.calibrateHandEye([F[:3, :3] for F in flange_T_world],
@@ -595,19 +727,42 @@ def initial_guess(samples: Sequence[Sample], K, D) -> Tuple[np.ndarray, np.ndarr
     return best[1], best[2], best[3]
 
 
+def _all_turns_vertical(samples: Sequence[Sample], tol_deg: float = 1.0) -> bool:
+    R0 = samples[0].world_T_flange[:3, :3]
+    for s in samples[1:]:
+        R = s.world_T_flange[:3, :3] @ R0.T
+        axis = matrix_to_rotvec(R)
+        if np.linalg.norm(axis) > 1e-9:
+            if math.degrees(math.acos(min(1.0, abs(axis[2]) / np.linalg.norm(axis)))) > tol_deg \
+                    and rotation_angle_deg(R) > tol_deg:
+                return False
+    return True
+
+
 def solve_stage1(samples: Sequence[Sample], K: np.ndarray, D: np.ndarray,
-                 outlier_px: float = 1.5, min_points_per_pose: int = 16) -> Stage1Result:
+                 outlier_px: float = 1.5, min_points_per_pose: int = 16,
+                 prior: Optional[np.ndarray] = None,
+                 camera_z_m: Optional[float] = None) -> Stage1Result:
     """world_T_cam and flange_T_board from the calibration samples.
 
     One pass of outlier removal: points further off than ``outlier_px`` or three
     times the RMS (whichever is larger) leave, then the fit is repeated. A pose
     left with fewer than ``min_points_per_pose`` points drops out as a whole.
+
+    If the flange only turned about the vertical, one direction is not
+    observable: camera and board may move up together without any pixel
+    changing. ``camera_z_m`` (camera height in world, from the belt in the
+    depth image) then fixes it; the solution is shifted along exactly that
+    direction, which leaves every residual as it is.
     """
     if len(samples) < 6:
         raise ValueError(f"zu wenige Posen: {len(samples)} (mindestens 6)")
     K = np.asarray(K, dtype=np.float64)
     D = np.asarray(D, dtype=np.float64)
-    X, Y, init_name = initial_guess(samples, K, D)
+    vertical_only = _all_turns_vertical(samples)
+    if vertical_only and camera_z_m is None:
+        raise ValueError("nur Drehungen um die Hochachse: die Kamerahöhe fehlt (Tiefenbild)")
+    X, Y, init_name = initial_guess(samples, K, D, prior)
     masks = [np.ones(len(s.obj), dtype=bool) for s in samples]
     X, Y, _, r = _refine(X, Y, samples, masks, K, D)
 
@@ -624,11 +779,18 @@ def solve_stage1(samples: Sequence[Sample], K: np.ndarray, D: np.ndarray,
     if len(samples) - dropped < 6:
         raise ValueError(f"nach der Ausreißerprüfung zu wenige Posen: {len(samples) - dropped}")
     X, Y, J, r = _refine(X, Y, samples, new_masks, K, D)
+    if vertical_only:
+        # move camera and board up together to the measured camera height
+        h = float(camera_z_m) - X[2, 3]
+        X, Y = X.copy(), Y.copy()
+        X[2, 3] += h
+        Y[:3, 3] += h * (samples[0].world_T_flange[:3, :3].T @ np.array([0.0, 0.0, 1.0]))
+        r = _residuals(X, Y, samples, new_masks, K, D)
 
     per_point = np.linalg.norm(r.reshape(-1, 2), axis=1)
     dof = max(1, len(r) - 12)
     try:
-        cov = float(r @ r) / dof * np.linalg.inv(J.T @ J)
+        cov = float(r @ r) / dof * np.linalg.pinv(J.T @ J)
         pos_std = 1000.0 * math.sqrt(max(0.0, np.trace(cov[3:6, 3:6])))
         rot_std = math.degrees(math.sqrt(max(0.0, np.trace(cov[0:3, 0:3]))))
     except np.linalg.LinAlgError:
@@ -709,26 +871,63 @@ def depth_points(depth_m: np.ndarray, K: np.ndarray,
     return np.c_[(us - K[0, 2]) * z / K[0, 0], (vs - K[1, 2]) * z / K[1, 1], z]
 
 
-def fit_plane(points: np.ndarray, trim_sigma: float = 3.0, iterations: int = 3) -> Plane:
-    """Least-squares plane, points beyond trim_sigma dropped between passes."""
+def fit_plane(points: np.ndarray, inlier_mm: float = 4.0, iterations: int = 300,
+              seed: int = 0) -> Plane:
+    """The dominant plane (RANSAC), then least squares over its points.
+
+    At the setup the arm and the board stand in the depth image above the belt;
+    a plain fit tilted towards them by 72 degrees (25.09.2026). The belt is
+    the largest plane in the ROI, so the consensus finds it.
+    """
     if len(points) < 3:
         raise ValueError("zu wenige Tiefenpunkte für die Ebene")
-    keep = np.ones(len(points), dtype=bool)
+    rng = np.random.default_rng(seed)
+    tol = inlier_mm / 1000.0
+    best, best_count = None, -1
     for _ in range(iterations):
-        c = points[keep].mean(axis=0)
-        _, _, Vt = np.linalg.svd(points[keep] - c, full_matrices=False)
+        a, b, c = points[rng.choice(len(points), 3, replace=False)]
+        n = np.cross(b - a, c - a)
+        norm = np.linalg.norm(n)
+        if norm < 1e-12:
+            continue
+        n = n / norm
+        count = int(np.count_nonzero(np.abs((points - a) @ n) <= tol))
+        if count > best_count:
+            best, best_count = (n, a), count
+    if best is None:
+        raise ValueError("keine Ebene im Tiefenbild")
+    n, a = best
+    keep = np.abs((points - a) @ n) <= tol
+    for _ in range(2):  # refine on the consensus set
+        centre = points[keep].mean(axis=0)
+        _, _, Vt = np.linalg.svd(points[keep] - centre, full_matrices=False)
         n = Vt[2]
-        if n[2] > 0:
-            n = -n  # towards the camera
-        d = -float(n @ c)
-        dist = points @ n + d
-        sigma = float(np.std(dist[keep]))
-        new_keep = np.abs(dist) <= max(trim_sigma * sigma, 1e-4)
-        if new_keep.sum() < 3 or np.array_equal(new_keep, keep):
-            break
-        keep = new_keep
-    dist = points[keep] @ n + d
-    return Plane(n, d, 1000.0 * rms(dist), int(keep.sum()))
+        keep = np.abs((points - centre) @ n) <= tol
+    if n[2] > 0:
+        n = -n  # towards the camera
+    d = -float(n @ points[keep].mean(axis=0))
+    return Plane(n, d, 1000.0 * rms(points[keep] @ n + d), int(keep.sum()))
+
+
+def camera_height_from_depth(depth_m: np.ndarray, K: np.ndarray, expected_height_m: float,
+                             belt_z_m: float, window_m: float = 0.08,
+                             stride: int = 4) -> Tuple[float, Plane]:
+    """Camera z in world from the belt in the depth image: belt z + distance.
+
+    Only depths within ``window_m`` of the expected camera height above the
+    belt count -- board and arm, much nearer the camera, drop out before the
+    plane is sought. The belt lies level in world (B17), so the distance to
+    its plane is the height above it.
+    """
+    pts = depth_points(depth_m, K, stride=stride)
+    pts = pts[np.abs(pts[:, 2] - expected_height_m) <= window_m]
+    if len(pts) < 2000:
+        raise ValueError(f"Band im Tiefenbild nicht gefunden ({len(pts)} Punkte im Fenster)")
+    plane = fit_plane(pts)
+    if plane.count < 0.5 * len(pts) or plane.rms_mm > 5.0:
+        raise ValueError(f"Bandebene unsicher: {plane.count} von {len(pts)} Punkten, "
+                         f"Rest {plane.rms_mm:.1f} mm")
+    return belt_z_m + abs(plane.offset), plane
 
 
 def belt_plane_check(world_T_cam: np.ndarray, plane: Plane, belt_z_m: float) -> Tuple[float, float]:
@@ -739,6 +938,71 @@ def belt_plane_check(world_T_cam: np.ndarray, plane: Plane, belt_z_m: float) -> 
     t = -plane.offset / float(plane.normal[2])
     hit = world_T_cam @ np.array([0.0, 0.0, t, 1.0])
     return tilt, 1000.0 * (float(hit[2]) - belt_z_m)
+
+
+# ---------------------------------------------------------------------------
+# Depth image against colour image (L515)
+# ---------------------------------------------------------------------------
+#
+# base_cam places a block from its colour pixel and the aligned depth, without
+# undistortion. The L515 depth is tilted against its colour image by about a
+# degree (board seen by both at once, setup 25.09.2026: 1.13 degrees), so the
+# colour camera's true pose (stage 1 above) puts base_cam's depth-built points
+# off by up to 9 mm in height. A single rigid transform cannot absorb that (the
+# belt kept 0.55 degrees in simulation and at the setup), and a depth scale
+# linear in the image, fitted on the board at 0.52 m, left the belt at 0.86 m
+# tilted by 0.68 degrees. Stage 1 therefore records the board in the depth
+# image at every pose, so the depth error can be modelled over image position
+# and distance before base_cam is changed.
+
+
+def pixel_rays(px: np.ndarray, K: np.ndarray) -> np.ndarray:
+    """Nx3 rays with z = 1, as base_cam deprojects (no undistortion)."""
+    px = np.asarray(px, dtype=np.float64).reshape(-1, 2)
+    return np.c_[(px[:, 0] - K[0, 2]) / K[0, 0], (px[:, 1] - K[1, 2]) / K[1, 1], np.ones(len(px))]
+
+
+def board_depth_plane(depth_m: np.ndarray, K: np.ndarray, corners_px: np.ndarray,
+                      shrink_px: int = 8, stride: int = 4) -> Optional[Plane]:
+    """Plane of the board in the depth image, over the area inside its corners
+    (every ``stride``-th pixel: some 8000 points, a few ms per pose)."""
+    pts = np.round(np.asarray(corners_px, dtype=np.float64).reshape(-1, 2)).astype(np.int32)
+    if len(pts) < 8:
+        return None
+    mask = np.zeros(depth_m.shape[:2], np.uint8)
+    cv2.fillConvexPoly(mask, cv2.convexHull(pts), 1)
+    if shrink_px > 0:
+        mask = cv2.erode(mask, np.ones((2 * shrink_px + 1, 2 * shrink_px + 1), np.uint8))
+    vs, us = np.nonzero(mask[::stride, ::stride])
+    vs, us = vs * stride, us * stride
+    z = depth_m[vs, us]
+    ok = np.isfinite(z) & (z > 0)
+    if ok.sum() < 300:
+        return None
+    rays = pixel_rays(np.c_[us[ok], vs[ok]], K)
+    try:
+        plane = fit_plane(rays * z[ok, None], inlier_mm=3.0)
+    except ValueError:
+        return None
+    return plane if plane.count >= 0.5 * ok.sum() else None
+
+
+def depth_grid(depth_m: np.ndarray, corners_px: np.ndarray, stride: int = 8,
+               shrink_px: int = 8) -> np.ndarray:
+    """Mx3 (u, v, depth m) on a pixel grid inside the corners -- raw material for
+    modelling the depth error against the colour image, stored with every pose."""
+    pts = np.round(np.asarray(corners_px, dtype=np.float64).reshape(-1, 2)).astype(np.int32)
+    if len(pts) < 3:
+        return np.zeros((0, 3))
+    mask = np.zeros(depth_m.shape[:2], np.uint8)
+    cv2.fillConvexPoly(mask, cv2.convexHull(pts), 1)
+    if shrink_px > 0:
+        mask = cv2.erode(mask, np.ones((2 * shrink_px + 1, 2 * shrink_px + 1), np.uint8))
+    vs, us = np.mgrid[0:depth_m.shape[0]:stride, 0:depth_m.shape[1]:stride]
+    keep = mask[vs, us] > 0
+    z = depth_m[vs, us]
+    keep &= np.isfinite(z) & (z > 0)
+    return np.c_[us[keep], vs[keep], z[keep]]
 
 
 # ---------------------------------------------------------------------------
