@@ -162,8 +162,16 @@
       "dynamic": true
     },
     {
+      "display_name": "Kalibrierdatei",
+      "description": "Kalibrierdatei der Basiskamera (Kamera→world), relativ zum Paket oder absolut; beim Aktivieren gelesen, das Log nennt die geltende Kalibrierung. Standard: die mitgelieferte Datei Extrinsics/base_cam_extrinsics.json, geschrieben von der Komponente base_cam_calibration (Stufe 1/2) und ins Repo übernommen. Leer oder unlesbar = die cal_*-Werte.",
+      "parameter_name": "calibration_file",
+      "parameter_type": "string",
+      "default_value": "Extrinsics/base_cam_extrinsics.json",
+      "dynamic": false
+    },
+    {
       "display_name": "Kalibrierung X (m)",
-      "description": "Extrinsik Kamera→world (= ur_base_link, nicht UR-Rahmen base): Translation x in m. Übergangswerte vom 23.09.2026 (Nachtrag 13): Neigung aus einer Bandebene im Tiefenbild, Rest aus fünf Antastpunkten, Restfehler ≤ 4 mm. Calibration/calibration.json enthält noch die Werte der Vorgängergruppe im Rahmen base. Nach Verschieben der Kamera neu bestimmen.",
+      "description": "Extrinsik Kamera→world (= ur_base_link, nicht UR-Rahmen base): Translation x in m. Übergangswerte vom 23.09.2026 (Nachtrag 13): Neigung aus einer Bandebene im Tiefenbild, Rest aus fünf Antastpunkten, Restfehler ≤ 4 mm. Gilt nur, wenn die Kalibrierdatei leer oder unlesbar ist; sonst gilt die Datei. Nach Verschieben der Kamera: base_cam_calibration.",
       "parameter_name": "cal_x",
       "parameter_type": "double",
       "default_value": "-0.7787",

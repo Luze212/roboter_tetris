@@ -25,6 +25,7 @@ from rclpy.qos import QoSProfile
 from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import Image, CameraInfo
 
+from .basecam_extrinsics import DEFAULT_CALIBRATION_FILE, load_camera_calibration
 from .contracts import ObjectEntry, pack_objects
 from .vision.color_estimation import COLOR_NAMES
 from .vision.detection import (
@@ -130,9 +131,14 @@ class BaseCam(LifecycleComponent):
         # frame "base" (180° about z, Nachtrag 12 / K5). Interim values of
         # 23.09.2026 (Nachtrag 13): tilt from a belt-plane fit in the depth image,
         # yaw and x/y from five touch points with the robot, 25 and 100 mm blocks,
-        # residual <= 4 mm. Calibration/calibration.json still holds the
-        # predecessor's values (roll 176.26, pitch -8.27, yaw -12.94 in "base");
-        # the calibration project (C3) will replace these, that folder stays untouched.
+        # residual <= 4 mm. Since the base camera calibration (stage 1/2) the
+        # calibration file below holds the extrinsics; these six only apply when
+        # it is left empty or cannot be read. (Calibration/calibration.json of the
+        # separate calibration project is obsolete: predecessor values in "base".)
+        self.add_parameter(sr.Parameter("calibration_file", DEFAULT_CALIBRATION_FILE,
+                                        sr.ParameterType.STRING),
+                           "Kalibrierdatei der Basiskamera, relativ zum Paket oder absolut; "
+                           "beim Aktivieren gelesen. Leer oder unlesbar = cal_*-Werte.")
         self.add_parameter(sr.Parameter("cal_x", -0.7787, sr.ParameterType.DOUBLE),
                            "Extrinsik: Translation x in m (Kamera→world)")
         self.add_parameter(sr.Parameter("cal_y", 0.7934, sr.ParameterType.DOUBLE),
@@ -231,6 +237,7 @@ class BaseCam(LifecycleComponent):
         self._last_frame_walltime = None  # rclpy Time of the last fresh frame
         self._last_error_walltime = None
         self._set_param_client = None     # created in on_configure (ROS 2 service client)
+        self._file_cam_to_robot = None    # extrinsics from the calibration file, if valid
         self._global_time_done = False
         self._global_time_attempts = 0
         self._global_time_last_try = None
@@ -240,6 +247,8 @@ class BaseCam(LifecycleComponent):
     def on_validate_parameter_callback(self, parameter: sr.Parameter) -> bool:
         name = parameter.get_name()
         if parameter.is_empty():
+            if name == "calibration_file":
+                return True  # empty = the cal_* values
             self.get_logger().warn(f"{name} must not be empty")
             return False
         if name == "vel_filter_alpha":
@@ -268,6 +277,12 @@ class BaseCam(LifecycleComponent):
         return True
 
     def on_activate_callback(self) -> bool:
+        # Which calibration the detection runs on, read once and logged.
+        value = self.get_parameter("calibration_file").get_value() or ""
+        record, line = load_camera_calibration(value)
+        self._file_cam_to_robot = None if record is None else record.world_T_cam
+        broken = record is None and value.strip()
+        (self.get_logger().warn if broken else self.get_logger().info)(f"base_cam: {line}")
         # Fresh tracking state per activation; parameters stay as configured.
         self._tracker = VisionTracker()
         self._filtered_velocity_y = 0.0
@@ -300,13 +315,7 @@ class BaseCam(LifecycleComponent):
             max_obj_height_mm=self.get_parameter("max_obj_height_mm").get_value(),
             z_offset=self.get_parameter("z_offset").get_value(),
             min_contour_area=self.get_parameter("min_contour_area").get_value(),
-            cam_to_robot=build_cam_to_robot(
-                self.get_parameter("cal_x").get_value(),
-                self.get_parameter("cal_y").get_value(),
-                self.get_parameter("cal_z").get_value(),
-                self.get_parameter("cal_roll").get_value(),
-                self.get_parameter("cal_pitch").get_value(),
-                self.get_parameter("cal_yaw").get_value()),
+            cam_to_robot=self._cam_to_robot(),
             x_scale=self.get_parameter("x_scale").get_value(),
             y_scale=self.get_parameter("y_scale").get_value(),
             x_offset_mm=self.get_parameter("x_offset_mm").get_value(),
@@ -315,6 +324,17 @@ class BaseCam(LifecycleComponent):
             search_area_y_max=self.get_parameter("search_area_y_max").get_value(),
             erosion_px=int(self.get_parameter("erosion_px").get_value()),
         )
+
+    def _cam_to_robot(self) -> np.ndarray:
+        if self._file_cam_to_robot is not None:
+            return self._file_cam_to_robot
+        return build_cam_to_robot(
+            self.get_parameter("cal_x").get_value(),
+            self.get_parameter("cal_y").get_value(),
+            self.get_parameter("cal_z").get_value(),
+            self.get_parameter("cal_roll").get_value(),
+            self.get_parameter("cal_pitch").get_value(),
+            self.get_parameter("cal_yaw").get_value())
 
     def _sync_tracker_params(self) -> None:
         t = self._tracker

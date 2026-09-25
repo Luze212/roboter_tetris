@@ -1,0 +1,58 @@
+{
+  "schema": "roboter_tetris.base_cam_extrinsics",
+  "version": 1,
+  "created": "2026-09-23T00:00:00+00:00",
+  "method": "uebergang_L6",
+  "frame": {
+    "parent": "world",
+    "child": "base camera, color optical frame"
+  },
+  "convention": "R = Rz(yaw) @ Ry(pitch) @ Rx(roll); m, deg",
+  "cal": {
+    "cal_x": -0.7787,
+    "cal_y": 0.7934,
+    "cal_z": 0.9163,
+    "cal_roll": 179.46,
+    "cal_pitch": 0.45,
+    "cal_yaw": 179.76
+  },
+  "matrix": [
+    [
+      -0.999960385,
+      0.004114572,
+      0.007892961,
+      -0.7787
+    ],
+    [
+      0.004188649,
+      0.999947125,
+      0.009391659,
+      0.7934
+    ],
+    [
+      -0.007853901,
+      0.009424348,
+      -0.999924746,
+      0.9163
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "quality": {
+    "herkunft": "Nachtrag 13 / L6: Neigung aus der Bandebene im Tiefenbild, Yaw und x/y aus fünf Antastpunkten, z aus der Bandhöhe 53,6 mm",
+    "rest_mm_max": 3.7,
+    "gegenprobe_mm": {
+      "flacher_klotz": 1.5,
+      "hoher_klotz": 5.6
+    }
+  },
+  "references": {
+    "size_m": 0.0,
+    "corners_world": {}
+  },
+  "grid": {}
+}
