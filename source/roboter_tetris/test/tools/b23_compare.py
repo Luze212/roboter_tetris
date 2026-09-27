@@ -19,11 +19,20 @@ Each place gives one pair. From the pairs this tool answers:
 This is a CHECK, not a calibration: the extrinsics come from the calibration
 project (C3). Pure Python, runs on the host.
 
+* **Calibrations side by side** (L27, 27.09.2026) -- with ``--aktiv`` (the file
+  base_cam ran on while the points were measured) and ``--vergleich`` (others),
+  every camera point is turned into what base_cam would have reported under
+  each file, and set against the robot as it stands: position and height, no
+  fitting. One round of touching compares the new calibration with L6.
+
 Usage -- the summary lines come from ``signal_reader.py ... --summary``::
 
     <reader objects   --duration 10 --summary> | tail -1 | python3 b23_compare.py add pts.json P1 cam
     <reader cartesian --duration 3  --summary> | tail -1 | python3 b23_compare.py add pts.json P1 rob
     python3 b23_compare.py eval pts.json
+    python3 b23_compare.py eval pts.json --aktiv NEU.json --vergleich base_cam_extrinsics.json
+
+Calibration files: a path, or relative to ``roboter_tetris/Extrinsics/``.
 """
 
 import json
@@ -39,6 +48,10 @@ FLANGE_Z_ON_BELT_MM = 298.56
 OLD_REGION_Y_MM = (500.0, 1000.0)
 #: Acceptance limit for B23 (Fahrplan Block 2), mm.
 B23_LIMIT_MM = 10.0
+#: Belt surface base_cam measures heights against (belt_surface_z_mm), mm.
+BELT_SURFACE_Z_MM = 53.6
+EXTRINSICS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              "..", "..", "roboter_tetris", "Extrinsics")
 
 
 def load(path):
@@ -98,7 +111,70 @@ def rms(values):
     return math.sqrt(sum(v * v for v in values) / len(values)) if values else float("nan")
 
 
-def cmd_eval(path):
+def load_matrix(path):
+    """world_T_cam of a calibration file (4x4 nested list, m). Found as given, else
+    relative to the package (like base_cam's parameter), else in Extrinsics/."""
+    for candidate in (path, os.path.join(EXTRINSICS_DIR, "..", path),
+                      os.path.join(EXTRINSICS_DIR, path)):
+        if os.path.exists(candidate):
+            path = candidate
+            break
+    else:
+        sys.exit(f"Kalibrierdatei nicht gefunden: {path}")
+    with open(path) as f:
+        data = json.load(f)
+    return data["matrix"], data.get("method", "?")
+
+
+def mat_mul(A, B):
+    return [[sum(A[i][k] * B[k][j] for k in range(4)) for j in range(4)] for i in range(4)]
+
+
+def rigid_inverse(T):
+    R = [[T[j][i] for j in range(3)] for i in range(3)]          # transpose
+    t = [-sum(R[i][k] * T[k][3] for k in range(3)) for i in range(3)]
+    return [R[0] + [t[0]], R[1] + [t[1]], R[2] + [t[2]], [0.0, 0.0, 0.0, 1.0]]
+
+
+def under(cam, M):
+    """(x, y, h) base_cam would report if its calibration changed by M (mm).
+    base_cam deprojects the top face and reports z at mid-height (z = top - h/2),
+    so the top face is (x, y, z + h/2); the height is its z above the belt."""
+    top = (cam["x"] / 1000.0, cam["y"] / 1000.0, (cam["z"] + cam["h"] / 2.0) / 1000.0)
+    q = [sum(M[i][k] * top[k] for k in range(3)) + M[i][3] for i in range(3)]
+    return q[0] * 1000.0, q[1] * 1000.0, q[2] * 1000.0 - BELT_SURFACE_Z_MM
+
+
+def compare_calibrations(pairs, active, others):
+    T_active, m_active = load_matrix(active)
+    back = rigid_inverse(T_active)
+    files = [(active, m_active, None)]
+    for f in others:
+        T, method = load_matrix(f)
+        files.append((f, method, T))
+    print("\n-- Kalibrierungen im Vergleich (was base_cam je Datei gemeldet hätte, gegen den Roboter)")
+    print(f"   gemessen unter: {active} ({m_active})")
+    summary = []
+    for f, method, T in files:
+        M = [[1.0 if i == j else 0.0 for j in range(4)] for i in range(4)] if T is None \
+            else mat_mul(T, back)
+        dxy, dh = [], []
+        for _, c, r in pairs:
+            x, y, h = under(c, M)
+            dxy.append(math.hypot(x - r["x"], y - r["y"]))
+            dh.append(h - (r["z"] - FLANGE_Z_ON_BELT_MM))
+        summary.append((f, method, dxy, dh))
+        print(f"\n   {f} ({method})")
+        print("     Lage   " + "  ".join(f"{k}:{v:5.1f}" for (k, _, _), v in zip(pairs, dxy)) + " mm")
+        print("     Höhe   " + "  ".join(f"{k}:{v:+5.1f}" for (k, _, _), v in zip(pairs, dh)) + " mm")
+    print(f"\n   {'Datei':40s} {'Lage max':>8s} {'mittel':>7s} {'Höhe max':>8s} {'mittel':>7s}")
+    for f, method, dxy, dh in summary:
+        print(f"   {os.path.basename(f)[:40]:40s} {max(dxy):8.1f} {sum(dxy) / len(dxy):7.1f} "
+              f"{max(abs(v) for v in dh):8.1f} {sum(dh) / len(dh):+7.1f}")
+    print("   Höhe: Kamera minus Roboter (Roboter über z_Flansch − 298,56 mm, M9).")
+
+
+def cmd_eval(path, active=None, others=()):
     pts = load(path)
     pairs = [(k, v["cam"], v["rob"]) for k, v in sorted(pts.items()) if "cam" in v and "rob" in v]
     single = [k for k, v in pts.items() if not ("cam" in v and "rob" in v)]
@@ -155,12 +231,28 @@ def cmd_eval(path):
     print("\n-- Höhe: Kamera gegen Roboter (Roboter unabhängig von den 245 mm)")
     print("  Differenz je Punkt " + "  ".join(f"{a - b:+.1f}" for a, b in hs) + " mm")
 
+    if active:
+        compare_calibrations(pairs, active, others)
+
 
 def main():
-    if len(sys.argv) >= 5 and sys.argv[1] == "add":
-        cmd_add(sys.argv[2], sys.argv[3], sys.argv[4])
-    elif len(sys.argv) == 3 and sys.argv[1] == "eval":
-        cmd_eval(sys.argv[2])
+    args = sys.argv[1:]
+    if len(args) >= 4 and args[0] == "add":
+        cmd_add(args[1], args[2], args[3])
+    elif len(args) >= 2 and args[0] == "eval":
+        active, others, rest = None, [], args[2:]
+        while rest:
+            flag = rest.pop(0)
+            if flag == "--aktiv" and rest:
+                active = rest.pop(0)
+            elif flag == "--vergleich":
+                while rest and not rest[0].startswith("--"):
+                    others.append(rest.pop(0))
+            else:
+                sys.exit(__doc__)
+        if others and not active:
+            sys.exit("--vergleich braucht --aktiv: die Datei, unter der base_cam gemessen hat")
+        cmd_eval(args[1], active, others)
     else:
         sys.exit(__doc__)
 

@@ -944,16 +944,19 @@ def belt_plane_check(world_T_cam: np.ndarray, plane: Plane, belt_z_m: float) -> 
 # Depth image against colour image (L515)
 # ---------------------------------------------------------------------------
 #
-# base_cam places a block from its colour pixel and the aligned depth, without
-# undistortion. The L515 depth is tilted against its colour image by about a
-# degree (board seen by both at once, setup 25.09.2026: 1.13 degrees), so the
-# colour camera's true pose (stage 1 above) puts base_cam's depth-built points
-# off by up to 9 mm in height. A single rigid transform cannot absorb that (the
-# belt kept 0.55 degrees in simulation and at the setup), and a depth scale
-# linear in the image, fitted on the board at 0.52 m, left the belt at 0.86 m
-# tilted by 0.68 degrees. Stage 1 therefore records the board in the depth
-# image at every pose, so the depth error can be modelled over image position
-# and distance before base_cam is changed.
+# base_cam places a block from the aligned depth image (outline and depth) in
+# the colour pixel grid, without undistortion. The L515 depth is tilted against
+# its colour image by about a degree and reads 4-13 mm too deep (board seen by
+# both at once, setup 25.09.2026), so the colour camera's true pose (stage 1
+# above) would put base_cam's blocks off by up to 13 mm in height. Stage 1
+# records the board in the depth image at every pose; the error was modelled
+# from that (27.09.2026, L27, docs/architektur/bilder/2026-09-25-basiskamera-
+# kalibrierung/modell_tiefenfehler.py): see DepthErrorModel below.
+#
+# base_cam stays as it is. Instead the calibration hands it a pose made for its
+# own view, the way the hand calibration L6 was made (tilt and height from the
+# belt in the depth image, yaw and x/y from blocks at belt level) -- only
+# automatically: see basecam_pose().
 
 
 def pixel_rays(px: np.ndarray, K: np.ndarray) -> np.ndarray:
@@ -1003,6 +1006,129 @@ def depth_grid(depth_m: np.ndarray, corners_px: np.ndarray, stride: int = 8,
     z = depth_m[vs, us]
     keep &= np.isfinite(z) & (z > 0)
     return np.c_[us[keep], vs[keep], z[keep]]
+
+
+@dataclass(frozen=True)
+class DepthErrorModel:
+    """How much the L515 depth reads too deep, against the colour image (model M1s).
+
+    In what base_cam has at hand -- pixel (u, v), measured depth z in m, rays
+    without undistortion, X = (u - cx) / fx * z, Y = (v - cy) / fy * z::
+
+        error [mm] = c0 + cx * X + cy * Y + cz * z
+
+    The defaults were fitted on 13 board images at belt level and 28 gripper
+    poses (27.09.2026, L27): 3.7 mm offset, 1.25 deg about the image x axis,
+    0.19 deg about y, 4.4 mm per m. Left out in turn, no image missed by more
+    than 1.5 mm (without the model: 5.5-13.4 mm). A property of the camera,
+    not of where it stands.
+    """
+
+    c0_mm: float = 3.715
+    cx_mm_per_m: float = 3.359
+    cy_mm_per_m: float = 21.812
+    cz_mm_per_m: float = 4.427
+
+    def error_mm(self, px: np.ndarray, depth_m: np.ndarray, K: np.ndarray) -> np.ndarray:
+        rays = pixel_rays(px, K)
+        z = np.asarray(depth_m, dtype=np.float64).reshape(-1)
+        return (self.c0_mm + self.cx_mm_per_m * rays[:, 0] * z
+                + self.cy_mm_per_m * rays[:, 1] * z + self.cz_mm_per_m * z)
+
+    def to_dict(self) -> dict:
+        return {"c0_mm": self.c0_mm, "cx_mm_per_m": self.cx_mm_per_m,
+                "cy_mm_per_m": self.cy_mm_per_m, "cz_mm_per_m": self.cz_mm_per_m}
+
+
+#: Heights above the belt the base_cam pose is fitted at: belt, flat block,
+#: block halves, 100 mm block -- where base_cam measures.
+BASECAM_LEVELS_M = (0.0, 0.025, 0.05, 0.10)
+
+
+@dataclass
+class BaseCamPose:
+    world_T_cam: np.ndarray
+    #: What a rigid pose cannot absorb of the depth error, over the ROI and the
+    #: levels: horizontal distance of base_cam's points from the truth.
+    rest_mm_rms: float
+    rest_mm_max: float
+    points: int
+
+
+def _tilt_to_level(normal: np.ndarray) -> np.ndarray:
+    """Shortest rotation taking ``normal`` (camera frame, towards the camera) to world +z."""
+    n = np.asarray(normal, dtype=np.float64) / np.linalg.norm(normal)
+    up = np.array([0.0, 0.0, 1.0])
+    v = np.cross(n, up)
+    s, c = float(np.linalg.norm(v)), float(n @ up)
+    if s < 1e-12:
+        return np.eye(3) if c > 0 else axis_rotation((1.0, 0.0, 0.0), 180.0)
+    vx = np.array([[0.0, -v[2], v[1]], [v[2], 0.0, -v[0]], [-v[1], v[0], 0.0]])
+    return np.eye(3) + vx + vx @ vx * ((1.0 - c) / s ** 2)
+
+
+def basecam_pose(world_T_colour: np.ndarray, K: np.ndarray, D: np.ndarray, belt_plane: Plane,
+                 belt_z_m: float, roi: Tuple[int, int, int, int],
+                 model: DepthErrorModel = DepthErrorModel(),
+                 levels: Sequence[float] = BASECAM_LEVELS_M, grid: int = 24) -> BaseCamPose:
+    """The camera pose for base_cam's view, from the colour pose of stage 1.
+
+    Built like the hand calibration L6, which base_cam has been gripping with:
+
+    * **tilt** from the belt plane in the depth image (as base_cam deprojects
+      it): the belt lies level, block heights come out against the belt. This
+      also takes up the belt's own cross slope (about 0.5 deg, L27) -- base_cam
+      measures height against a level belt.
+    * **height** so that this belt lies at ``belt_z_m``.
+    * **yaw and x/y** from points at belt and block level over the ROI: where
+      the colour pose says a point is, against where base_cam would put it from
+      its pixel and the depth the model says the L515 reads there.
+
+    ``world_T_colour`` may carry a camera height from the uncorrected depth: it
+    shifts the levels by millimetres along z, which moves nothing here.
+    Checked against 12 board images at belt level (left out of the fit): 3.3 mm
+    mean, 7.1 mm largest position error, against 4.3 / 8.4 mm of L6; board
+    heights as even as with L6 (27.09.2026).
+    """
+    R_tilt = _tilt_to_level(belt_plane.normal)
+
+    # pairs: base_cam's point (camera frame) -> true point (world)
+    x, y, w, h = roi
+    us, vs = np.meshgrid(np.linspace(x, x + w, grid), np.linspace(y, y + h, grid))
+    px = np.c_[us.ravel(), vs.ravel()]
+    und = cv2.undistortPoints(px.reshape(-1, 1, 2), K, D).reshape(-1, 2)
+    rays_world = np.c_[und, np.ones(len(und))] @ world_T_colour[:3, :3].T
+    origin = world_T_colour[:3, 3]
+    colour_T_world = invert(world_T_colour)
+    base, true = [], []
+    for level in levels:
+        s = (belt_z_m + level - origin[2]) / rays_world[:, 2]
+        ok = s > 0
+        W = origin + s[ok, None] * rays_world[ok]
+        z_true = (W @ colour_T_world[:3, :3].T + colour_T_world[:3, 3])[:, 2]
+        z = z_true.copy()
+        for _ in range(3):  # the error depends on the depth as read
+            z = z_true + model.error_mm(px[ok], z, K) / 1000.0
+        base.append(pixel_rays(px[ok], K) * z[:, None])
+        true.append(W)
+    P = np.vstack(base) @ R_tilt.T
+    Q = np.vstack(true)
+    if len(P) < 10:
+        raise ValueError("Bildausschnitt trifft das Band nicht")
+
+    # yaw and x/y: 2D Procrustes after the tilt
+    pc, qc = P.mean(axis=0), Q.mean(axis=0)
+    a, b = P[:, :2] - pc[:2], Q[:, :2] - qc[:2]
+    theta = math.atan2(float(np.sum(a[:, 0] * b[:, 1] - a[:, 1] * b[:, 0])),
+                       float(np.sum(a[:, 0] * b[:, 0] + a[:, 1] * b[:, 1])))
+    Rz = axis_rotation((0.0, 0.0, 1.0), math.degrees(theta))
+    T = np.eye(4)
+    T[:3, :3] = orthonormalize(Rz @ R_tilt)
+    T[:2, 3] = qc[:2] - (Rz @ pc)[:2]
+    # height: points of the belt plane satisfy n.p = -offset, and R_tilt n = +z
+    T[2, 3] = belt_z_m + belt_plane.offset
+    rest = np.linalg.norm((P @ Rz.T)[:, :2] + T[:2, 3] - Q[:, :2], axis=1) * 1000.0
+    return BaseCamPose(T, rms(rest), float(np.max(rest)), len(P))
 
 
 # ---------------------------------------------------------------------------

@@ -34,10 +34,10 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 from .basecam_extrinsics import (
-    DEFAULT_CALIBRATION_FILE, CheckLimits, Detections, ExtrinsicsRecord, GridSpec, PlanParams, Sample,
-    average_detections, average_transforms, belt_displacement_mm, belt_plane_check,
-    belt_sample_points, board_depth_plane, board_slip, camera_height_from_depth, camera_moved,
-    depth_grid, depth_points, fit_plane, grid_points,
+    DEFAULT_CALIBRATION_FILE, CheckLimits, DepthErrorModel, Detections, ExtrinsicsRecord, GridSpec,
+    PlanParams, Sample, average_detections, average_transforms, basecam_pose, belt_displacement_mm,
+    belt_plane_check, belt_sample_points, board_depth_plane, board_slip, cal_from_matrix,
+    camera_height_from_depth, camera_moved, depth_grid, depth_points, fit_plane, grid_points,
     identify_layout, layout_candidates, plan_poses, plan_problems, reference_corners_world,
     refine_grid_corners, refine_tag_corners, rotation_angle_deg, solve_from_references,
     solve_pnp, solve_stage1, validate,
@@ -79,6 +79,9 @@ class RunParams:
     grid: GridSpec = field(default_factory=GridSpec)
     plan: PlanParams = field(default_factory=PlanParams)
     limits: CheckLimits = field(default_factory=CheckLimits)
+    #: How the L515 depth reads against its colour image (L27): turns the colour
+    #: pose into the pose base_cam needs.
+    depth_model: DepthErrorModel = field(default_factory=DepthErrorModel)
     #: Quality gates of stage 1; a result outside them is reported, not written.
     max_rms_px: float = 1.0
     max_holdout_mm: float = 2.0
@@ -109,8 +112,9 @@ PARAMETERS = (
      "den Referenzmarken ohne Bewegung, pruefen = nur prüfen, ob sich die Kamera bewegt hat "
      "(schreibt nichts)."),
     ("output_file", "/tmp/base_cam_extrinsics.json",
-     "Hierhin schreibt stufe1/stufe2 das Ergebnis (im Container). Übernahme: ins Repo nach "
-     "roboter_tetris/Extrinsics/base_cam_extrinsics.json kopieren, Paket bauen."),
+     "Hierhin schreibt stufe1/stufe2 das Ergebnis (im Container): die Kalibrierung für "
+     "base_cam. Testen ohne Build: in base_cam den Parameter Kalibrierdatei auf diesen Pfad "
+     "setzen. Übernahme: ins Repo nach roboter_tetris/Extrinsics/ kopieren, Paket bauen."),
     ("calibration_file", DEFAULT_CALIBRATION_FILE,
      "Bisher gültige Kalibrierdatei, relativ zum Paket oder absolut: Vergleich, Lage der "
      "Referenzmarken für stufe2/pruefen. Leer = Übergangswerte L6."),
@@ -151,6 +155,13 @@ PARAMETERS = (
     ("max_belt_shift_mm", 3.0, "Prüfen: ab dieser Verschiebung auf dem Band gilt die Kamera als bewegt (mm)."),
     ("max_angle_deg", 0.5, "Prüfen: ab dieser Verdrehung gilt die Kamera als bewegt (Grad)."),
     ("debug_enable", True, "Debug-Bild mit erkannten Tags und Zustand senden."),
+    ("depth_error_c0_mm", 3.715,
+     "Tiefenfehler der L515 gegen das Farbbild (L27): fester Anteil in mm. Die vier Werte "
+     "rechnen die Lage der Farbkamera in die Kalibrierung für base_cam um; gemessen am "
+     "27.09.2026, eine Eigenschaft der Kamera. Alle 0 = ohne Tiefenfehler."),
+    ("depth_error_cx_mm_per_m", 3.359, "Tiefenfehler: Anteil je m quer im Bild (Bild-x) in mm/m."),
+    ("depth_error_cy_mm_per_m", 21.812, "Tiefenfehler: Anteil je m längs im Bild (Bild-y) in mm/m."),
+    ("depth_error_cz_mm_per_m", 4.427, "Tiefenfehler: Anteil je m Abstand in mm/m."),
 )
 
 
@@ -173,7 +184,11 @@ def run_params(values: Dict[str, object]) -> RunParams:
                      roi=(int(v["roi_x"]), int(v["roi_y"]), int(v["roi_width"]), int(v["roi_height"])),
                      grid=grid, plan=plan,
                      limits=CheckLimits(max_belt_shift_mm=float(v["max_belt_shift_mm"]),
-                                        max_angle_deg=float(v["max_angle_deg"])))
+                                        max_angle_deg=float(v["max_angle_deg"])),
+                     depth_model=DepthErrorModel(float(v["depth_error_c0_mm"]),
+                                                 float(v["depth_error_cx_mm_per_m"]),
+                                                 float(v["depth_error_cy_mm_per_m"]),
+                                                 float(v["depth_error_cz_mm_per_m"])))
 
 
 @dataclass
@@ -576,6 +591,27 @@ class CalibrationRun:
         return {"ebene_neigung_grad": round(tilt, 3), "ebene_hoehe_mm": round(height, 2),
                 "ebene_rest_mm": round(plane.rms_mm, 2)}
 
+    def _for_basecam(self, X: np.ndarray):
+        """The pose base_cam needs, from the colour pose X (L27): tilt and height
+        from the belt in the depth image, yaw and x/y through the depth model."""
+        p, cam = self.params, self._camera
+        plane = self._belt_plane
+        if plane is None:
+            if self._depth is None:
+                raise ValueError("kein Tiefenbild - ohne das Band keine Kalibrierung für base_cam")
+            plane = fit_plane(depth_points(self._depth, cam.K, p.roi))
+        return basecam_pose(X, cam.K, cam.D, plane, p.plan.belt_z_m, p.roi, p.depth_model)
+
+    def _shift_report(self, prefix: str, T: np.ndarray) -> Dict[str, float]:
+        """How far the belt moves (largest, mean) and the turn, from the calibration before."""
+        belt = self._belt()
+        moved = (T @ np.linalg.inv(self.reference_T) @ np.c_[belt, np.ones(len(belt))].T)[:3].T
+        dist = 1000.0 * np.linalg.norm(moved - belt, axis=1)
+        return {f"{prefix}gegen_vorher_band_mm": round(float(dist.max()), 2),
+                f"{prefix}gegen_vorher_band_mm_mittel": round(float(dist.mean()), 2),
+                f"{prefix}gegen_vorher_grad":
+                    round(rotation_angle_deg(T[:3, :3] @ self.reference_T[:3, :3].T), 3)}
+
     def _intrinsics(self) -> dict:
         cam = self._camera
         return {"K": np.round(cam.K, 4).tolist(), "D": np.round(np.ravel(cam.D), 6).tolist(),
@@ -593,6 +629,7 @@ class CalibrationRun:
         shift = belt_displacement_mm(self.reference_T, X, self._belt())
         angle = rotation_angle_deg(X[:3, :3] @ self.reference_T[:3, :3].T)
         references = self._measure_references(X)
+        basecam = self._for_basecam(X)
         self.report = {
             "posen": len(cal) - result.poses_dropped,
             "posen_ausgelassen": self._missing + result.poses_dropped,
@@ -611,6 +648,10 @@ class CalibrationRun:
             "referenzmarken": len(references),
             "kamerahoehe_aus_tiefe": self._camera_z is not None,
             **self._plane_report(X),
+            # the result proper: the calibration for base_cam
+            **self._shift_report("basecam_", basecam.world_T_cam),
+            "basecam_rest_mm": round(basecam.rest_mm_rms, 2),
+            "basecam_rest_mm_max": round(basecam.rest_mm_max, 2),
         }
         gates = []
         if result.rms_px > p.max_rms_px:
@@ -624,10 +665,14 @@ class CalibrationRun:
             self._fail("Gütegrenzen verletzt, nichts geschrieben: " + "; ".join(gates))
             return
         self.result = ExtrinsicsRecord(
-            world_T_cam=X, method="stufe1_farbkamera", created=_now_iso(),
+            world_T_cam=basecam.world_T_cam, method="stufe1_basecam", created=_now_iso(),
             quality={**self.report, "startverfahren": result.init_method,
-                     "hinweis": "Lage der Farbkamera. Für base_cam erst zusammen mit einer "
-                                "Korrektur des Tiefenbilds (Tiefe gegen Farbe ~1 Grad, 25.09.2026).",
+                     "hinweis": "Kalibrierung für base_cam (Tiefenbild): Lage der Farbkamera aus "
+                                "Stufe 1, mit dem Tiefenfehler der L515 umgerechnet; Neigung und "
+                                "Höhe aus dem Band im Tiefenbild (L27). Übernahme erst nach der "
+                                "Abnahme am Aufbau.",
+                     "farbkamera": {k: round(v, 6) for k, v in cal_from_matrix(X).items()},
+                     "tiefenmodell": p.depth_model.to_dict(),
                      "intrinsik": self._intrinsics()},
             reference_size_m=p.reference_size_m if references else 0.0,
             references=references, grid=self._spec.to_dict())
@@ -657,6 +702,8 @@ class CalibrationRun:
         X, err, used = solve_from_references(self.stored.references, refs, cam.K, cam.D,
                                              guess=self.stored.world_T_cam,
                                              min_tags=p.min_reference_tags)
+        colour = X
+        X = self._for_basecam(colour).world_T_cam   # compared and written like stage 1
         self.moved, shift, angle = camera_moved(self.stored.world_T_cam, X, self._belt(), p.limits)
         self.report = {
             "referenzmarken": len(used),
@@ -664,15 +711,17 @@ class CalibrationRun:
             "gegen_datei_band_mm": round(shift, 2),
             "gegen_datei_grad": round(angle, 3),
             "kamera_bewegt": bool(self.moved),
-            **self._plane_report(X),
+            **self._plane_report(colour),
         }
         verdict = ("Kamera hat sich bewegt - nachkalibrieren" if self.moved
                    else "Kamera unverändert")
         self._events.append(f"{verdict}: " + ", ".join(f"{k} {v}" for k, v in self.report.items()))
         if p.mode == "stufe2":
             self.result = ExtrinsicsRecord(
-                world_T_cam=X, method="stufe2", created=_now_iso(),
+                world_T_cam=X, method="stufe2_basecam", created=_now_iso(),
                 quality={**self.report, "intrinsik": self._intrinsics(),
+                         "farbkamera": {k: round(v, 6) for k, v in cal_from_matrix(colour).items()},
+                         "tiefenmodell": p.depth_model.to_dict(),
                          "grundlage": self.stored.created},
                 reference_size_m=self.stored.reference_size_m,
                 references=self.stored.references, grid=self.stored.grid)

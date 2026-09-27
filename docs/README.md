@@ -16,6 +16,7 @@ Was man liest, um das System zu verstehen, einzurichten und zu bedienen.
 | `Komponentenplan Robotetris - Stand 2026-09-24.docx` | Beschreibung aller Komponenten, Signale, Abläufe und Einstellungen zum Einlesen, mit Farbcode |
 | `systemgraph.md` | Der AICA-Graph: Komponenten mit Ein- und Ausgängen und Raten, Ablauf eines Griffs, Bezugssysteme, Kopplungen zwischen Parametern |
 | `einrichtung-projektanwendung.md` | Was beim Anlegen der AICA-Anwendung gesetzt werden muss, mit allen Messwerten des Aufbaus |
+| `ablauf-kalibrierung-aufbau.md` | Ablauf des Termins am 28.09.2026: automatische Kalibrierung der Basiskamera laufen lassen, einstellen, gegen L6 antasten, Greiflauf; nach dem Termin ins Archiv |
 
 ## `architektur/` — die technische Grundlage
 
@@ -91,7 +92,7 @@ ist daraus abgeleitet. Änderungen an einem Signal werden **zuerst** in
 | Warum die Anzeige ASCII schreibt und wann sie „veraltet“ zeigt | ebd. Nachtrag 11 / V1–V3 |
 | Warum Basiskamera und Roboter das Band an verschiedenen Stellen sahen (180°) | ebd. Nachtrag 8 / F1, Nachtrag 12 / K5 |
 | Woher die Kalibrierung der Basiskamera stammt, warum sie senkrecht schaut, was die Parallaxe war | ebd. Nachtrag 13 / L6 |
-| Wie die Basiskamera mit dem Roboter kalibriert wird und warum das Ergebnis noch nicht gilt (Tiefe gegen Farbe) | ebd. Nachtrag 13 / L27; `uebersicht/einrichtung-projektanwendung.md` §10 |
+| Wie die Basiskamera mit dem Roboter kalibriert wird, warum `base_cam` dafür unverändert bleibt und wie die Tiefe der L515 umgerechnet wird | ebd. Nachtrag 13 / L27; `uebersicht/einrichtung-projektanwendung.md` §10; `uebersicht/ablauf-kalibrierung-aufbau.md` |
 | Warum alle Python-Komponenten einen Prozess teilen und was das für die Messrate heißt | ebd. Nachtrag 13 / L2 |
 | Warum Greifzone und Wartebereich außerhalb des Bildes der Basiskamera liegen | ebd. Nachtrag 13 / L4 |
 | Wie Klötze hinter dem Bild weitergeführt werden (Status 4) | ebd. Nachtrag 13 / L10; `architektur/datenvertraege.md` S3 |

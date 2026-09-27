@@ -16,13 +16,15 @@ from roboter_tetris.calibration_run import (
     FEHLER, FERTIG, Camera, CalibrationRun, Frame, RunParams,
 )
 from test_basecam_extrinsics import (
-    D, IMAGE, K, SPEC, START, X_TRUE, Y_TRUE, _belt_depth, _reference_world,
+    D, IMAGE, K, NO_DEPTH_ERROR, SPEC, START, X_TRUE, Y_TRUE, _basecam_errors, _belt_depth,
+    _l515_depth, _reference_world,
 )
 
 CAMERA = Camera(K, D, IMAGE)
 _TAGS = [t for t in range(SPEC.rows * SPEC.cols) if t % SPEC.cols]   # column 0 under the jaws
 _CORNERS = np.vstack([SPEC.tag_corners(t) for t in _TAGS])
 _DEPTH = _belt_depth(X_TRUE)
+_L515_DEPTH = _l515_depth(X_TRUE)
 
 
 def _project(points, cam_T_points):
@@ -68,7 +70,7 @@ class Robot:
                 self.flange = self._target.copy()
 
 
-def _run(run, start=START, max_steps=6000, seed=0, **seen):
+def _run(run, start=START, max_steps=6000, seed=0, depth=None, **seen):
     rng = np.random.default_rng(seed)
     robot, now, targets = Robot(start), 0.0, []
     for _ in range(max_steps):
@@ -79,7 +81,8 @@ def _run(run, start=START, max_steps=6000, seed=0, **seen):
             fb = board_fn(run) if board_fn else Y_TRUE
             frame = Frame(now, _detections(robot.flange, rng, flange_T_board=fb,
                                            **{k: v for k, v in seen.items()
-                                              if k != "flange_T_board"}), _DEPTH)
+                                              if k != "flange_T_board"}),
+                          _DEPTH if depth is None else depth)
         target = run.step(now, robot.flange.copy(), CAMERA, frame)
         targets.append(target)
         robot.follow(target)
@@ -100,7 +103,8 @@ def _moved_camera():
 # -- stage 1 ------------------------------------------------------------------
 
 def test_stage1_runs_through_and_finds_the_camera():
-    run = CalibrationRun(RunParams(), None, X_TRUE)
+    # without depth error the pose for base_cam is the colour camera's
+    run = CalibrationRun(RunParams(depth_model=NO_DEPTH_ERROR), None, X_TRUE)
     targets, events = _run(run)
     assert run.state == FERTIG, events
     assert np.allclose(targets[0], START)                        # holds first
@@ -115,7 +119,27 @@ def test_stage1_runs_through_and_finds_the_camera():
     assert sorted(run.result.references) == [100, 101, 102, 103]
     for tag, truth in _reference_world().items():
         assert np.max(np.linalg.norm(run.result.references[tag] - truth, axis=1)) < 0.004
-    assert run.result.method == "stufe1_farbkamera" and run.result.grid == SPEC.to_dict()
+    assert run.result.method == "stufe1_basecam" and run.result.grid == SPEC.to_dict()
+    colour = q["farbkamera"]
+    assert colour["cal_x"] == pytest.approx(X_TRUE[0, 3], abs=5e-4)
+    assert q["basecam_gegen_vorher_band_mm"] < 0.5 and q["tiefenmodell"]["c0_mm"] == 0.0
+
+
+def test_stage1_writes_the_pose_for_base_cam():
+    """The L515 reads the belt too deep and tilted (L27). The file stage 1
+    writes must put blocks where they are for base_cam -- the colour pose it
+    wrote until 27.09.2026 put their heights off by more than 10 mm."""
+    from roboter_tetris.basecam_extrinsics import matrix_from_cal
+    run = CalibrationRun(RunParams(), None, X_TRUE)
+    _, events = _run(run, depth=_L515_DEPTH)
+    assert run.state == FERTIG, events
+    xy, height = _basecam_errors(run.result.world_T_cam, X_TRUE)
+    assert height < 1.5 and xy < 9.5
+    colour = matrix_from_cal(*[run.result.quality["farbkamera"][k] for k in
+                               ("cal_x", "cal_y", "cal_z", "cal_roll", "cal_pitch", "cal_yaw")])
+    assert _error(X_TRUE, colour)[1] < 0.03                        # colour pose kept in the report
+    assert _basecam_errors(colour, X_TRUE)[1] > 5.0
+    assert run.result.quality["basecam_rest_mm_max"] < 9.5
 
 
 def test_raw_data_keeps_what_the_solution_saw_also_after_a_refusal():
@@ -185,19 +209,19 @@ def _stored(X=X_TRUE, with_refs=True):
 
 def test_stage2_solves_a_moved_camera_without_motion():
     moved = _moved_camera()
-    run = CalibrationRun(RunParams(mode="stufe2"), _stored(), X_TRUE)
-    targets, events = _run(run, X=moved, board=False)
+    run = CalibrationRun(RunParams(mode="stufe2", depth_model=NO_DEPTH_ERROR), _stored(), X_TRUE)
+    targets, events = _run(run, X=moved, board=False, depth=_belt_depth(moved))
     assert run.state == FERTIG, events
     assert all(t is None for t in targets)                        # never commands
     shift, angle = _error(moved, run.result.world_T_cam)
     assert shift < 1.5 and angle < 0.05
-    assert run.moved and run.result.method == "stufe2"
+    assert run.moved and run.result.method == "stufe2_basecam"
     assert sorted(run.result.references) == [100, 101, 102, 103]
     assert any("nachkalibrieren" in e for e in events)
 
 
 def test_check_reports_an_unchanged_camera_and_writes_nothing():
-    run = CalibrationRun(RunParams(mode="pruefen"), _stored(), X_TRUE)
+    run = CalibrationRun(RunParams(mode="pruefen", depth_model=NO_DEPTH_ERROR), _stored(), X_TRUE)
     targets, events = _run(run, board=False)
     assert run.state == FERTIG and run.moved is False and run.result is None
     assert run.report["gegen_datei_band_mm"] < 1.0
@@ -231,7 +255,8 @@ def test_flange_floor_lifts_poses_and_keeps_their_turns():
 
 
 def test_stage1_with_the_flange_floor_still_finds_the_camera():
-    run = CalibrationRun(RunParams(plan=PlanParams(min_flange_z_m=START[2, 3] - 0.06)), None, X_TRUE)
+    run = CalibrationRun(RunParams(plan=PlanParams(min_flange_z_m=START[2, 3] - 0.06),
+                                   depth_model=NO_DEPTH_ERROR), None, X_TRUE)
     _, events = _run(run)
     assert run.state == FERTIG, events
     shift, angle = _error(X_TRUE, run.result.world_T_cam)

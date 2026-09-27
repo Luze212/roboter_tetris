@@ -115,7 +115,7 @@ class BaseCamCalibration(LifecycleComponent):
             return False
         value = parameter.get_value()
         if isinstance(value, (int, float)) and not isinstance(value, bool):
-            if name not in ("belt_z_m",) and value < 0:
+            if name != "belt_z_m" and not name.startswith("depth_error_") and value < 0:
                 self.get_logger().warn(f"{name} darf nicht negativ sein")
                 return False
         return True
@@ -271,8 +271,9 @@ class BaseCamCalibration(LifecycleComponent):
         self.get_logger().info(
             f"base_cam_calibration: Ergebnis geschrieben: {path} - "
             + ", ".join(f"{k} {v:.4f}" for k, v in cal.items())
-            + ". Das ist die Lage der Farbkamera - noch nicht in base_cam übernehmen: das "
-              "Tiefenbild der L515 ist gegen das Farbbild verkippt (siehe Rohdaten).")
+            + ". Kalibrierung für base_cam (L27). Testen: in base_cam den Parameter "
+              f"Kalibrierdatei auf {path} setzen und base_cam neu aktivieren; zurück: den "
+              "Parameter auf den alten Wert.")
 
     def _write_raw(self, run) -> None:
         """Raw samples next to the result, whatever the outcome: a refused run

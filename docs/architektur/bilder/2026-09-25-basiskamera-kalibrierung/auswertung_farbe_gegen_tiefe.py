@@ -17,9 +17,15 @@ def detect_small(g0):
     for scale, amt, sig, thr in itertools.product([2, 3], [2, 3, 4], [1.0, 2.0], [7, 13]):
         g = cv2.resize(g0, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
         b = cv2.GaussianBlur(g, (0, 0), sig * scale); g = cv2.addWeighted(g, 1 + amt, b, -amt, 0)
-        p = cv2.aruco.DetectorParameters_create(); p.perspectiveRemovePixelPerCell = 20
+        # OpenCV 4.6 needs the factory, 4.7+ (image pin) dropped it -- as make_tag_detector
+        p = (cv2.aruco.DetectorParameters_create() if hasattr(cv2.aruco, "DetectorParameters_create")
+             else cv2.aruco.DetectorParameters())
+        p.perspectiveRemovePixelPerCell = 20
         p.perspectiveRemoveIgnoredMarginPerCell = 0.4; p.adaptiveThreshConstant = thr
-        c, ids, _ = cv2.aruco.detectMarkers(g, dic, parameters=p)
+        if hasattr(cv2.aruco, "ArucoDetector"):
+            c, ids, _ = cv2.aruco.ArucoDetector(dic, p).detectMarkers(g)
+        else:
+            c, ids, _ = cv2.aruco.detectMarkers(g, dic, parameters=p)
         if ids is None: continue
         for i, q in zip(ids.ravel(), c):
             if i < 77: union.setdefault(int(i), []).append(q.reshape(4, 2) / scale)
@@ -46,6 +52,14 @@ for n in sys.argv[1:]:
     pl = board_depth_plane(d, K, img)
     ang = np.degrees(np.arccos(abs(pl.normal @ nc)))
     axis = np.cross(pl.normal, nc)
+    # Depth error where the board is (not at the foot of the plane distance): depth pixels
+    # (median 5x5) at every grid corner minus the corner's z from the colour pose
+    P = (T[:3, :3] @ obj.T).T + T[:3, 3]
+    dz = []
+    for (u, v), p in zip(np.round(img).astype(int), P):
+        w = d[v - 2:v + 3, u - 2:u + 3]; w = w[w > 0]
+        if len(w) > 10: dz.append(1000 * (np.median(w) - p[2]))
     print(f"{n}: {len(det)} Tags gelesen, {len(obj)} Ecken fein ({err:.2f} px), Mitte im Bild {np.round(img.mean(axis=0)).astype(int).tolist()} | "
           f"Abstand Farbe {abs(nc @ T[:3,3])*1000:.1f} / Tiefe {abs(pl.offset)*1000:.1f} mm | Neigung Farbe gegen Tiefe {ang:.2f} Grad "
-          f"(um x {np.degrees(axis[0]):+.2f}, um y {np.degrees(axis[1]):+.2f})")
+          f"(um x {np.degrees(axis[0]):+.2f}, um y {np.degrees(axis[1]):+.2f}) | "
+          f"Tiefe zu tief am Board {np.median(dz):.1f} mm (10./90. %: {np.percentile(dz, 10):.1f} / {np.percentile(dz, 90):.1f})")

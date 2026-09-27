@@ -1,0 +1,81 @@
+{
+  "schema": "roboter_tetris.base_cam_extrinsics",
+  "version": 1,
+  "created": "2026-09-27T08:25:14.288630+00:00",
+  "method": "stufe1_basecam",
+  "frame": {
+    "parent": "world",
+    "child": "base camera, color optical frame"
+  },
+  "convention": "R = Rz(yaw) @ Ry(pitch) @ Rx(roll); m, deg",
+  "cal": {
+    "cal_x": -0.773464,
+    "cal_y": 0.793297,
+    "cal_z": 0.916889,
+    "cal_roll": 179.458503,
+    "cal_pitch": 0.268045,
+    "cal_yaw": 179.827629
+  },
+  "matrix": [
+    [
+      -0.999984532,
+      0.002964097,
+      0.004706452,
+      -0.773464322
+    ],
+    [
+      0.003008411,
+      0.999950948,
+      0.009436654,
+      0.793296723
+    ],
+    [
+      -0.00467825,
+      0.009450667,
+      -0.999944398,
+      0.916888676
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "quality": {
+    "rohdaten": "lauf3_rohdaten.json",
+    "rohdaten_vom": "2026-09-25T09:35:30.557187+00:00",
+    "posen": 39,
+    "bildfehler_px": 0.372,
+    "basecam_rest_mm": 4.24,
+    "basecam_rest_mm_max": 10.86,
+    "farbkamera": {
+      "cal_x": -0.769327,
+      "cal_y": 0.809136,
+      "cal_z": 0.916884,
+      "cal_roll": -179.462929,
+      "cal_pitch": -0.022911,
+      "cal_yaw": 179.830102
+    },
+    "tiefenmodell": {
+      "c0_mm": 3.715,
+      "cx_mm_per_m": 3.359,
+      "cy_mm_per_m": 21.812,
+      "cz_mm_per_m": 4.427
+    },
+    "hinweis": "Kalibrierung für base_cam aus den Rohdaten eines Laufs, nachgerechnet mit test/tools/basecam_kalibrierung.py (L27)."
+  },
+  "references": {
+    "size_m": 0.0,
+    "corners_world": {}
+  },
+  "grid": {
+    "rows": 7,
+    "cols": 11,
+    "tag_size_m": 0.02,
+    "tag_spacing_m": 0.006,
+    "first_id": 0,
+    "origin": "bottom_left",
+    "tag_rotation_deg": 180
+  }
+}

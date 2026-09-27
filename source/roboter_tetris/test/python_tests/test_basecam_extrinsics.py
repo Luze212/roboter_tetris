@@ -15,8 +15,8 @@ import numpy as np
 import pytest
 
 from roboter_tetris.basecam_extrinsics import (
-    CheckLimits, ExtrinsicsRecord, GridSpec, PlanParams, Sample, average_detections,
-    camera_height_from_depth,
+    CheckLimits, DepthErrorModel, ExtrinsicsRecord, GridSpec, PlanParams, Sample, average_detections,
+    basecam_pose, camera_height_from_depth, pixel_rays,
     axis_rotation, belt_displacement_mm, belt_plane_check, belt_sample_points, board_slip,
     cal_from_matrix, camera_moved, depth_points, fit_plane, grid_points, identify_layout,
     invert, layout_candidates, load_record, make_tag_detector, make_transform,
@@ -375,6 +375,83 @@ def test_belt_plane_reveals_wrong_tilt():
     tilted = X_TRUE @ make_transform(axis_rotation((1, 0, 0), 1.0), (0, 0, 0))
     tilt, _ = belt_plane_check(tilted, plane, BELT_Z)
     assert tilt == pytest.approx(1.0, abs=0.05)
+
+
+# -- the pose for base_cam (depth image, L27) ----------------------------------
+
+NO_DEPTH_ERROR = DepthErrorModel(0.0, 0.0, 0.0, 0.0)
+
+
+def _l515_depth(world_T_cam, model=DepthErrorModel()):
+    """Aligned depth image of the bare belt as the L515 reads it: the true depth
+    along each (distorted) pixel's ray, plus the modelled error."""
+    vs, us = np.mgrid[0:IMAGE[1], 0:IMAGE[0]]
+    px = np.c_[us.ravel(), vs.ravel()].astype(np.float64)
+    und = cv2.undistortPoints(px.reshape(-1, 1, 2), K, D).reshape(-1, 2)
+    rays = np.c_[und, np.ones(len(und))] @ world_T_cam[:3, :3].T
+    z_true = (BELT_Z - world_T_cam[2, 3]) / rays[:, 2]
+    z = z_true.copy()
+    for _ in range(3):
+        z = z_true + model.error_mm(px, z, K) / 1000.0
+    return z.reshape(IMAGE[1], IMAGE[0])
+
+
+def _basecam_errors(T, world_T_colour, model=DepthErrorModel()):
+    """How far base_cam, running on pose T, puts points at belt level, on a flat
+    block and on a 100 mm block over its ROI: largest horizontal error and
+    largest height error (mm; height against the belt at BELT_Z)."""
+    us, vs = np.meshgrid(np.linspace(ROI[0], ROI[0] + ROI[2], 9), np.linspace(ROI[1], ROI[1] + ROI[3], 9))
+    px = np.c_[us.ravel(), vs.ravel()]
+    und = cv2.undistortPoints(px.reshape(-1, 1, 2), K, D).reshape(-1, 2)
+    rays = np.c_[und, np.ones(len(und))] @ world_T_colour[:3, :3].T
+    xy, dh = [], []
+    for level in (0.0, 0.025, 0.1):
+        s = (BELT_Z + level - world_T_colour[2, 3]) / rays[:, 2]
+        W = world_T_colour[:3, 3] + s[:, None] * rays
+        z_true = (W - world_T_colour[:3, 3]) @ world_T_colour[:3, 2]
+        z = z_true.copy()
+        for _ in range(3):
+            z = z_true + model.error_mm(px, z, K) / 1000.0
+        seen = (pixel_rays(px, K) * z[:, None]) @ T[:3, :3].T + T[:3, 3]   # as base_cam deprojects
+        xy.append(np.linalg.norm(seen[:, :2] - W[:, :2], axis=1))
+        dh.append(seen[:, 2] - BELT_Z - level)
+    return 1000.0 * np.max(np.concatenate(xy)), 1000.0 * np.max(np.abs(np.concatenate(dh)))
+
+
+def _l515_belt_plane(world_T_cam, model=DepthErrorModel()):
+    _, plane = camera_height_from_depth(_l515_depth(world_T_cam, model), K,
+                                        world_T_cam[2, 3] - BELT_Z, BELT_Z)
+    return plane
+
+
+def test_basecam_pose_without_depth_error_is_the_colour_pose():
+    """No depth error, no lens distortion: base_cam's view is the colour camera's."""
+    plane = _l515_belt_plane(X_TRUE, NO_DEPTH_ERROR)
+    pose = basecam_pose(X_TRUE, K, np.zeros(5), plane, BELT_Z, ROI, NO_DEPTH_ERROR)
+    assert _pose_error(X_TRUE, pose.world_T_cam)[0] < 0.1
+    assert _pose_error(X_TRUE, pose.world_T_cam)[1] < 0.01
+    assert pose.rest_mm_max < 0.1
+
+
+def test_basecam_pose_puts_blocks_at_their_height_the_colour_pose_does_not():
+    """With the L515's depth error, the colour pose (what stage 1 wrote until
+    27.09.2026) puts block heights off by more than 10 mm; the pose for base_cam
+    brings them to the belt within a millimetre, and places no worse."""
+    plane = _l515_belt_plane(X_TRUE)
+    pose = basecam_pose(X_TRUE, K, D, plane, BELT_Z, ROI)
+    xy_new, height_new = _basecam_errors(pose.world_T_cam, X_TRUE)
+    xy_old, height_old = _basecam_errors(X_TRUE, X_TRUE)
+    assert height_old > 10.0
+    assert height_new < 1.0
+    assert xy_new < xy_old + 0.5 and xy_new < 9.0
+    assert pose.rest_mm_max == pytest.approx(xy_new, abs=1.5)
+
+
+def test_basecam_pose_needs_the_roi_on_the_belt():
+    plane = _l515_belt_plane(X_TRUE)
+    with pytest.raises(ValueError):
+        basecam_pose(X_TRUE, K, D, plane, BELT_Z, (0, 0, 1, 1), grid=2,
+                     levels=(5.0,))   # a level above the camera: no ray reaches it
 
 
 # -- stage 2 ------------------------------------------------------------------
