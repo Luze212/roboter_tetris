@@ -18,7 +18,6 @@ built again: every calibration in force is a file under version control.
 """
 
 import json
-import os
 
 import cv2
 import numpy as np
@@ -32,7 +31,7 @@ from sensor_msgs.msg import CameraInfo, Image
 
 from .basecam_extrinsics import (
     L6_CAL, load_camera_calibration, make_tag_detector, matrix_from_cal, pose_from_quaternion,
-    quaternion_from_matrix, required_start_height, save_record,
+    quaternion_from_matrix, replace_calibration, required_start_height, resolve_calibration_path,
 )
 from .calibration_run import (
     FEHLER, FERTIG, PARAMETERS, Camera, CalibrationRun, Frame, run_params,
@@ -260,20 +259,20 @@ class BaseCamCalibration(LifecycleComponent):
 
     def _write(self, run) -> None:
         self._written = True
-        path = self.get_parameter("output_file").get_value()
+        path = resolve_calibration_path(self.get_parameter("output_file").get_value())
         try:
-            save_record(path, run.result)
+            backup = replace_calibration(path, run.result)
         except OSError as exc:
             self.get_logger().error(f"base_cam_calibration: {path} nicht schreibbar: {exc}")
             self.set_predicate("has_failed", True)
             return
         cal = run.result.cal()
+        kept = f" Die bisherige liegt als {backup}." if backup else ""
         self.get_logger().info(
-            f"base_cam_calibration: Ergebnis geschrieben: {path} - "
+            f"base_cam_calibration: Kalibrierung für base_cam geschrieben: {path} - "
             + ", ".join(f"{k} {v:.4f}" for k, v in cal.items())
-            + ". Kalibrierung für base_cam (L27). Testen: in base_cam den Parameter "
-              f"Kalibrierdatei auf {path} setzen und base_cam neu aktivieren; zurück: den "
-              "Parameter auf den alten Wert.")
+            + f". base_cam nutzt sie ab dem nächsten Aktivieren.{kept} Dauerhaft erst "
+              "nach docker cp ins Repo (roboter_tetris/Extrinsics/) und Build.")
 
     def _write_raw(self, run) -> None:
         """Raw samples next to the result, whatever the outcome: a refused run
@@ -282,7 +281,7 @@ class BaseCamCalibration(LifecycleComponent):
         data = run.raw_data()
         if data is None:
             return
-        path = os.path.splitext(self.get_parameter("output_file").get_value())[0] + "_rohdaten.json"
+        path = self.get_parameter("raw_file").get_value()
         try:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(data, f)

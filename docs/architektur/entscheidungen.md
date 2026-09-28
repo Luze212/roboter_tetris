@@ -3938,8 +3938,26 @@ höchstens neben L6 auf dem Band — das automatische Verfahren trifft die Handk
 **Vergleich am Aufbau:** `test/tools/b23_compare.py eval … --aktiv … --vergleich …` wertet
 eine Runde Antasten für mehrere Kalibrierdateien aus.
 
-**Nächste Schritte.** Termin am Aufbau nach `uebersicht/ablauf-kalibrierung-aufbau.md`:
+**Nächste Schritte (Stand 27.09.).** Termin am Aufbau nach `archiv/ablauf-kalibrierung-aufbau.md`:
 Kalibrierlauf, neue Datei über den Parameter „Kalibrierdatei“ von `base_cam` einstellen,
 Antasten, Greiflauf. Die genutzte Kalibrierung (`Extrinsics/base_cam_extrinsics.json`, L6)
 bleibt unverändert; übernommen wird von Hand, wenn die Abnahme besteht. **Offen:** ob Referenzmarken am Bandgestell angebracht werden
 dürfen; ohne sie entfällt Stufe 2, und Nachkalibrieren heißt Stufe 1 laufen lassen.
+
+**Termin am Aufbau (28.09.2026, Ablauf `archiv/ablauf-kalibrierung-aufbau.md`).**
+Kalibrierlauf: 40 Posen, 0,34 px, Prüfposen 0,54 mm, Rutschen 0,04 mm, gegen L6 3,1 mm im
+Mittel und 3,8 mm höchstens auf dem Band. **Wiederholbarkeit über drei Tage:** gegen den Lauf
+vom 25.09. x/y/z 0,3 / 0,5 / 0,8 mm, Winkel ≤ 0,03°, auf dem Band 0,9 mm im Mittel und 1,3 mm
+höchstens — die Kamera stand, das Verfahren reproduziert sich. **Greiflauf** mit der neuen
+Kalibrierung in `base_cam` (Parameter „Kalibrierdatei“): 7 von 7 Klötzen gegriffen und
+abgelegt, kein Fehlgriff; nach dem Urteil des Nutzers so gut wie mit L6.
+
+**Entscheidungen (Nutzer):** Das Antasten entfiel aus Zeitgründen; die Abnahme stützt sich auf
+den Greiflauf. **In Kraft bleibt L6** — vermutlich noch minimal besser, und seit dem finalen
+Build erprobt. Die Kalibrierung vom 28.09. liegt als Messdatum bei den Rohdaten
+(`architektur/bilder/2026-09-28-basiskamera-kalibrierung/`). **Die Kalibrierung schreibt ab
+jetzt direkt in die Datei, die `base_cam` liest** (`output_file` = `Extrinsics/base_cam_extrinsics.json`,
+die bisherige bleibt als `_vorher.json`): Nachkalibrieren heißt Stufe 1 laufen lassen und
+`base_cam` neu aktivieren; dauerhaft über `docker cp` ins Repo und Build
+(`einrichtung-projektanwendung.md` §10). Rohdaten nach `raw_file` in `/tmp`.
+

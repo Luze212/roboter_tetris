@@ -1,0 +1,130 @@
+{
+  "schema": "roboter_tetris.base_cam_extrinsics",
+  "version": 1,
+  "created": "2026-09-28T10:55:15.755086+00:00",
+  "method": "stufe1_basecam",
+  "frame": {
+    "parent": "world",
+    "child": "base camera, color optical frame"
+  },
+  "convention": "R = Rz(yaw) @ Ry(pitch) @ Rx(roll); m, deg",
+  "cal": {
+    "cal_x": -0.773843,
+    "cal_y": 0.793776,
+    "cal_z": 0.917708,
+    "cal_roll": 179.484773,
+    "cal_pitch": 0.302873,
+    "cal_yaw": 179.836639
+  },
+  "matrix": [
+    [
+      -0.999981964,
+      0.002803537,
+      0.005311506,
+      -0.773842669
+    ],
+    [
+      0.002851146,
+      0.99995564,
+      0.008977171,
+      0.79377624
+    ],
+    [
+      -0.005286103,
+      0.008992153,
+      -0.999945598,
+      0.917708486
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "quality": {
+    "posen": 40,
+    "posen_ausgelassen": 0,
+    "punkte": 6463,
+    "punkte_verworfen": 1,
+    "bildfehler_px": 0.342,
+    "pruefposen_px": 0.316,
+    "pruefposen_mm_mittel": 0.54,
+    "pruefposen_mm_max": 1.44,
+    "rutschen_mm": 0.04,
+    "rutschen_grad": 0.169,
+    "streuung_position_mm": 28.583,
+    "streuung_drehung_grad": 0.0029,
+    "gegen_vorher_band_mm": 9.86,
+    "gegen_vorher_grad": 1.195,
+    "referenzmarken": 0,
+    "kamerahoehe_aus_tiefe": true,
+    "ebene_neigung_grad": 1.115,
+    "ebene_hoehe_mm": -0.01,
+    "ebene_rest_mm": 1.5,
+    "basecam_gegen_vorher_band_mm": 3.8,
+    "basecam_gegen_vorher_band_mm_mittel": 3.05,
+    "basecam_gegen_vorher_grad": 0.168,
+    "basecam_rest_mm": 4.24,
+    "basecam_rest_mm_max": 10.82,
+    "startverfahren": "bisherige Kalibrierung",
+    "hinweis": "Kalibrierung für base_cam (Tiefenbild): Lage der Farbkamera aus Stufe 1, mit dem Tiefenfehler der L515 umgerechnet; Neigung und Höhe aus dem Band im Tiefenbild (L27). Übernahme erst nach der Abnahme am Aufbau.",
+    "farbkamera": {
+      "cal_x": -0.768728,
+      "cal_y": 0.809296,
+      "cal_z": 0.917708,
+      "cal_roll": -179.459731,
+      "cal_pitch": -0.055973,
+      "cal_yaw": 179.838774
+    },
+    "tiefenmodell": {
+      "c0_mm": 3.715,
+      "cx_mm_per_m": 3.359,
+      "cy_mm_per_m": 21.812,
+      "cz_mm_per_m": 4.427
+    },
+    "intrinsik": {
+      "K": [
+        [
+          897.8309,
+          0.0,
+          647.0538
+        ],
+        [
+          0.0,
+          897.5387,
+          362.3055
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "D": [
+        0.129869,
+        -0.440544,
+        -0.000885,
+        -0.00064,
+        0.402135
+      ],
+      "bild": [
+        1280,
+        720
+      ]
+    }
+  },
+  "references": {
+    "size_m": 0.0,
+    "corners_world": {}
+  },
+  "grid": {
+    "rows": 7,
+    "cols": 11,
+    "tag_size_m": 0.02,
+    "tag_spacing_m": 0.006,
+    "first_id": 0,
+    "origin": "bottom_left",
+    "tag_rotation_deg": 180
+  }
+}

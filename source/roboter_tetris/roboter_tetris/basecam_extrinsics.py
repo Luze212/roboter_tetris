@@ -1264,6 +1264,26 @@ def save_record(path: str, record: ExtrinsicsRecord) -> None:
     os.replace(tmp, path)
 
 
+def replace_calibration(path: str, record: ExtrinsicsRecord) -> Optional[str]:
+    """Write ``record`` over the calibration at ``path`` (relative = to the package),
+    keeping the file it replaces as ``<name>_vorher.json``. Returns the backup path,
+    None if there was nothing to keep.
+
+    The calibration run writes straight into the file base_cam reads by default
+    (28.09.2026): base_cam takes it at its next activation, no build. One step
+    back stays possible without a build via the backup.
+    """
+    path = resolve_calibration_path(path)
+    backup = None
+    if os.path.exists(path):
+        stem, ext = os.path.splitext(path)
+        backup = stem + "_vorher" + ext
+        with open(path, encoding="utf-8") as src, open(backup, "w", encoding="utf-8") as dst:
+            dst.write(src.read())
+    save_record(path, record)
+    return backup
+
+
 def _matrix_problems(T: np.ndarray) -> List[str]:
     if T.shape != (4, 4) or not np.all(np.isfinite(T)):
         return ["Matrix nicht 4x4 oder nicht endlich"]

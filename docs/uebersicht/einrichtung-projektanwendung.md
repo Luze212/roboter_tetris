@@ -251,9 +251,10 @@ null heißt, `lead_time_s` passt zur Verstärkung des Attractors.
 Eigene Anwendung, getrennt vom normalen Programm: Inhalt von
 `docs/uebersicht/anwendung-kalibrierung-basiskamera.yaml` in eine neue AICA-Anwendung
 (Code-Ansicht) einfügen und speichern. Hintergrund und Stand: `entscheidungen.md` L27.
-Seit 27.09.2026 schreibt der Lauf die **Kalibrierung für `base_cam`** (die Lage der
-Farbkamera mit dem Tiefenfehler der L515 umgerechnet). In Kraft ist weiter L6, bis eine
-neue Datei am Aufbau abgenommen ist — Ablauf: `ablauf-kalibrierung-aufbau.md`.
+Der Lauf schreibt die **Kalibrierung für `base_cam`** (die Lage der Farbkamera mit dem
+Tiefenfehler der L515 umgerechnet) seit 28.09.2026 **direkt in die Datei, die `base_cam`
+liest**. In Kraft ist L6; die Kalibrierung vom 28.09. ist abgenommen, aber nicht übernommen
+(L27).
 
 1. Anwendung starten, **Greiferbacken frei**: Der Greifer fährt beim Laden einmal auf und zu.
 2. Knopf 1 fährt die Startpose an (Frame „Kalibrierstart“: Werkzeug waagerecht, Board-Mitte
@@ -263,13 +264,16 @@ neue Datei am Aufbau abgenommen ist — Ablauf: `ablauf-kalibrierung-aufbau.md`.
 4. Knopf 5 startet Stufe 1: etwa 2 s Prüfung ohne Bewegung (Board, Kamerahöhe, Plan), dann
    45 Posen in 3–4 min, zurück in die Startpose. Knopf 6 bricht ab, der Roboter hält die
    letzte Zielpose.
-5. Ergebnis `/tmp/base_cam_extrinsics.json` und Rohdaten
-   `/tmp/base_cam_extrinsics_rohdaten.json` im Container, Werte und Güte im Log
-   (`basecam_gegen_vorher_band_mm_mittel`: Verschiebung gegen die bisherige Kalibrierung).
-   Herauskopieren mit `docker cp`, **unter neuem Namen** nach `roboter_tetris/Extrinsics/` —
-   die genutzte `base_cam_extrinsics.json` nicht überschreiben.
-   Testen: in `base_cam` den Parameter „Kalibrierdatei“ auf die neue Datei setzen (ohne
-   Build auch direkt `/tmp/base_cam_extrinsics.json`); zurück mit demselben Parameter.
+5. Das Ergebnis ersetzt `roboter_tetris/Extrinsics/base_cam_extrinsics.json` im Container;
+   die bisherige Datei bleibt daneben als `base_cam_extrinsics_vorher.json`. `base_cam`
+   nutzt die neue ab dem nächsten Aktivieren, ohne Build. Werte und Güte im Log
+   (`basecam_gegen_vorher_band_mm_mittel`: Verschiebung gegen die bisherige Kalibrierung),
+   Rohdaten in `/tmp/base_cam_extrinsics_rohdaten.json`.
+   **Dauerhaft** wird sie erst im Repo: mit `docker cp` aus dem Container nach
+   `source/roboter_tetris/roboter_tetris/Extrinsics/` holen, committen, bauen — ein Build
+   ohne das bringt die Datei aus dem Repo zurück. **Zurück ohne Build:** im Container die
+   `_vorher.json` über die Datei kopieren oder in `base_cam` den Parameter „Kalibrierdatei“
+   auf `Extrinsics/base_cam_extrinsics_vorher.json` setzen.
 6. Knopf 7 prüft ohne Bewegung, ob sich die Kamera bewegt hat (braucht Referenzmarken).
 
 Standard-Posenplan: nur Verschiebung ±8 cm und Drehung um die Hochachse ±20°, Flansch

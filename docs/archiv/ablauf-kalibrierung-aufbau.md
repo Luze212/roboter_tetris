@@ -1,5 +1,9 @@
 # Ablauf am Aufbau: automatische Kalibrierung der Basiskamera
 
+> **Archiviert.** Termin durchgeführt am 28.09.2026; Ergebnis und Entscheidungen in
+> `architektur/entscheidungen.md` L27. Seitdem schreibt der Lauf direkt in die Datei, die
+> `base_cam` liest — Schritt 3 und 4 unten gelten so nicht mehr.
+
 **Für den Termin am 28.09.2026** (halber Tag, letzter Termin am Roboter). Ziel: Die
 automatische Kalibrierung liefert eine Kalibrierdatei für `base_cam`, die mindestens so gut
 ist wie die Handkalibrierung L6 — nachgewiesen durch Antasten und einen Greiflauf.

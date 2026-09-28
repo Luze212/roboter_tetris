@@ -82,11 +82,19 @@
       "dynamic": false
     },
     {
-      "display_name": "1 Ergebnisdatei im Container [output_file]",
-      "description": "Hierhin schreibt stufe1/stufe2 das Ergebnis (im Container): die Kalibrierung für base_cam. Testen ohne Build: in base_cam den Parameter Kalibrierdatei auf diesen Pfad setzen. Übernahme: ins Repo nach roboter_tetris/Extrinsics/ kopieren, Paket bauen.",
+      "display_name": "1 Kalibrierdatei schreiben nach [output_file]",
+      "description": "Hierhin schreibt stufe1/stufe2 die Kalibrierung für base_cam, relativ zum Paket oder absolut. Standard: die Datei, die base_cam liest - sie gilt ab dem nächsten Aktivieren von base_cam, ohne Build; die bisherige bleibt als ..._vorher.json daneben. Im Container: dauerhaft erst, wenn sie ins Repo kopiert und gebaut ist.",
       "parameter_name": "output_file",
       "parameter_type": "string",
-      "default_value": "/tmp/base_cam_extrinsics.json",
+      "default_value": "Extrinsics/base_cam_extrinsics.json",
+      "dynamic": false
+    },
+    {
+      "display_name": "1 Rohdaten nach [raw_file]",
+      "description": "Rohdaten jedes Laufs (alle Posen, auch wenn eine Gütegrenze greift), zum Nachrechnen mit test/tools/basecam_kalibrierung.py.",
+      "parameter_name": "raw_file",
+      "parameter_type": "string",
+      "default_value": "/tmp/base_cam_extrinsics_rohdaten.json",
       "dynamic": false
     },
     {

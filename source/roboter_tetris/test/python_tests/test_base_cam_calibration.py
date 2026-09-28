@@ -15,7 +15,7 @@ import pytest
 from roboter_tetris.basecam_extrinsics import (
     DEFAULT_CALIBRATION_FILE, L6_CAL, ExtrinsicsRecord, cal_from_matrix,
     load_camera_calibration, matrix_from_cal, pose_from_quaternion, quaternion_from_matrix,
-    resolve_calibration_path, rotation_angle_deg, save_record,
+    replace_calibration, resolve_calibration_path, rotation_angle_deg, save_record,
 )
 from roboter_tetris.calibration_run import PARAMETERS, RunParams, run_params
 from roboter_tetris.vision.detection import build_cam_to_robot
@@ -62,6 +62,27 @@ def test_calibration_file_sources(tmp_path):
     assert np.allclose(record.world_T_cam, moved, atol=1e-8) and "stufe1" in line
     assert resolve_calibration_path(" Extrinsics/x.json ").endswith(
         os.path.join("roboter_tetris", "Extrinsics", "x.json"))
+
+
+def test_calibration_run_writes_the_file_base_cam_reads():
+    """Since 28.09.2026 the run writes straight into base_cam's default file."""
+    out = dict((n, v) for n, v, _ in PARAMETERS)["output_file"]
+    assert resolve_calibration_path(out) == resolve_calibration_path(DEFAULT_CALIBRATION_FILE)
+    base_cam_default = {p["parameter_name"]: p["default_value"]
+                        for p in _description("base_cam")["parameters"]}["calibration_file"]
+    assert base_cam_default == out
+
+
+def test_replacing_keeps_the_previous_calibration(tmp_path):
+    path = str(tmp_path / "Extrinsics" / "base_cam_extrinsics.json")
+    old = ExtrinsicsRecord(world_T_cam=matrix_from_cal(*L6_CAL), method="uebergang_L6")
+    new = ExtrinsicsRecord(world_T_cam=matrix_from_cal(-0.774, 0.794, 0.918, 179.5, 0.3, 179.8),
+                           method="stufe1_basecam")
+    assert replace_calibration(path, old) is None               # nothing to keep yet
+    backup = replace_calibration(path, new)
+    assert backup.endswith("base_cam_extrinsics_vorher.json")
+    assert load_camera_calibration(path)[0].method == "stufe1_basecam"
+    assert load_camera_calibration(backup)[0].method == "uebergang_L6"
 
 
 def test_quaternions_round_trip():

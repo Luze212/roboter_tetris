@@ -111,10 +111,14 @@ PARAMETERS = (
      "Betriebsart: stufe1 = Roboter fährt das Board ab (Grundkalibrierung), stufe2 = neu aus "
      "den Referenzmarken ohne Bewegung, pruefen = nur prüfen, ob sich die Kamera bewegt hat "
      "(schreibt nichts)."),
-    ("output_file", "/tmp/base_cam_extrinsics.json",
-     "Hierhin schreibt stufe1/stufe2 das Ergebnis (im Container): die Kalibrierung für "
-     "base_cam. Testen ohne Build: in base_cam den Parameter Kalibrierdatei auf diesen Pfad "
-     "setzen. Übernahme: ins Repo nach roboter_tetris/Extrinsics/ kopieren, Paket bauen."),
+    ("output_file", DEFAULT_CALIBRATION_FILE,
+     "Hierhin schreibt stufe1/stufe2 die Kalibrierung für base_cam, relativ zum Paket oder "
+     "absolut. Standard: die Datei, die base_cam liest - sie gilt ab dem nächsten Aktivieren "
+     "von base_cam, ohne Build; die bisherige bleibt als ..._vorher.json daneben. Im "
+     "Container: dauerhaft erst, wenn sie ins Repo kopiert und gebaut ist."),
+    ("raw_file", "/tmp/base_cam_extrinsics_rohdaten.json",
+     "Rohdaten jedes Laufs (alle Posen, auch wenn eine Gütegrenze greift), zum Nachrechnen "
+     "mit test/tools/basecam_kalibrierung.py."),
     ("calibration_file", DEFAULT_CALIBRATION_FILE,
      "Bisher gültige Kalibrierdatei, relativ zum Paket oder absolut: Vergleich, Lage der "
      "Referenzmarken für stufe2/pruefen. Leer = Übergangswerte L6."),
