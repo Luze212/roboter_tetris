@@ -92,10 +92,10 @@
     },
     {
       "display_name": "Anfahrgeschwindigkeit max (m/s) [attractor_v_max_mps]",
-      "description": "Der kleinere Wert aus max_linear_velocity von Attractor und IK-Controller. Bindend ist meist der IK-Controller; für das laufende Band 0,5 (Einrichtung §2, Nachtrag 13 / L24). Bei gedrosseltem IK-Controller hier denselben kleineren Wert eintragen.",
+      "description": "Der kleinere Wert aus max_linear_velocity von Attractor und IK-Controller. Bindend ist meist der IK-Controller; für das laufende Band 0,85 (Einrichtung §2, Nachtrag 13 / L29). Bei gedrosseltem IK-Controller hier denselben kleineren Wert eintragen.",
       "parameter_name": "attractor_v_max_mps",
       "parameter_type": "double",
-      "default_value": "0.5",
+      "default_value": "0.85",
       "dynamic": true
     },
     {
@@ -116,10 +116,10 @@
     },
     {
       "display_name": "Absenkzeit (s) [t_descend_s]",
-      "description": "Dauer des Absenkens von der Folgehöhe auf die Greifhöhe: (observe_z - Greifhöhe) / descend_speed_mps des object_follower plus Einschwingen - mit 0,45 m, 0,31...0,34 m und 0,25 m/s rund 0,9 s (am Roboter 0,78-0,93 s gemessen, Nachtrag 13 / L24). Geht in die Lage der Greifebene ein. Gedrosselt mit langsamerem Absenken entsprechend höher.",
+      "description": "Dauer des Absenkens von der Folgehöhe auf die Greifhöhe: (observe_z - Greifhöhe) / descend_speed_mps des object_follower plus Einschwingen - mit 0,45 m, 0,30...0,34 m und 0,35 m/s rund 0,7 s (Nachtrag 13 / L29; bei 0,25 m/s 0,9 s, gemessen 0,78-0,93 s, L24). Geht in die Lage der Greifebene ein. Gedrosselt mit langsamerem Absenken entsprechend höher.",
       "parameter_name": "t_descend_s",
       "parameter_type": "double",
-      "default_value": "0.9",
+      "default_value": "0.7",
       "dynamic": true
     },
     {
@@ -156,7 +156,7 @@
     },
     {
       "display_name": "Mindesthöhe (m) [min_graspable_height_m]",
-      "description": "Flachere Klötze werden nicht gewählt. 0,02: flache 25-mm-Klötze (gemessen ~24 mm) greift der Follower an seiner Untergrenze min_grip_height_m, geschlossene Backen 11 mm über dem Band (B15, Nachtrag 13 / L24).",
+      "description": "Flachere Klötze werden nicht gewählt. 0,02: flache 25-mm-Klötze (gemessen ~24 mm) greift der Follower auf halber Höhe, knapp über seiner Untergrenze min_grip_height_m (B15, Nachtrag 13 / L24, L28).",
       "parameter_name": "min_graspable_height_m",
       "parameter_type": "double",
       "default_value": "0.02",

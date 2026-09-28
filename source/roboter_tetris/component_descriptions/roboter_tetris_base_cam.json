@@ -115,10 +115,10 @@
     },
     {
       "display_name": "Min Objekthöhe (mm)",
-      "description": "Mindesthöhe, ab der ein Objekt erkannt wird",
+      "description": "Mindesthöhe, ab der ein Objekt erkannt wird, auf der rohen Tiefe vor top_depth_bias_mm. 10: flache 25-mm-Klötze liegen roh nur 11-15 mm über dem Band und fielen mit 15 auf der tieferen Bandseite heraus (Nachtrag 13 / L28; 9 gab Fehlerkennungen, L24).",
       "parameter_name": "min_obj_height",
       "parameter_type": "double",
-      "default_value": "15.0",
+      "default_value": "10.0",
       "dynamic": true
     },
     {

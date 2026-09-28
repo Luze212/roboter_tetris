@@ -81,7 +81,8 @@ class PriorityHandler(LifecycleComponent):
         self.add_parameter(
             sr.Parameter("min_graspable_height_m", d.min_graspable_height_m, sr.ParameterType.DOUBLE),
             "Flachere Klötze werden nicht gewählt (m). 0,02: flache 25-mm-Klötze greift "
-            "der Follower an seiner Untergrenze min_grip_height_m (B15, Nachtrag 13 / L24).")
+            "der Follower auf halber Höhe, knapp über seiner Untergrenze min_grip_height_m "
+            "(B15, Nachtrag 13 / L24, L28).")
         self.add_parameter(
             sr.Parameter("max_gripper_opening_m", d.max_gripper_opening_m, sr.ParameterType.DOUBLE),
             "Backenabstand bei offenem Greifer (m), gemessen 0,127. (B16)")

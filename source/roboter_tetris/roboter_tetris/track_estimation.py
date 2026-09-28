@@ -89,8 +89,10 @@ class EstimatorParams:
     outlier_distance_m: float = 0.02
     #: That many outliers in a row are a real change of position -> restart. D21.
     outlier_persist_frames: int = 3
-    #: Measurements averaged for position, orientation and geometry.
-    smoothing_window: int = 30
+    #: Measurements averaged for position, orientation and geometry. 20 since
+    #: 28.09.2026: with base_cam and vectoring at 15/s about 1.3 s of data, so
+    #: faster belts still settle inside the image (Nachtrag 13 / L29).
+    smoothing_window: int = 20
     #: A SETTLING track not seen for this long is forgotten (its pool share
     #: stays). At ~7 measurements/s, 0.5 s were barely three frames.
     track_expiry_s: float = 1.0

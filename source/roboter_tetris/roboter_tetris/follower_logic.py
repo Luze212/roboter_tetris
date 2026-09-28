@@ -105,7 +105,7 @@ class FollowerParams:
     ws_x_max: Optional[float] = -0.30
     ws_y_min: Optional[float] = -0.32
     ws_y_max: Optional[float] = 0.48
-    ws_z_min: Optional[float] = 0.3036
+    ws_z_min: Optional[float] = 0.2986
     ws_z_max: Optional[float] = 0.60
     #: Observation pose: belt middle at the start of the grasp zone (y +0.40),
     #: low enough to follow without the robot camera (B8, Nachtrag 13 / L14).
@@ -145,7 +145,10 @@ class FollowerParams:
     #: Mode 2: grip along the block's own angle, if its quality allows. On since
     #: the final build (Nachtrag 13 / L26): at most +-45 deg from the mode-1 yaw.
     use_block_orientation: bool = True
-    orientation_quality_min: float = 0.7
+    #: 0.4 since 28.09.2026: small upright blocks stayed below 0.7 and were
+    #: gripped along the belt; averaged over the smoothing window the angle
+    #: is still good to a few degrees (Nachtrag 13 / L29).
+    orientation_quality_min: float = 0.4
     #: Mode 2: largest turn away from the mode-1 yaw (degrees). A rectangle is
     #: gripped across either side, so every block lies within +-45 deg; up to
     #: this limit the side chosen last is kept (hysteresis at 45 deg). User,
@@ -156,15 +159,14 @@ class FollowerParams:
     # -- 4d: grasp cycle -----------------------------------------------------
     belt_surface_z_m: float = 0.0536          # B17
     flange_to_grip_point_m: float = 0.235     # Nachtrag 6 / Z7
-    #: Lowest grip point above the belt (pad centre). 0.016 since the final
-    #: build: closed jaw tip 6 mm above the belt, flange 53.6 + 16 + 235 =
-    #: 304.6 mm, 1 mm above the workspace floor 0.3036 (Nachtrag 13 / L26). Pad
-    #: 6...26 mm covers a flat 25 mm block. Was 0.021 (L14), 0.015 (B15).
-    min_grip_height_m: float = 0.016
-    #: 0.25 m/s: observation height 0.45 -> grip height 0.31...0.34 in 0.8-0.9 s
-    #: (was 0.15, Nachtrag 13 / L24). Couples to t_descend_s of the
-    #: priority_handler (Nachtrag 10 / J2).
-    descend_speed_mps: float = 0.25
+    #: Lowest grip point above the belt (pad centre). 0.011 since 28.09.2026:
+    #: closed jaw tip 1 mm above the belt, flange 53.6 + 11 + 235 = 299.6 mm,
+    #: 1 mm above the workspace floor 0.2986 (Nachtrag 13 / L28). Was 0.016
+    #: (L26), 0.021 (L14), 0.015 (B15).
+    min_grip_height_m: float = 0.011
+    #: 0.35 m/s since 28.09.2026 (Nachtrag 13 / L29; 0.25 in L24, 0.15 before).
+    #: Couples to t_descend_s of the priority_handler, 0.7 s (Nachtrag 10 / J2).
+    descend_speed_mps: float = 0.35
     #: Rise above the grip height while still moving with the belt.
     lift_clearance_m: float = 0.10
     #: Grasp release in belt coordinates, as err_laengs/err_quer of S8 (D3, B18).

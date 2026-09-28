@@ -87,9 +87,9 @@ Greifgraph liest; die Anzeige folgt ihr. Bedienung: `einrichtung-projektanwendun
 
 | Komponente | Rate | Eingänge | Ausgänge | Logik ohne ROS | Anmerkung |
 |---|---|---|---|---|---|
-| `base_cam` | Kamera | color, depth, info | `objects` (S1), `debug_image` | `vision/*` | Debug-Bild an (für den Streamer); Extrinsik aus der Kalibrierdatei (L27) |
+| `base_cam` | 15 Hz (L29) | color, depth, info | `objects` (S1), `debug_image` | `vision/*` | Debug-Bild an (für den Streamer); Extrinsik aus der Kalibrierdatei (L27) |
 | `robot_cam_2`, `robot_cam` | Kamera | color, depth, info | `object_position` (S2), `debug_image` | `vision/robot_detection*` | **nicht eingebunden** (L22) — im Paket, ohne Abnehmer |
-| `vectoring` | 20 Hz | `objects` | `tracks` (S3) | `track_estimation.py` | Bandgeschwindigkeit (Ziel 3) |
+| `vectoring` | 15 Hz (L29) | `objects` | `tracks` (S3) | `track_estimation.py` | Bandgeschwindigkeit (Ziel 3) |
 | `priority_handler` | 20 Hz | `tracks`, `picked_id`, `robot_state` | `target` (S4), `not_pickable` (S5) | `target_selection.py` | Greifzone = Arbeitsraum auf dem Band (L21) |
 | `data_tracker` | 2 Hz | `tracks`, `not_pickable`, `picked_id` | `world_state` (S10) | `world_bookkeeping.py` | nur Anzeige |
 | `object_follower` | 50 Hz | `target`, `robot_state`, `gripper_motion_done`, `gripper_has_object` | `target_pose` (S6), `gripper_close`, `picked_id` (S7), `follower_status` (S8) | `follower_logic.py` | Zustandsautomat, Winkel höchstens ±45° (L25) |
@@ -156,9 +156,9 @@ Werte, die in zwei Komponenten zusammenpassen müssen:
 | Wert hier | muss passen zu | Grund |
 |---|---|---|
 | `lead_time_s` (Follower) | `linear_gains` K des Attractors | Vorhalt ≈ 1/K; eingemessen über `err_laengs` (Nachtrag 9 / G7) — am Roboter 0,24 s bei K = 5 (Nachtrag 13 / L18) |
-| `attractor_gain`, `attractor_v_max_mps` (`priority_handler`) | Attractor-Gain; kleineres `max_linear_velocity` aus Attractor und IK-Controller (im Betrieb beide 0,5, L24) | Anfahrzeit in der Erreichbarkeitsprüfung |
+| `attractor_gain`, `attractor_v_max_mps` (`priority_handler`) | Attractor-Gain; kleineres `max_linear_velocity` aus Attractor und IK-Controller (im Betrieb beide 0,85, L29) | Anfahrzeit in der Erreichbarkeitsprüfung |
 | `t_descend_s` (`priority_handler`) | `(observe_z − Greifhöhe) / descend_speed_mps` des Followers | Lage der Greifebene (Nachtrag 10 / J2) |
-| `min_graspable_height_m` (`priority_handler`) | `min_grip_height_m` des Followers (Greifhöhe min) | kein Klotz, den der Follower nicht fassen kann — 0,02: flache 25-mm-Klötze greift er an der Untergrenze, geschlossene Backen 6 mm über dem Band (L24, L26) |
+| `min_graspable_height_m` (`priority_handler`) | `min_grip_height_m` des Followers (Greifhöhe min) | kein Klotz, den der Follower nicht fassen kann — 0,02: flache 25-mm-Klötze greift er auf halber Höhe, knapp über der Untergrenze (Backenspitze 1 mm über dem Band) (L24, L26, L28) |
 | Greifzone `zone_*` (`priority_handler`) | Arbeitsraum `ws_*` des Followers | Zone liegt im Arbeitsraum, seit L21 deckungsgleich auf dem Band; hinter dem Bild der Basiskamera (L4) |
 | `expiry_after_done_s` (`data_tracker`) | Dauer Heben + Transfer + Ablegen | sonst kommt `picked` nicht mehr an (Nachtrag 7 / T1) |
 

@@ -40,9 +40,9 @@ class SelectorParams:
     zone_y_min: float = -0.32
     zone_y_max: float = 0.445
     #: Binding speed limit of the approach: the lower of attractor and IK
-    #: controller (A1). 0.5 since 24.09.2026: both run at 0.5 (setup guide §2,
-    #: Nachtrag 13 / L24). Throttled runs: set lower.
-    attractor_v_max_mps: float = 0.5
+    #: controller (A1). 0.85 since 28.09.2026: both run at 0.85 (setup guide §2,
+    #: Nachtrag 13 / L29; 0.5 in L24). Throttled runs: set lower.
+    attractor_v_max_mps: float = 0.85
     #: Attractor gain K; settling takes about 3/K (setup guide: K ~ 5).
     attractor_gain: float = 5.0
     #: Settling of the follower from arriving to the grasp release (tolerances
@@ -51,9 +51,9 @@ class SelectorParams:
     #: 3/K models the way back from the place pose correctly (2.6-2.7 s, L24).
     t_settle_s: float = 0.4
     #: (observe_z - grip height) / descend_speed_mps of the follower, plus
-    #: settling (Nachtrag 10 / J2). 0.11...0.14 m / 0.25 m/s + settling -> 0.9,
-    #: measured 0.78-0.93 s at the robot (Nachtrag 13 / L24).
-    t_descend_s: float = 0.9
+    #: settling (Nachtrag 10 / J2). 0.11...0.15 m / 0.35 m/s + settling -> 0.7
+    #: (Nachtrag 13 / L29; 0.9 at 0.25 m/s, measured 0.78-0.93 s, L24).
+    t_descend_s: float = 0.7
     #: Measured 0.63-0.83 s from closing to has_object (L24).
     t_grasp_s: float = 0.8
     t_lift_s: float = 0.5

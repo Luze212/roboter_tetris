@@ -9,7 +9,7 @@ Kalibrierung der Basiskamera (28.09.2026).
 im Lauf und legt sie ab; gegriffen wird allein mit der Basiskamera (L22). Die
 Bandgeschwindigkeit wird geschätzt (−127,9 mm/s, L9, L10), die Erreichbarkeit mit
 gemessenen Prozesszeiten gerechnet (L24), gedrehte Klötze im Winkel gegriffen
-(höchstens ±45°, L25), flache ab 20 mm (L24, L26). Alle Parameter der eigenen
+(höchstens ±45°, L25), flache ab 20 mm (L24, L26, L28). Alle Parameter der eigenen
 Komponenten sind Standardwert im Paket; von Hand gesetzt werden nur die
 AICA-Bausteine, Raten und die UR-Nutzlast (L26). Die Basiskamera kalibriert ein eigenes
 automatisches Verfahren mit dem Roboter (L27): über drei Tage auf unter 1 mm wiederholbar,
@@ -34,7 +34,7 @@ frühere Festlegung berührt; an der alten Stelle steht dann ein Verweis.
 | Nachtrag 10 | Bau `object_follower` 4c/4d: J1 Freihöhe, J2 Absenkzeit, J3–J8 |
 | Nachtrag 11 | Bau `interface_streamer`: V1–V3 |
 | Nachtrag 12 | Inbetriebnahme am Aufbau (22.09.): K1–K6, u. a. 180° `base`/`world`, falsche Gier der Altkalibrierung |
-| **Nachtrag 13** | **Audit, Aufbau und Kalibrierung (23.–28.09.):** L1 Audit, L2 Datenrate/Latenz, L3 Hardware-Takt, L4 Greifer im Bild, L5 Roboterkamera, L6 B23 abgeschlossen (Neigung, Parallaxe, neue Extrinsik), L7 Bandgeschwindigkeit, L8 Standardwerte, L9 Block 3 und Pool-Mindestgeschwindigkeit, L10 Weiterführung hinter dem Bild, L11 Roboterkamera und Hand-Auge, L12 Nah-Gate ohne fehlende Tiefe, L13 Erkennung der Roboterkamera, L14 Arbeitsraum und Greifzone, L15 Standardwerte für Arbeitsraum und Beobachtungspose (24.09.), L16 Kameras 15 Bilder/s, Infrarot aus (24.09.), L17 Follower ohne Signale, Fake-Zeitstempel (24.09.), L18 Block 7 gedrosselt bestanden (24.09.), **L19 erste echte Griffe im Lauf** (24.09.), L20 Schutzstopp am Bandrand: Nutzlast und Beschleunigung (24.09.), L21 Greifzone = Arbeitsraum, Bildausschnitt der Basiskamera (24.09.), **L22 Roboterkamera nicht mehr eingebunden** (24.09.), L23 Vorhersagedeckel und pessimistische Erreichbarkeit (24.09.), **L24 Tempo ausgereizt, flache Klötze greifbar** (24.09.), L25 Modus 2 höchstens ±45° aus der Grundstellung (24.09.), **L26 finaler Build** (24.09.), **L27 Kalibrierung der Basiskamera** (25.–28.09.) |
+| **Nachtrag 13** | **Audit, Aufbau und Kalibrierung (23.–28.09.):** L1 Audit, L2 Datenrate/Latenz, L3 Hardware-Takt, L4 Greifer im Bild, L5 Roboterkamera, L6 B23 abgeschlossen (Neigung, Parallaxe, neue Extrinsik), L7 Bandgeschwindigkeit, L8 Standardwerte, L9 Block 3 und Pool-Mindestgeschwindigkeit, L10 Weiterführung hinter dem Bild, L11 Roboterkamera und Hand-Auge, L12 Nah-Gate ohne fehlende Tiefe, L13 Erkennung der Roboterkamera, L14 Arbeitsraum und Greifzone, L15 Standardwerte für Arbeitsraum und Beobachtungspose (24.09.), L16 Kameras 15 Bilder/s, Infrarot aus (24.09.), L17 Follower ohne Signale, Fake-Zeitstempel (24.09.), L18 Block 7 gedrosselt bestanden (24.09.), **L19 erste echte Griffe im Lauf** (24.09.), L20 Schutzstopp am Bandrand: Nutzlast und Beschleunigung (24.09.), L21 Greifzone = Arbeitsraum, Bildausschnitt der Basiskamera (24.09.), **L22 Roboterkamera nicht mehr eingebunden** (24.09.), L23 Vorhersagedeckel und pessimistische Erreichbarkeit (24.09.), **L24 Tempo ausgereizt, flache Klötze greifbar** (24.09.), L25 Modus 2 höchstens ±45° aus der Grundstellung (24.09.), **L26 finaler Build** (24.09.), **L27 Kalibrierung der Basiskamera** (25.–28.09.), L28 flache Klötze tiefer erkannt und gegriffen (28.09.), L29 schneller: 0,85 m/s, Rate 15, Winkel kleiner Klötze (28.09.) |
 
 Namensgleichheit: **F1–F3 in Nachtrag 2** und **F1–F6 in Nachtrag 8** sind
 verschiedene Punkte — im Text immer mit Nachtragsnummer zitiert.
@@ -3770,7 +3770,7 @@ gegriffen; `t_settle_s` musste für die Drehzeit nicht angehoben werden.
 Gate): geschlossene Backenspitze **6 mm** über dem Band, Arbeitsraumgrenze bei 5 mm;
 die Auflage deckt 6–26 mm, den ganzen 25-mm-Klotz. Klötze bis 32 mm an der
 Untergrenze, darüber mittig. `Safety/workspace_bounds.json` nachgezogen
-(z_min, Marge 5 mm).
+(z_min, Marge 5 mm). *(Seit L28: 0,011 / 0,2986, Backenspitze 1 mm über dem Band.)*
 
 **Neue Standardwerte (finaler Build):**
 
@@ -3905,3 +3905,82 @@ laufen lassen (etwa 5 min). Genauer als L6 wird `base_cam` nur mit Eingriffen in
 Erkennung: Tiefenkorrektur (M1s), Entzerrung, Bandfläche statt ebener Bandebene. In der
 höchsten Greiferlage (0,44 m unter der Kamera) lieferte die L515 über dem Board keine Tiefe;
 der Materialversatz Kunststoff gegen Board ist nicht neu gemessen.
+
+### L28 — Flache Klötze tiefer erkannt und gegriffen (28.09.2026)
+
+**Befund (Nutzer):** Flache Klötze wurden auf der tieferen, robotnahen Bandseite von der
+Basiskamera manchmal nicht erkannt. Ursache: `min_obj_height` wirkt auf die rohe Tiefe vor
+`top_depth_bias_mm`; ein flacher 25-mm-Klotz liegt roh nur 11–15 mm über dem Band (L24),
+und das Band ist quer geneigt (B17 0,39°, L27 0,64°; bei x −0,70 rund 52,9 mm, bei
+x −0,93 rund 54,5 mm), auf der tiefen Seite fällt die Oberseite unter 15 mm.
+
+**Entscheidung (Nutzer):** Erkennung und Greifhöhe je 5 mm tiefer; von Hand am Aufbau
+erprobt („funktioniert bestens“), dann als Standard übernommen.
+
+| Komponente | Parameter in AICA | alt | neu |
+|---|---|---|---|
+| Base Kamera | Min Objekthöhe (mm) [`min_obj_height`] | 15,0 | **10,0** |
+| Object Follower | 4 Absenken und Greifen: Greifhöhe min über Band (m) [`min_grip_height_m`] | 0,016 | **0,011** |
+| Object Follower | 1 Arbeitsraum: z min (m) [`ws_z_min`] | 0,3036 | **0,2986** |
+
+Greifhöhe = Band + max(h/2, 11 mm) + 235 mm: geschlossene Backenspitze an der Untergrenze
+**1 mm** über der Bandhöhe 53,6 mm, Arbeitsraumgrenze auf Bandhöhe (Marge 0). Die Grenze
+greift nur bei Klötzen bis 22 mm; ein flacher Klotz (23,8 mm) wird auf halber Höhe gefasst,
+Backenspitze rund 2 mm über dem Band. `Safety/workspace_bounds.json` nachgezogen.
+
+**Zu beachten:** Auf der hohen Bandseite (x ≈ −0,93) liegt das Band rund 1 mm über
+53,6 mm — dort bleibt an der Untergrenze kaum Abstand. Mit `min_obj_height` 9 gab es in L24
+Fehlerkennungen; bei 10 nach einem Build einmal leeres Band beobachten. Greifhöhe min und
+`ws_z_min` weiter nur gemeinsam ändern.
+
+### L29 — Schneller: Fahrt 0,85 m/s, Absenken 0,35 m/s, Rate 15; Winkel kleiner Klötze (28.09.2026)
+
+Am Aufbau stufenweise von Hand erprobt (Nutzer: „läuft gut“, Eindruck deutlich schneller),
+dann ausgelesen und übernommen. Jede Stufe einzeln getestet, kein Schutzstopp.
+
+**Winkel kleiner Klötze:** Ein kleines Rechteck hochkant (kleine Oberseite) wurde gegriffen,
+aber ohne Drehung. Die Güte des gemittelten Winkels (S4 Feld 16, Streuung der Einzelwerte)
+blieb unter 0,7, der Follower fiel auf Modus 1 zurück. Bei 0,4 streuen die Einzelwerte um
+rund ±38°, der Mittelwert über das Glättungsfenster liegt trotzdem auf wenige Grad. Seitdem
+dreht der Greifer auch für diese Klötze.
+
+**Glättungsfenster und Raten:** Das Fenster 30 kostete bei schnellerem Band zu viel Zeit im
+Bild (Klötze nicht mehr rechtzeitig fertig). 20 Messungen bei Rate 15 sind rund 1,3 s.
+`base_cam` auf Rate 15 = Farbbildrate der L515, `vectoring` auf dieselbe Rate. Log eines
+Laufs mit Interface: keine Kamerameldung, keine verlorenen Bilder — das frühere
+Hardwareproblem bei höheren Raten trat nicht auf.
+
+**Neue Standardwerte:**
+
+| Komponente | Parameter in AICA | alt | neu |
+|---|---|---|---|
+| Vectoring | Glättungsfenster [`smoothing_window`] | 30 | **20** |
+| Priority Handler | Anfahrgeschwindigkeit max (m/s) [`attractor_v_max_mps`] | 0,5 | **0,85** |
+| Priority Handler | Absenkzeit (s) [`t_descend_s`] | 0,9 | **0,7** |
+| Object Follower | 4 Absenken und Greifen: Sinkgeschwindigkeit (m/s) [`descend_speed_mps`] | 0,25 | **0,35** |
+| Object Follower | 6 Orientierung: Mindestgüte Winkel [`orientation_quality_min`] | 0,7 | **0,4** |
+
+`t_descend_s` gerechnet: 0,11–0,15 m / 0,35 m/s + Einschwingen ≈ 0,7 s (nicht neu gemessen).
+
+**Von Hand in AICA** (`einrichtung-projektanwendung.md` §2, §5):
+
+| Baustein | Parameter in AICA | alt | neu |
+|---|---|---|---|
+| Signal Point Attractor | Maximal linear velocity | 0,5 | **0,85** |
+| IK Velocity Controller | Maximal linear velocity | 0,5 | **0,85** |
+| IK Velocity Controller | Command rate limit | 2,0 | **3,0** |
+| Base Kamera | Rate | 10 | **15** |
+| Vectoring | Rate | 20 | **15** |
+
+**Grenzen:** Über 0,85 m/s nicht — UR10e typisch 1 m/s, Impuls- und Leistungsgrenzen der
+Sicherheitskonfiguration, und der Gewinn auf 0,5 m Weg läge unter 0,15 s. Absenken nicht
+über 0,35 m/s: kaum Zeitgewinn, der Arm folgt dabei noch dem Band. Mit `command_rate_limit`
+3,0 steigt das Risiko von C157A2 (L20); bei einem Stopp zuerst die Geschwindigkeit
+zurücknehmen.
+
+**Rechenlast:** Mit Rate 15, Interface im Browser und `rviz2` war der Rechner voll (Last 8,2
+auf 8 Kernen). Die 500-Hz-Schleife der Hardware fiel mehrmals je Minute auf 54–89 %; um 14:02
+lief die RTDE-Verbindung einmal über (98 Meldungen, Follower kurz ohne frischen
+`robot_state`, danach normal). Im Betrieb `rviz2` und zusätzliche Browser-Ansichten schließen;
+Claude bzw. Mitlese-Prozesse nicht parallel laufen lassen. Reicht das nicht, `base_cam` auf
+Rate 12.

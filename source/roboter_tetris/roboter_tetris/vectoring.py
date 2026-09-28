@@ -46,9 +46,10 @@ class Vectoring(LifecycleComponent):
             "So viele Ausreißer in Folge gelten als echte Lageänderung — etwa ein "
             "umgekippter Klotz — und starten den Track neu. (D21)")
         self.add_parameter(
-            sr.Parameter("smoothing_window", 30, sr.ParameterType.INT),
+            sr.Parameter("smoothing_window", 20, sr.ParameterType.INT),
             "Anzahl Messungen, über die Position, Orientierung und Abmessungen "
-            "gemittelt werden — erst ab dem Einschwingen.")
+            "gemittelt werden — erst ab dem Einschwingen. 20: bei Rate 15 rund "
+            "1,3 s, auch bei schnellerem Band (Nachtrag 13 / L29).")
         self.add_parameter(
             sr.Parameter("track_expiry_s", 1.0, sr.ParameterType.DOUBLE),
             "Nach dieser Zeit (s) ohne Messung wird ein EINSCHWINGENDER Track "

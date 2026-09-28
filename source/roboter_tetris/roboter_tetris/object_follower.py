@@ -58,7 +58,9 @@ DESCRIPTIONS = {
                        "des Vorhalts auf 10 s oder mehr.",
     "use_block_orientation": "Modus 2: entlang des Klotzwinkels greifen statt entlang "
                              "der geschätzten Bandrichtung (Modus 1).",
-    "orientation_quality_min": "Mindestgüte (S4 Feld 16, 0...1) für den Klotzwinkel (D11).",
+    "orientation_quality_min": "Mindestgüte (S4 Feld 16, 0...1) für den Klotzwinkel (D11). "
+                               "0,4: kleine hochkant stehende Klötze blieben unter 0,7 "
+                               "(Nachtrag 13 / L29).",
     "max_yaw_deviation_deg": "Modus 2: größte Drehung aus der Grundstellung (Bandrichtung, "
                              "wie Modus 1) in Grad, 45 bis unter 90. Ein Rechteck wird über "
                              "die nähere Seite gegriffen, also höchstens 45°; bis zu diesem "
@@ -69,11 +71,11 @@ DESCRIPTIONS = {
     "flange_to_grip_point_m": "Flansch -> Griffpunkt (m), gemessen 0,235 - nicht der TCP "
                               "der UR-Steuerung (215 mm) (Nachtrag 6 / Z7).",
     "min_grip_height_m": "Untere Grenze der Greifhöhe über dem Band (m), Mitte der Auflage. "
-                         "0,016: geschlossene Backenspitze 6 mm über dem Band, Flansch 0,3046 m "
-                         "1 mm über ws_z_min 0,3036 (Nachtrag 13 / L26). Nur zusammen mit "
+                         "0,011: geschlossene Backenspitze 1 mm über dem Band, Flansch 0,2996 m "
+                         "1 mm über ws_z_min 0,2986 (Nachtrag 13 / L28). Nur zusammen mit "
                          "ws_z_min senken, sonst bricht das Gate jeden flachen Griff ab.",
     "descend_speed_mps": "Sinkgeschwindigkeit (m/s). Gekoppelt an t_descend_s des "
-                         "priority_handler (Nachtrag 10 / J2; 0,25 seit L24).",
+                         "priority_handler, 0,7 s (Nachtrag 10 / J2; 0,35 seit L29, vorher 0,25).",
     "lift_clearance_m": "So hoch (m) über die Greifhöhe fährt der Roboter beim Heben "
                         "noch mit dem Band mit.",
     "tol_along_m": "Greif-Freigabe: Abweichung entlang des Bandes (m) (D3, B18).",

@@ -113,7 +113,7 @@
       "description": "Arbeitsraum des Flansches in world (m), B10 - nicht die Greifzone. Default = Safety/workspace_bounds.json, am Aufbau festgelegt (Nachtrag 13 / L14). Pflicht: leer -> configure scheitert.",
       "parameter_name": "ws_z_min",
       "parameter_type": "double",
-      "default_value": "0.3036",
+      "default_value": "0.2986",
       "dynamic": false
     },
     {
@@ -222,10 +222,10 @@
     },
     {
       "display_name": "4 Absenken und Greifen: Sinkgeschwindigkeit (m/s) [descend_speed_mps]",
-      "description": "Sinkgeschwindigkeit (m/s). Gekoppelt an t_descend_s des priority_handler (Nachtrag 10 / J2; 0,25 seit L24).",
+      "description": "Sinkgeschwindigkeit (m/s). Gekoppelt an t_descend_s des priority_handler, 0,7 s (Nachtrag 10 / J2; 0,35 seit L29, vorher 0,25).",
       "parameter_name": "descend_speed_mps",
       "parameter_type": "double",
-      "default_value": "0.25",
+      "default_value": "0.35",
       "dynamic": true
     },
     {
@@ -270,10 +270,10 @@
     },
     {
       "display_name": "4 Absenken und Greifen: Greifhöhe min über Band (m) [min_grip_height_m]",
-      "description": "Untere Grenze der Greifhöhe über dem Band (m), Mitte der Auflage. 0,016: geschlossene Backenspitze 6 mm über dem Band, Flansch 0,3046 m liegt 1 mm über der Arbeitsraum-Untergrenze 0,3036 (Nachtrag 13 / L26). Die Auflage reicht von 6 bis 26 mm und deckt einen flachen 25-mm-Klotz ab. Nur zusammen mit ws_z_min senken, sonst bricht das Gate jeden flachen Griff ab.",
+      "description": "Untere Grenze der Greifhöhe über dem Band (m), Mitte der Auflage. 0,011: geschlossene Backenspitze 1 mm über dem Band, Flansch 0,2996 m liegt 1 mm über der Arbeitsraum-Untergrenze 0,2986 (Nachtrag 13 / L28). Klötze bis 22 mm an der Untergrenze, darüber auf halber Höhe. Nur zusammen mit ws_z_min senken, sonst bricht das Gate jeden flachen Griff ab.",
       "parameter_name": "min_grip_height_m",
       "parameter_type": "double",
-      "default_value": "0.016",
+      "default_value": "0.011",
       "dynamic": true
     },
     {
@@ -358,10 +358,10 @@
     },
     {
       "display_name": "6 Orientierung: Mindestgüte Winkel [orientation_quality_min]",
-      "description": "Mindestgüte (S4 Feld 16, 0...1) für den Klotzwinkel (D11).",
+      "description": "Mindestgüte (S4 Feld 16, 0...1) für den Klotzwinkel (D11). 0,4: kleine hochkant stehende Klötze blieben unter 0,7 (Nachtrag 13 / L29).",
       "parameter_name": "orientation_quality_min",
       "parameter_type": "double",
-      "default_value": "0.7",
+      "default_value": "0.4",
       "dynamic": true
     },
     {

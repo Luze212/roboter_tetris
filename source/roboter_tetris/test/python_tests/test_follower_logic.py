@@ -296,6 +296,8 @@ def test_mode_2_uses_the_block_angle_only_with_enough_quality():
     assert abs(desired_yaw(_s4(1.0, 0.0, orientation=turned, quality=0.9), mode2)
                - turned) < 1e-12
     assert abs(desired_yaw(_s4(1.0, 0.0, orientation=turned, quality=0.5), mode2)
+               - turned) < 1e-12                      # 0.4 is enough since L29
+    assert abs(desired_yaw(_s4(1.0, 0.0, orientation=turned, quality=0.3), mode2)
                - belt) < 1e-12
 
 

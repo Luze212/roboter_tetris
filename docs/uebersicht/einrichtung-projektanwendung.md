@@ -1,6 +1,6 @@
 # Einrichtung der Projektanwendung in AICA
 
-**Stand 28.09.2026: finaler Build (24.09.), Kalibrierung der Basiskamera in §10.** Was beim Anlegen der AICA-Anwendung für den
+**Stand 28.09.2026: finaler Build (24.09.), Nachjustierung am Aufbau (L28, L29), Kalibrierung der Basiskamera in §10.** Was beim Anlegen der AICA-Anwendung für den
 Pick im Lauf gesetzt werden muss — und warum die AICA-Defaults nicht taugen.
 Kopplungen zwischen Parametern: `systemgraph.md`.
 
@@ -50,16 +50,16 @@ synchronisiert, der Versatz sieht direkt danach klein aus und wächst erst spät
 |---|---|---|---|---|
 | Signal Point Attractor | `linear_gains` | `[1.0]` | **`[5.0]`** | Bei K = 1 läuft der Flansch einem 0,13-m/s-Band 70 mm hinterher, und das Einschwingen (3/K) dauert 3 s. Mit K = 5 und Vorhalt 0,24 s rund 1 mm Längsfehler (Nachtrag 13 / L18). Isotrop halten — ein Wert. |
 | Signal Point Attractor | `angular_gains` | `[1.0]` | **`[5.0]`** | Sonst dauert das Eindrehen auf gedrehte Klötze rund 3 s (L26). |
-| Signal Point Attractor | `max_linear_velocity` | 0,5 m/s | **0,5** | |
+| Signal Point Attractor | `max_linear_velocity` | 0,5 m/s | **0,85** | zusammen mit dem IK-Controller (L29) |
 | Signal Point Attractor | `max_angular_velocity` | 0,5 rad/s | **1,0** | 45° Drehung in rund 0,9 s statt 1,5 s (L26). |
 | Signal Point Attractor | `rate` | 10 Hz | **50** | glatte Bewegung beim Folgen |
-| IK Velocity Controller | `max_linear_velocity` | 0,25 m/s | **0,5** | **Die bindende Grenze** — sie klemmt unabhängig vom Attractor. 0,5 m/s verkürzt Ablegen und Rückweg um rund 1 s (L24). |
+| IK Velocity Controller | `max_linear_velocity` | 0,25 m/s | **0,85** | **Die bindende Grenze** — sie klemmt unabhängig vom Attractor. 0,5 m/s verkürzten Ablegen und Rückweg um rund 1 s (L24), 0,85 m/s seit L29; darüber nicht (UR10e typisch 1 m/s). |
 | IK Velocity Controller | `max_angular_velocity` | 0,25 rad/s | **1,0** | wie am Attractor |
-| IK Velocity Controller | `command_rate_limit` | ∞ | **2,0** | Gelenkbeschleunigung in rad/s². Ohne Grenze springt der Arm beim Anfahren aus dem Stand — Schutzstopp am Bandrand (L20). |
+| IK Velocity Controller | `command_rate_limit` | ∞ | **3,0** | Gelenkbeschleunigung in rad/s². Ohne Grenze springt der Arm beim Anfahren aus dem Stand — Schutzstopp am Bandrand (L20); 2,0 bis L29. Bei C157A2 zuerst die Geschwindigkeit zurücknehmen. |
 | UR-Steuerung (Pendant, Installation) | Nutzlast | 2,8 kg | **1,3 kg**, Schwerpunkt 12 / 24 / 45 mm | gemessen mit dem Assistenten der Steuerung (L20) |
 
 **Im `priority_handler` passen die Standardwerte dazu:** `attractor_gain` 5 =
-`linear_gains`, `attractor_v_max_mps` 0,5 = das kleinere `max_linear_velocity` aus
+`linear_gains`, `attractor_v_max_mps` 0,85 = das kleinere `max_linear_velocity` aus
 Attractor und IK-Controller. Er rechnet damit die Anfahrzeit; werden die Bausteine
 anders eingestellt, müssen diese beiden Werte mitgehen.
 
@@ -118,8 +118,8 @@ empfangen ihre Bilder.
 
 | Komponente | Rate | Anmerkung |
 |---|---|---|
-| `base_cam` | 10 Hz (Default) | rund 8–9 Messungen je Sekunde |
-| `vectoring` | **20 Hz** | |
+| `base_cam` | **15 Hz** | = Farbbildrate der Kamera; Hardware ohne Befund (L29) |
+| `vectoring` | **15 Hz** | an `base_cam` angepasst (L29) |
 | `priority_handler` | **20 Hz** | |
 | `object_follower` | **50 Hz** | glatte Zielpose für den Attractor |
 | `robotiq_gripper` | **20 Hz** | Takt, mit dem `motion_done`/`has_object` gelesen werden |
@@ -191,7 +191,7 @@ daneben.
 | Greifhöhe Flansch, 100-mm-Klotz stehend | **≈ 339 mm** | 53,6 + 50 + 235 |
 | Freihöhe Flansch (Transfer, Abbruch) = `transfer_height_m` | **490 mm** | Band + stehender Klotz + gehaltener Klotz + Luft (Nachtrag 10 / J1) |
 | Ablagepose Flansch | x −316,49 · y +476,21 · z +419,71 mm, Gier 94,2° | am Aufbau angefahren, im Betrieb bestätigt |
-| Arbeitsraum `ws_*` | x −1,0 … −0,30 · y −0,32 … +0,48 · z 0,3036 … 0,60 m | abgefahren (L14), z min L26; `Safety/workspace_bounds.json` |
+| Arbeitsraum `ws_*` | x −1,0 … −0,30 · y −0,32 … +0,48 · z 0,2986 … 0,60 m | abgefahren (L14), z min L28; `Safety/workspace_bounds.json` |
 | Greifzone (`priority_handler`) | x −1,0 … −0,53 · y +0,445 … −0,32 m | der Arbeitsraum auf dem Band (L21) |
 | Bildausschnitt `base_cam` | `roi_x` 342, `roi_width` 618, `roi_y` 60, `roi_height` 580 | Bandrand am Roboter bis x −1,0; der Greifer ragt nicht ins Bild (L21) |
 | Bandrichtung | praktisch die y-Achse, Lauf nach −y | |
@@ -202,15 +202,15 @@ daneben.
 | Extrinsik Basiskamera | −0,7787 · 0,7934 · 0,9163 · 179,46° · 0,45° · 179,76° | Handkalibrierung L6 in `world`, in Kraft (L27); steht in `Extrinsics/base_cam_extrinsics.json` (Parameter „Kalibrierdatei“), als Rückfall in `cal_*`; Abweichung höchstens 6 mm |
 | `belt_surface_z_mm` / `top_depth_bias_mm` (`base_cam`) | 53,6 / 11,5 | Standardwerte (L6) |
 | Bild der Basiskamera | y ≈ 0,46 … 1,03 m | L7 |
-| Prozesszeiten | Einschwingen 0,23–0,33 s · Absenken 0,78–0,93 s (0,25 m/s) · Greifen 0,63–0,83 s · Ablegen 1,3–2,2 s (0,5 m/s) | `priority_handler` `t_settle_s` 0,4, `t_descend_s` 0,9, `t_grasp_s` 0,8, Faktor 1,0; Greifebene y ≈ +0,02 (L24) |
-| Flacher Klotz 50 × 75 × 25 mm | gemessen 23,8 mm; Oberseite roh 11–15 mm über dem Band | erkannt über `min_contour_area` 1000 bei `min_obj_height` 15; greifbar ab 20 mm (L24) |
+| Prozesszeiten | Einschwingen 0,23–0,33 s · Absenken 0,78–0,93 s (0,25 m/s) · Greifen 0,63–0,83 s · Ablegen 1,3–2,2 s (0,5 m/s) | gemessen in L24; `priority_handler` `t_settle_s` 0,4, `t_grasp_s` 0,8, Faktor 1,0. Seit L29 Fahrt 0,85 m/s und Absenken 0,35 m/s, dazu `t_descend_s` 0,7 gerechnet (nicht neu gemessen) |
+| Flacher Klotz 50 × 75 × 25 mm | gemessen 23,8 mm; Oberseite roh 11–15 mm über dem Band | erkannt über `min_contour_area` 1000 bei `min_obj_height` 10 (L28; 15 verlor sie auf der tieferen Bandseite); greifbar ab 20 mm (L24) |
 | Klotzwinkel der Basiskamera | im Lauf kein Wechsel der langen Kante, Güte 1,00, auch bei fast quadratischer Oberseite | L26 |
 | Takt bei dichter Folge | etwa ein Klotz je 7 s | L24 |
 
 **Greifhöhe:** `flansch_z_greifen = 53,6 + max(klotzhoehe/2, 16) + 235` [mm]. Die
-Untergrenze 16 mm (`min_grip_height_m`) hält die geschlossene Backenspitze 6 mm
-über dem Band, 1 mm über der Arbeitsraumgrenze `ws_z_min` 0,3036. Klötze ab 20 mm
-Höhe werden gegriffen, bis 32 mm an der Untergrenze, darüber auf halber Höhe.
+Untergrenze 11 mm (`min_grip_height_m`, L28) hält die geschlossene Backenspitze 1 mm
+über dem Band, 1 mm über der Arbeitsraumgrenze `ws_z_min` 0,2986. Klötze ab 20 mm
+Höhe werden gegriffen, bis 22 mm an der Untergrenze, darüber auf halber Höhe.
 **Greifhöhe min und `ws_z_min` nur gemeinsam ändern** — sonst bricht das Gate jeden
 flachen Griff ab.
 
@@ -231,15 +231,16 @@ tragen den Namen ebenfalls in Klammern.
 |---|---|---|
 | `ws_x_min` / `ws_x_max` | −1,000 / −0,300 | abgefahren bis −0,530; erweitert für die Ablage (x −0,316) |
 | `ws_y_min` / `ws_y_max` | −0,320 / +0,480 | Bandende / abgefahren bis +0,445, erweitert für die Ablage (y +0,476) |
-| `ws_z_min` / `ws_z_max` | 0,3036 / 0,600 | Backenspitze 5 mm über dem Band / darüber Singularität |
+| `ws_z_min` / `ws_z_max` | 0,2986 / 0,600 | Backenspitze auf Bandhöhe (L28) / darüber Singularität |
 | `observe_x` / `observe_y` | −0,816 / +0,35 | Bandmitte am Anfang der Greifzone; beim Anfahren wartet der Arm am Zonenanfang |
 | `observe_z` | 0,45 | Folgehöhe |
 | `observe_yaw_deg` | 90° | Backen quer zur Bandrichtung (Grundstellung), nahe der Ablage-Orientierung |
 | `lead_time_s` | 0,24 | Vorhalt ≈ 1/K, eingemessen über `err_laengs` (L18) |
 | `max_extrapolation_s` / `target_timeout_s` | 1,0 / 1,5 | Deckel der Vorhersage über dem Alter der Messung (L23) |
-| `descend_speed_mps` | 0,25 | passt zu `t_descend_s` 0,9 im `priority_handler` (Nachtrag 10 / J2, L24) |
-| `min_grip_height_m` | 0,016 | siehe Greifhöhe (§8) |
+| `descend_speed_mps` | 0,35 | passt zu `t_descend_s` 0,7 im `priority_handler` (Nachtrag 10 / J2, L29) |
+| `min_grip_height_m` | 0,011 | siehe Greifhöhe (§8), L28 |
 | `use_block_orientation` | an | im Winkel des Klotzes greifen (L25, L26) |
+| `orientation_quality_min` | 0,4 | kleine hochkant stehende Klötze blieben unter 0,7 (L29) |
 | `max_yaw_deviation_deg` | 50 | höchstens ±45° aus der Grundstellung, Hysterese bis 50° (L25) |
 | `gripper_yaw_offset_deg` | 0 | die Grundstellung greift richtig |
 

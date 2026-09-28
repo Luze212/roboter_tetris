@@ -109,8 +109,11 @@ class BaseCam(LifecycleComponent):
                            "Die Kamera liest die Klotzoberseiten um diesen Wert zu tief (mm); er "
                            "wird von der Oberseitentiefe abgezogen. Gemessen 23.09.2026 an 25- "
                            "und 100-mm-Klötzen: 11,5 ± 1,6 mm (Nachtrag 13).")
-        self.add_parameter(sr.Parameter("min_obj_height", 15.0, sr.ParameterType.DOUBLE),
-                           "Mindesthöhe eines Objekts in mm")
+        self.add_parameter(sr.Parameter("min_obj_height", 10.0, sr.ParameterType.DOUBLE),
+                           "Mindesthöhe eines Objekts in mm, auf der rohen Tiefe vor "
+                           "top_depth_bias_mm. 10: flache 25-mm-Klötze liegen roh nur "
+                           "11-15 mm über dem Band und fielen mit 15 auf der tieferen "
+                           "Bandseite heraus (Nachtrag 13 / L28; 9 gab Fehlerkennungen, L24).")
         self.add_parameter(sr.Parameter("max_obj_height_mm", 150.0, sr.ParameterType.DOUBLE),
                            "Maximale Objekthöhe in mm")
         self.add_parameter(sr.Parameter("z_offset", 0.0, sr.ParameterType.DOUBLE),

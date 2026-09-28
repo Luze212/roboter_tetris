@@ -40,8 +40,8 @@ def _s4(t, y, x=BELT_X, tid=1, has=True, plane=0.9, height=0.1):
 
 def test_grip_height_is_mid_block_but_never_too_close_to_the_belt():
     assert abs(PARAMS.grip_flange_z(0.100) - (0.0536 + 0.050 + 0.235)) < 1e-12
-    # Floor 16 mm (pad centre): the closed jaw tip stays 6 mm above the belt (L26).
-    assert abs(PARAMS.grip_flange_z(0.020) - (0.0536 + 0.016 + 0.235)) < 1e-12
+    # Floor 11 mm (pad centre): the closed jaw tip stays 1 mm above the belt (L28).
+    assert abs(PARAMS.grip_flange_z(0.020) - (0.0536 + 0.011 + 0.235)) < 1e-12
 
 
 def _following_core(params=PARAMS, y=-0.02, plane=0.9, height=0.1):
@@ -70,7 +70,7 @@ def test_descend_starts_after_stable_cycles_within_tolerance():
     assert out.state == STATE_DESCEND          # the 10th
     for k in range(10, 20):
         out = _on_block(core, k * 0.01, -0.02 - 0.001 * k)
-    assert abs(out.target.z - (0.60 - 0.25 * 0.10)) < 1e-9     # 0.25 m/s for 0.1 s (L24)
+    assert abs(out.target.z - (0.60 - 0.35 * 0.10)) < 1e-9     # 0.35 m/s for 0.1 s (L29)
 
 
 def test_crossing_the_grasp_plane_before_descending_is_outcome_3():
