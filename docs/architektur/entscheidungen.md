@@ -1,7 +1,8 @@
 # Entscheidungsprotokoll Robotetris
 
 Protokoll der Architekturentscheidungen, Thema für Thema und in Nachträgen
-fortgeschrieben — vom Konzept (05.09.2026) bis zum finalen Build (24.09.2026).
+fortgeschrieben — vom Konzept (05.09.2026) über den finalen Build (24.09.2026) bis zur
+Kalibrierung der Basiskamera (28.09.2026).
 
 **Endstand in Kürze.** Die Kette `base_cam` → `vectoring` → `priority_handler` →
 `object_follower` → Signal Point Attractor → IK Velocity Controller greift Klötze
@@ -10,8 +11,9 @@ Bandgeschwindigkeit wird geschätzt (−127,9 mm/s, L9, L10), die Erreichbarkeit
 gemessenen Prozesszeiten gerechnet (L24), gedrehte Klötze im Winkel gegriffen
 (höchstens ±45°, L25), flache ab 20 mm (L24, L26). Alle Parameter der eigenen
 Komponenten sind Standardwert im Paket; von Hand gesetzt werden nur die
-AICA-Bausteine, Raten und die UR-Nutzlast (L26). Die Basiskamera läuft mit einer
-Übergangskalibrierung (L6). Wo ein Eintrag unten einen damals ungeklärten Punkt
+AICA-Bausteine, Raten und die UR-Nutzlast (L26). Die Basiskamera kalibriert ein eigenes
+automatisches Verfahren mit dem Roboter (L27): über drei Tage auf unter 1 mm wiederholbar,
+im Greiflauf so gut wie die Handkalibrierung L6, die in Kraft bleibt. Wo ein Eintrag unten einen damals ungeklärten Punkt
 nennt, steht sein Ausgang dabei.
 
 **Lesereihenfolge:** Die Themen legen die Architektur fest, die Nachträge
@@ -32,7 +34,7 @@ frühere Festlegung berührt; an der alten Stelle steht dann ein Verweis.
 | Nachtrag 10 | Bau `object_follower` 4c/4d: J1 Freihöhe, J2 Absenkzeit, J3–J8 |
 | Nachtrag 11 | Bau `interface_streamer`: V1–V3 |
 | Nachtrag 12 | Inbetriebnahme am Aufbau (22.09.): K1–K6, u. a. 180° `base`/`world`, falsche Gier der Altkalibrierung |
-| **Nachtrag 13** | **Audit und Aufbau (23./24.09.):** L1 Audit, L2 Datenrate/Latenz, L3 Hardware-Takt, L4 Greifer im Bild, L5 Roboterkamera, L6 B23 abgeschlossen (Neigung, Parallaxe, neue Extrinsik), L7 Bandgeschwindigkeit, L8 Standardwerte, L9 Block 3 und Pool-Mindestgeschwindigkeit, L10 Weiterführung hinter dem Bild, L11 Roboterkamera und Hand-Auge, L12 Nah-Gate ohne fehlende Tiefe, L13 Erkennung der Roboterkamera, L14 Arbeitsraum und Greifzone, L15 Standardwerte für Arbeitsraum und Beobachtungspose (24.09.), L16 Kameras 15 Bilder/s, Infrarot aus (24.09.), L17 Follower ohne Signale, Fake-Zeitstempel (24.09.), L18 Block 7 gedrosselt bestanden (24.09.), **L19 erste echte Griffe im Lauf** (24.09.), L20 Schutzstopp am Bandrand: Nutzlast und Beschleunigung (24.09.), L21 Greifzone = Arbeitsraum, Bildausschnitt der Basiskamera (24.09.), **L22 Roboterkamera nicht mehr eingebunden** (24.09.), L23 Vorhersagedeckel und pessimistische Erreichbarkeit (24.09.), **L24 Tempo ausgereizt, flache Klötze greifbar** (24.09.), L25 Modus 2 höchstens ±45° aus der Grundstellung (24.09.), **L26 finaler Build** (24.09.) |
+| **Nachtrag 13** | **Audit, Aufbau und Kalibrierung (23.–28.09.):** L1 Audit, L2 Datenrate/Latenz, L3 Hardware-Takt, L4 Greifer im Bild, L5 Roboterkamera, L6 B23 abgeschlossen (Neigung, Parallaxe, neue Extrinsik), L7 Bandgeschwindigkeit, L8 Standardwerte, L9 Block 3 und Pool-Mindestgeschwindigkeit, L10 Weiterführung hinter dem Bild, L11 Roboterkamera und Hand-Auge, L12 Nah-Gate ohne fehlende Tiefe, L13 Erkennung der Roboterkamera, L14 Arbeitsraum und Greifzone, L15 Standardwerte für Arbeitsraum und Beobachtungspose (24.09.), L16 Kameras 15 Bilder/s, Infrarot aus (24.09.), L17 Follower ohne Signale, Fake-Zeitstempel (24.09.), L18 Block 7 gedrosselt bestanden (24.09.), **L19 erste echte Griffe im Lauf** (24.09.), L20 Schutzstopp am Bandrand: Nutzlast und Beschleunigung (24.09.), L21 Greifzone = Arbeitsraum, Bildausschnitt der Basiskamera (24.09.), **L22 Roboterkamera nicht mehr eingebunden** (24.09.), L23 Vorhersagedeckel und pessimistische Erreichbarkeit (24.09.), **L24 Tempo ausgereizt, flache Klötze greifbar** (24.09.), L25 Modus 2 höchstens ±45° aus der Grundstellung (24.09.), **L26 finaler Build** (24.09.), **L27 Kalibrierung der Basiskamera** (25.–28.09.) |
 
 Namensgleichheit: **F1–F3 in Nachtrag 2** und **F1–F6 in Nachtrag 8** sind
 verschiedene Punkte — im Text immer mit Nachtragsnummer zitiert.
@@ -2919,7 +2921,7 @@ per Pendant freifahren.
 
 ---
 
-## Nachtrag 13 — Audit und Aufbau (23./24.09.2026)
+## Nachtrag 13 — Audit, Aufbau und Kalibrierung (23.–28.09.2026)
 
 Ein Audit des Gesamtstands (L1), danach Messungen am Aufbau mit
 `test/tools/signal_reader.py`. Umgesetzt wurde nur, was der Nutzer freigegeben
@@ -3068,6 +3070,8 @@ Griffe, L19).
 Die Werte sind eine **Übergangskalibrierung**; `Calibration/calibration.json`
 (Vorgängerwerte im Rahmen `base`) bleibt unberührt. Für das Kalibrierprojekt (C3):
 180° zwischen `base` und `world`, Kamera senkrecht, Parallaxe in der Detektion.
+**Ausgang (L27):** Die automatische Kalibrierung trifft diese Werte auf rund 3 mm und greift
+gleich gut; sie bleiben als Handkalibrierung in Kraft, in `Extrinsics/base_cam_extrinsics.json`.
 
 ### L7 — Bandgeschwindigkeit, Bandlage
 
@@ -3446,7 +3450,7 @@ Vorgängerprojekt gescheitert ist.**
 
 **Nächste Schritte:** mehrere Klötze nacheinander und kurz hintereinander
 (Priorisierung, Ziel 4), Farben, flache 50-mm-Klötze (Grenzfall Greifhöhe),
-Dauerlauf auf Stabilität der Regelschleife.
+Dauerlauf auf Stabilität der Regelschleife. **Ausgang:** alle erledigt (L24–L26).
 
 ### L20 — Schutzstopp am Bandrand: falsche Nutzlast, Anfahren ohne Beschleunigungsgrenze (24.09.2026)
 
@@ -3807,157 +3811,97 @@ Transferhöhe 0,49 m bestätigt (D12); die Sprungerkennung bleibt bei 0,05 m.
 prüft den neuen Standard; die Referenzaufzeichnung mit den alten Werten festgehalten
 ist mit L25 Takt für Takt identisch — geändert haben sich nur Standardwerte.
 
-### L27 — Kalibrierung der Basiskamera: eigenes Verfahren, Stufe 1 am Aufbau (25.09.2026)
+### L27 — Kalibrierung der Basiskamera (25.–28.09.2026)
+
+**Endstand.** Ein eigenes, automatisches Verfahren kalibriert die Basiskamera mit dem Roboter
+(Projektziel 2). Es ist am Aufbau abgenommen: über drei Tage auf unter 1 mm wiederholbar, im
+Greiflauf so gut wie die Handkalibrierung L6 (7 von 7). **In Kraft bleibt L6** (Nutzer:
+vermutlich minimal besser und seit dem finalen Build erprobt). Ein Kalibrierlauf schreibt
+direkt in die Datei, die `base_cam` liest; die Kalibrieranwendung zeigt die Kamera aus dieser
+Datei als Frame. Bedienung: `einrichtung-projektanwendung.md` §10.
 
 **Ausgang.** Der Branch `Calibration-Working` des Kommilitonen kalibriert vor allem die
-Roboterkamera (Hand-Auge, Board auf dem Band). Die Basiskamera hängt dort am Ende einer
-Kette, ihre Ergebnisse wurden nur in den Container geschrieben und gingen verloren
-(einziger Lauf mit Basiskamera, 12.09.: Position 13 mm neben L6, Drehung nicht erhalten).
-**Entscheidung (Nutzer):** eigenes Verfahren in diesem Paket, **nur für die Basiskamera**.
+Roboterkamera (Hand-Auge, Board auf dem Band); die Basiskamera hängt dort am Ende einer Kette,
+ihre Ergebnisse gingen im Container verloren (einziger Lauf, 12.09.: Position 13 mm neben L6).
+**Entscheidung (Nutzer):** eigenes Verfahren in diesem Paket, **nur für die Basiskamera**;
 `Calibration/*` bleibt unberührt, `Calibration/calibration.json` ist überholt. **Alle Daten
 liegen im Repo:** Die gültige Kalibrierung ist `Extrinsics/base_cam_extrinsics.json`, die
-`base_cam` über den Parameter „Kalibrierdatei“ liest. Eine neue Kalibrierung wird aus dem
-Container ins Repo kopiert und eingebaut. Die Datei trägt bis auf Weiteres exakt die
-L6-Werte, leer oder unlesbar gelten `cal_*`.
+`base_cam` über den Parameter „Kalibrierdatei“ liest; leer oder unlesbar gelten `cal_*` (L6).
 
-**Verfahren.** Stufe 1 (`base_cam_calibration`, Betriebsart `stufe1`): Der Greifer hält
-ein AprilGrid in das Bild der Basiskamera, der Block fährt einen Posenplan ab und löst
-Kamera → `world` und Board → Flansch gemeinsam. Stufe 2 (`stufe2`, `pruefen`): ohne
-Bewegung aus Referenzmarken am Bandgestell. Code: `basecam_extrinsics.py` (Mathematik),
-`calibration_run.py` (Ablauf), Anwendung `docs/uebersicht/anwendung-kalibrierung-basiskamera.yaml`,
-Bedienung in `einrichtung-projektanwendung.md` §10.
+**Verfahren.** Block `base_cam_calibration` (`basecam_extrinsics.py` Mathematik,
+`calibration_run.py` Ablauf), eigene Anwendung `uebersicht/anwendung-kalibrierung-basiskamera.yaml`.
+Betriebsarten:
+- `stufe1`: Der Greifer hält ein AprilGrid ins Bild der Basiskamera; der Block fährt 40 Posen,
+  4 Prüfposen und zum Schluss die erste noch einmal (Rutschprüfung), etwa 4 min. Gelöst werden
+  Farbkamera → `world` und Board → Flansch gemeinsam (Startwert Hand-Auge oder die bisherige
+  Kalibrierung, dann Ausgleich über alle Tag-Ecken); daraus die Lage für `base_cam` (unten).
+  Geschrieben wird nur innerhalb der Gütegrenzen: Bildfehler ≤ 1 px, Prüfposen ≤ 2 mm,
+  Rutschen ≤ 0,5 mm / 0,2°. Rohdaten schreibt jeder Lauf (`raw_file`).
+- `stufe2`, `pruefen`: ohne Bewegung aus Referenzmarken am Bandgestell (nicht angebracht, s. u.).
+- `anzeigen`: gibt die Kamera der Kalibrierdatei als Pose aus, ein `SignalToTf` macht daraus
+  den Frame `basiskamera`; die Datei wird beobachtet, der Frame folgt einem neuen Lauf.
 
 **Am Aufbau festgelegt** (Begründungen im Code):
-- Board: calib.io-AprilGrid 7 × 11, 36h11. OpenCV liest die Tags um 180° gedreht. Die
-  Tags werden nach Schärfen gelesen und die Ecken über die Board-Lage fein nachgesetzt
-  (0,2 px statt 2 px).
-- **Die Greifer-Hardware darf nicht verändert werden** (auch von anderen genutzt). Eine
-  Gummihülle am Board klemmt es fest. Trotzdem bewegt sich das Board im Griff, sobald es
-  gekippt wird (Lauf 1: 0,5°). Deshalb **verschiebt der Plan nur und dreht um die
-  Hochachse**; die dann nicht beobachtbare Kamerahöhe kommt aus dem Band im Tiefenbild.
-- Posenplan klein: Flansch höchstens 24 cm von der Startpose, **Untergrenze z 0,34 m**
-  (Handgelenk, `min_flange_z_m` in der Anwendung). Greifkraft in der Anwendung 100 %.
-- Jeder Lauf schreibt Rohdaten, auch wenn eine Gütegrenze greift.
+- Board: calib.io-AprilGrid 7 × 11, 36h11; OpenCV liest die Tags um 180° gedreht. Gelesen
+  nach Schärfen, die Ecken über die Board-Lage nachgesetzt (0,2 px statt 2 px).
+- **Die Greifer-Hardware darf nicht verändert werden** (auch von anderen genutzt): Eine
+  Gummihülle am Board klemmt es. Gekippt bewegt es sich trotzdem im Griff (Lauf 1: 0,5°) —
+  der Plan **verschiebt nur (±8 cm) und dreht um die Hochachse (±20°)**; die so nicht
+  beobachtbare Kamerahöhe kommt aus dem Band im Tiefenbild.
+- Flansch höchstens 24 cm von der Startpose, **Untergrenze z 0,34 m** (Handgelenk), Greifkraft
+  100 % — beides in der Anwendung gesetzt.
 
-**Ergebnis.** Läufe 2 und 3: 0,37 px, Prüfposen 0,5 mm, untereinander auf Bruchteile eines
-Millimeters gleich; Lage auf dem Band gegen L6 2,2–8,9 mm über den Bildausschnitt (im Mittel
-4,4 mm). **Befund: Das Tiefenbild der L515 ist gegen ihr Farbbild um 1,0–1,8° verkippt**
-(um die waagerechte Bildachse) **und liest am Ort des Boards 5,5–13,5 mm zu tief**, mit der
-Bildzeile wachsend (13 Board-Aufnahmen, `architektur/bilder/2026-09-25-basiskamera-kalibrierung/`).
-`base_cam` kombiniert Farbpixel und Tiefe. Mit der Lage der Farbkamera allein wären die
-Klotzhöhen am unteren Bildrand bis zu rund 13 mm falsch, und eine starre Ersatz-Kalibrierung
-reicht nicht. **L6 bleibt deshalb aktiv, die Kalibrierdatei ist unverändert.**
+**Befund: Das Tiefenbild der L515 ist gegen ihr Farbbild verkippt.** Dieselbe Board-Ebene
+über die Tags und über die Tiefe gemessen (13 Aufnahmen, 0,53–0,85 m): 1,0–1,8° um die
+waagerechte Bildachse, am Ort des Klotzes 5,5–13,5 mm zu tief, mit der Bildzeile wachsend.
+Ausgeschlossen: Maßstab von Board oder Brennweite (s = 0,9991), Helligkeit (≤ 0,5 mm), ein
+gedrehtes Tiefenbild (Umriss 2–7 px versetzt, eine Drehung ergäbe 22 px) — der Fehler steckt
+im Tiefenwert. **Modell M1s** (Nutzer): `e = c0 + c1·X + c2·Y + c3·z` in dem, was `base_cam`
+hat (X, Y, z im Kamerarahmen, ohne Entzerrung), c = 3,715 mm / 3,359 / 21,812 / 4,427 mm/m;
+je Aufnahme ohne diese angepasst höchstens 1,5 mm, rms 0,7 mm (ohne Modell 5,5–13,4 mm; M1
+ohne Maßstab 2,1 mm, M2 mit Bildmuster 1,3 mm bei sieben Parametern). **Die Querneigung des
+Bandes ist echt:** allein aus dem Farbbild über neun Board-Lagen 0,64° quer und 0,25° längs,
+leicht gewölbt (−3,4 … +2,1 mm); B17 fand 0,39° in derselben Richtung. Mit der Lage der
+Farbkamera allein wären die Klotzhöhen von `base_cam` am unteren Bildrand bis zu rund 13 mm
+falsch; L6 hat Verkippung der Tiefe und Bandneigung über die Bandebene aufgenommen.
 
-**Nachprüfung (27.09.2026, am Schreibtisch).** Die Neigungen der Tabelle lassen sich exakt
-nachrechnen. Berichtigt: (a) Die zuerst genannten „5–8 mm zu tief“ sind der Abstand der beiden
-Ebenen im Lot, also nahe der optischen Achse; am Ort des Klotzes ist der Fehler größer (siehe
-oben). (b) „Gegen L6 2–3 mm“ war das Minimum; `gegen_vorher_band_mm` im Bericht ist das
-Maximum. L6 hat die Verkippung der Tiefe mit aufgenommen (Neigung aus der Bandebene im
-Tiefenbild): Unter L6 liegt das Band im Tiefenbild eben, unter der Farb-Lage ist es 1,08°
-längs geneigt. (c) Von den Greiferposen aus Lauf 3 tragen 28 von 44 eine Tiefe
-(0,49–0,59 m); in der obersten Lage (Board ≈ 0,44 m unter der Kamera) lieferte die L515
-über dem Board keine Tiefe — am Aufbau klären. (d) Die Querneigung des Bandes (0,39°) liegt in
-der anderen Achse und erklärt die Verkippung nicht.
+**Lösung: eine Lage für die Sicht von `base_cam`.** Entscheidung (Nutzer, 27.09.):
+`base_cam` bleibt unverändert — Ziel 2 verlangt ein schnelles, wiederholbares Verfahren,
+nicht mehr Genauigkeit als L6, und das greifende System wird nicht angefasst. `basecam_pose`
+baut die Lage wie L6, nur automatisch: **Neigung und Höhe** aus der Bandebene im Tiefenbild;
+**Gier und x/y** aus Punktpaaren auf Arbeitshöhe (Band, 25, 50, 100 mm) im Bildausschnitt —
+wo die Farb-Lage einen Punkt sieht, gegen wo `base_cam` ihn mit der vom Modell vorhergesagten
+Tiefe hinlegt. Auf Arbeitshöhe angepasst werden muss: auf Greiferhöhe lag der Fehler auf dem
+Band bei bis zu 12 mm. **Geprüft** an 12 Board-Aufnahmen auf Band und Klotz (Modell je
+Aufnahme ohne diese): Lage 3,3 mm im Mittel, höchstens 7,0 mm (L6: 4,3 / 8,4 mm); Board-Höhe
+über das Band auf 1,8 mm gleichmäßig (L6: 1,3), 100-mm-Klotz 100,0 mm (L6: 99,9). In den
+unteren Ecken des Bildausschnitts bleiben bei beiden rund 11 mm — die Grenze einer starren
+Lage ohne Entzerrung und Tiefenkorrektur in `base_cam`. **Empfindlichkeit:** Varianten des
+Modells verschieben die Lage auf dem Band um höchstens 0,1 mm, ganz ohne Modell um 0,7 mm —
+der Gewinn gegenüber L6 kommt aus der Farb-Lage (39 Posen statt fünf Antastpunkte).
+Werkzeuge: `test/tools/basecam_kalibrierung.py` rechnet eine Kalibrierung aus Rohdaten nach,
+`test/tools/b23_compare.py eval … --aktiv … --vergleich …` vergleicht Kalibrierdateien an
+angetasteten Punkten.
 
-**Modell des Tiefenfehlers (27.09.2026, am Schreibtisch).** Auswertung und Zahlen:
-`modell_tiefenfehler.py` und LIESMICH im Messordner. Ausgeschlossen sind ein Maßstabsfehler
-von Board oder Brennweite (Stufe 1 mit freiem Maßstab: s = 0,9991, die Farbabstände stimmen
-auf unter 1 mm), die Helligkeit (≤ 0,5 mm) und ein gedrehtes Tiefenbild (Umriss nur 2–7 px
-gegen das Farbbild versetzt, eine starre Drehung ergäbe 22 px). Der Fehler steckt im
-Tiefenwert.
+**Abnahme am Aufbau (28.09.2026).** Kriterium (Nutzer): mindestens so gut wie L6, Punkt für
+Punkt (Lage im Mittel höchstens 1 mm und nirgends mehr als 2 mm schlechter, Höhe im Mittel
+±2 mm), durch Antasten und Greiflauf. **Das Antasten entfiel aus Zeitgründen, die Abnahme
+stützt sich auf den Greiflauf (Nutzer).** Kalibrierlauf: 40 Posen, 0,34 px, Prüfposen 0,54 mm,
+Rutschen 0,04 mm; gegen L6 3,1 mm im Mittel, 3,8 mm höchstens auf dem Band. **Wiederholbar:**
+gegen den Lauf vom 25.09. 0,3 / 0,5 / 0,8 mm in x/y/z und ≤ 0,03°, auf dem Band 0,9 mm im
+Mittel — die Kamera stand, das Verfahren reproduziert sich über drei Tage. **Greiflauf** mit
+der neuen Kalibrierung in `base_cam`: 7 von 7 Klötzen gegriffen und abgelegt, kein Fehlgriff.
 
-**Entscheidung (Nutzer): Modell M1s** — die gemessene Tiefe je Pixel wird um
-`e = c0 + c1·X + c2·Y + c3·z` korrigiert (X, Y, z im Kamerarahmen wie in `base_cam`, ohne
-Entzerrung; c = 3,715 / 3,359 / 21,812 / 4,427 mm, mm/m). Median-Rest je Aufnahme, wenn sie
-beim Anpassen fehlt: höchstens 1,5 mm, rms 0,7 mm (ohne Korrektur 5,5–13,4 mm). M1 ohne
-Maßstab: 2,1 mm; M2 mit Bildmuster: 1,3 mm bei sieben statt vier Parametern. In `base_cam`
-wirkt die Korrektur auf den einen Median der Oberseitentiefe je Klotz.
+**Wo was liegt.** In Kraft ist L6 in `Extrinsics/base_cam_extrinsics.json` (`uebergang_L6`); die
+Kalibrierung vom 28.09. liegt als Messdatum in `architektur/bilder/2026-09-28-basiskamera-kalibrierung/`.
+Ein Lauf schreibt direkt in diese Datei und behält die bisherige als `_vorher.json`;
+Übernahme, Rückweg und Anzeige: `einrichtung-projektanwendung.md` §10. Messdaten und
+Zwischenstände der Auswertung: `architektur/bilder/2026-09-25-…` und `…-28-…` (je
+`LIESMICH.md`); Ablauf des Termins: `archiv/ablauf-kalibrierung-aufbau.md`.
 
-**Entscheidung (Nutzer): Abnahmekriterium** einer neuen Kalibrierung am Aufbau — Position
-≤ 3 mm, Höhe ≤ 2 mm über den ganzen Bildausschnitt, jeweils mit flachem und
-100-mm-Klotz.
-
-**Befund: Die Querneigung des Bandes ist echt.** Nach der Korrektur steigt das Band im
-Tiefenbild unter der Farb-Lage quer um 0,49° zur Gegenseite (−x) an, längs 0,18°. Allein
-aus dem Farbbild, über neun flach aufgelegte Board-Lagen, unabhängig von Tiefe und
-Kamerahöhe: 0,64° und 0,25°, dazu eine leichte Wölbung (Bandhöhe −3,4…+2,1 mm über die
-Lagen). Das Antasten B17 im Greifbereich fand 0,39° in derselben Richtung. Damit ist der
-Rest von 0,55° bzw. 0,68° aus der ersten Auswertung erklärt, und die Aussage oben, eine
-starre Ersatz-Kalibrierung reiche nicht, beruhte auf der Annahme eines ebenen Bandes. L6
-hat die Neigung ebenso in die Extrinsik aufgenommen wie die Verkippung der Tiefe. Wie
-`base_cam` die Klotzhöhe künftig gegen das geneigte Band rechnet, ist **offen**.
-
-**Was eine Korrektur in `base_cam` außerdem braucht:** Die Kamerahöhe aus Stufe 1 stammt
-aus der unkorrigierten Tiefe; korrigiert liegt die Kamera 8–9 mm tiefer. Die Farb-Lage ist
-mit Verzerrung gelöst, `base_cam` rechnet ohne (bis etwa 5 mm im Bildausschnitt). Der
-Materialversatz Kunststoff gegen Papier-Board ist am Aufbau neu zu messen.
-
-**Entscheidung (Nutzer, 27.09.2026): `base_cam` bleibt unverändert** — die Kalibrierung
-liefert eine Lage für die Sicht von `base_cam`, so wie L6 entstanden ist, nur automatisch.
-Begründung: Projektziel 2 verlangt ein schnelles, wiederholbares Verfahren, nicht mehr
-Genauigkeit als L6; das greifende System wird nicht angefasst; drei Tage bis zum
-Projektende, ein halber Tag am Roboter. Die Korrektur in `base_cam` (Tiefenformel,
-Entzerrung, Bandfläche) bleibt eine mögliche spätere Verbesserung.
-
-**Abnahmekriterium (ersetzt das obige, Nutzer):** mindestens so gut wie L6, Punkt für
-Punkt an denselben Messungen verglichen (das Antastrauschen von 1–2 mm trifft beide gleich):
-Lagefehler im Mittel höchstens 1 mm schlechter und an keinem Punkt mehr als 2 mm
-schlechter, Höhe im Mittel innerhalb ±2 mm von L6; nachgewiesen durch Antasten mit dem
-Roboter und einen Greiflauf.
-
-**Umsetzung (`basecam_extrinsics.basecam_pose`, im Kalibrierlauf seit 27.09.2026):**
-
-- *Neigung und Höhe* aus der Bandebene im Tiefenbild — wie L6; das Band liegt eben, auch
-  seine Querneigung ist aufgenommen, die Klotzhöhen kommen gegen das Band heraus.
-- *Gier und x/y* aus Punktpaaren auf Arbeitshöhe (Band, 25, 50, 100 mm über dem Band) im
-  Bildausschnitt: wo die Farb-Lage einen Punkt sieht, gegen wo `base_cam` ihn aus Pixel und
-  der Tiefe hinlegt, die die Tiefenformel dort vorhersagt.
-- Die Anpassung muss auf Arbeitshöhe stattfinden: Mit den Tafelpixeln im Greifer
-  (0,49–0,59 m) angepasst, lag der Lagefehler auf dem Band bei bis zu 12 mm.
-
-**Geprüft** an den 12 Tafelaufnahmen auf Band und Klotz, die Tiefenformel je Aufnahme ohne
-diese angepasst: Lagefehler im Mittel 3,3 mm, höchstens 7,0 mm (L6 an denselben Aufnahmen:
-4,3 / 8,4 mm); Tafelhöhe über das Band gleichmäßig auf 1,8 mm (L6: 1,3 mm), 100-mm-Klotz auf
-100,0 mm (L6: 99,9). In den unteren Ecken des Bildausschnitts bleiben bei beiden rund 11 mm
-— die Grenze einer starren Lage ohne Entzerrung und ohne Tiefenkorrektur in `base_cam`.
-
-**Empfindlichkeit:** Das Ergebnis hängt fast nur an der Bandebene und an der Farb-Lage.
-Andere Varianten der Tiefenformel (nur Band- oder nur Greiferdaten, ohne Maßstab, Versatz
-+2 mm, Neigung +10 %) verschieben die Lage auf dem Band um höchstens 0,1 mm, ganz ohne
-Tiefenformel um 0,7 mm; die Bandebene aus dem Bildausschnitt statt aus dem ganzen Bild um
-0,3 mm. Stimmt die Formel nach einem Umbau nicht mehr genau, bleibt das Verfahren also
-brauchbar. Der Gewinn gegenüber L6 kommt aus der genaueren Lage (Farb-Lage aus 39 Posen
-statt fünf Antastpunkten), nicht aus der Formel.
-
-**Kalibrierlauf:** Stufe 1 schreibt nach `output_file` jetzt diese Lage (`method`
-`stufe1_basecam`), die Farb-Lage steht im Gütebericht (`farbkamera`). Die Tiefenformel ist
-Parameter (`depth_error_*`, Standard die Werte oben). Stufe 2 und `pruefen` rechnen ebenso
-um. **Nachrechnen aus Rohdaten:** `test/tools/basecam_kalibrierung.py`. Aus Lauf 3 vom 25.09.
-ergibt sich `lauf3_kalibrierung_basecam.json` im Messordner: 2,7 mm im Mittel, 3,2 mm
-höchstens neben L6 auf dem Band — das automatische Verfahren trifft die Handkalibrierung.
-**Vergleich am Aufbau:** `test/tools/b23_compare.py eval … --aktiv … --vergleich …` wertet
-eine Runde Antasten für mehrere Kalibrierdateien aus.
-
-**Nächste Schritte (Stand 27.09.).** Termin am Aufbau nach `archiv/ablauf-kalibrierung-aufbau.md`:
-Kalibrierlauf, neue Datei über den Parameter „Kalibrierdatei“ von `base_cam` einstellen,
-Antasten, Greiflauf. Die genutzte Kalibrierung (`Extrinsics/base_cam_extrinsics.json`, L6)
-bleibt unverändert; übernommen wird von Hand, wenn die Abnahme besteht. **Offen:** ob Referenzmarken am Bandgestell angebracht werden
-dürfen; ohne sie entfällt Stufe 2, und Nachkalibrieren heißt Stufe 1 laufen lassen.
-
-**Termin am Aufbau (28.09.2026, Ablauf `archiv/ablauf-kalibrierung-aufbau.md`).**
-Kalibrierlauf: 40 Posen, 0,34 px, Prüfposen 0,54 mm, Rutschen 0,04 mm, gegen L6 3,1 mm im
-Mittel und 3,8 mm höchstens auf dem Band. **Wiederholbarkeit über drei Tage:** gegen den Lauf
-vom 25.09. x/y/z 0,3 / 0,5 / 0,8 mm, Winkel ≤ 0,03°, auf dem Band 0,9 mm im Mittel und 1,3 mm
-höchstens — die Kamera stand, das Verfahren reproduziert sich. **Greiflauf** mit der neuen
-Kalibrierung in `base_cam` (Parameter „Kalibrierdatei“): 7 von 7 Klötzen gegriffen und
-abgelegt, kein Fehlgriff; nach dem Urteil des Nutzers so gut wie mit L6.
-
-**Entscheidungen (Nutzer):** Das Antasten entfiel aus Zeitgründen; die Abnahme stützt sich auf
-den Greiflauf. **In Kraft bleibt L6** — vermutlich noch minimal besser, und seit dem finalen
-Build erprobt. Die Kalibrierung vom 28.09. liegt als Messdatum bei den Rohdaten
-(`architektur/bilder/2026-09-28-basiskamera-kalibrierung/`). **Die Kalibrierung schreibt ab
-jetzt direkt in die Datei, die `base_cam` liest** (`output_file` = `Extrinsics/base_cam_extrinsics.json`,
-die bisherige bleibt als `_vorher.json`): Nachkalibrieren heißt Stufe 1 laufen lassen und
-`base_cam` neu aktivieren; dauerhaft über `docker cp` ins Repo und Build
-(`einrichtung-projektanwendung.md` §10). Rohdaten nach `raw_file` in `/tmp`.
-
+**Offen, mögliche Verbesserungen.** Stufe 2 braucht Referenzmarken am Bandgestell — nicht
+angebracht, weil die Hardware nicht verändert werden darf; Nachkalibrieren heißt Stufe 1
+laufen lassen (etwa 5 min). Genauer als L6 wird `base_cam` nur mit Eingriffen in die
+Erkennung: Tiefenkorrektur (M1s), Entzerrung, Bandfläche statt ebener Bandebene. In der
+höchsten Greiferlage (0,44 m unter der Kamera) lieferte die L515 über dem Board keine Tiefe;
+der Materialversatz Kunststoff gegen Board ist nicht neu gemessen.

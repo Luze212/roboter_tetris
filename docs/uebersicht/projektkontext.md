@@ -1,6 +1,7 @@
 # Projektkontext Robotetris
 
-**Stand 24.09.2026, finaler Build.** Rahmenbedingungen, Aufbau, Abgrenzungen und
+**Stand 28.09.2026: finaler Build (24.09.) und Kalibrierung der Basiskamera (L27).**
+Rahmenbedingungen, Aufbau, Abgrenzungen und
 Arbeitsweise — der Einstieg vor den technischen Dokumenten.
 
 > Dies ist **nicht** die `CLAUDE.md`. Die existiert separat, ist in `.gitignore`
@@ -20,7 +21,7 @@ oder schräg.
 | Nr. | Ziel | Umsetzung | Ergebnis am Aufbau |
 |---|---|---|---|
 | 1 | Ansteuerung des UR10e mit AICA | AICA-Kette Signal Point Attractor → IK Velocity Controller | erfüllt |
-| 2 | Entwicklung eines schnellen Kalibrierungsverfahrens | eigenes Verfahren für die Basiskamera: Der Roboter hält ein AprilGrid ins Bild (`base_cam_calibration`, L27); das Projekt des Kommilitonen (`Calibration/*`) bleibt getrennt | Verfahren läuft am Aufbau, wiederholbar auf unter 1 mm; noch nicht aktiv, weil das Tiefenbild der L515 gegen das Farbbild verkippt ist. Bis dahin Übergangskalibrierung L6, höchstens 6 mm |
+| 2 | Entwicklung eines schnellen Kalibrierungsverfahrens | eigenes Verfahren für die Basiskamera: Der Roboter hält ein AprilGrid ins Bild (`base_cam_calibration`, L27); das Projekt des Kommilitonen (`Calibration/*`) bleibt getrennt | erfüllt: am Aufbau abgenommen, etwa 4 min je Lauf, über drei Tage auf unter 1 mm wiederholbar; Greiflauf 7 von 7, so gut wie die Handkalibrierung L6. In Kraft bleibt L6 (höchstens 6 mm), Nachkalibrieren schreibt in dieselbe Datei |
 | 3 | Verfahren zur **Geschwindigkeitsschätzung** und Positionsberechnung | `base_cam` (Position), `vectoring` (Geschwindigkeit je Klotz und für das Band) | Position gegen den Roboter höchstens 6 mm; Band geschätzt −127,9 mm/s gegen 125–133 mm/s per Stoppuhr |
 | 4 | Algorithmus zur **Priorisierung** und **Bahnplanung** für das kontrollierte Greifen | `priority_handler` (Auswahl, Erreichbarkeit, Greifebene); `object_follower` mit den AICA-Bausteinen (Bahn) | greift im Lauf mit rund 1 mm Längsfehler; bei dichter Folge etwa ein Klotz je 7 s; flache und gedrehte Klötze; Dauerlauf zuverlässig |
 
@@ -84,8 +85,8 @@ dortigen Komponenten (`board_detection`, `auto_calibration`) und Dateien werden
 nicht verändert; `Calibration/calibration.json` ist überholt. Die Basiskamera
 kalibriert dieses Paket seit 25.09.2026 selbst (`basecam_extrinsics.py`,
 `calibration_run.py`, `base_cam_calibration.py`, L27). Die gültige Kalibrierung
-liegt in `Extrinsics/base_cam_extrinsics.json` und trägt bis auf Weiteres die
-Übergangskalibrierung (Nachtrag 13 / L6).
+liegt in `Extrinsics/base_cam_extrinsics.json` und trägt die Handkalibrierung
+(Nachtrag 13 / L6); ein Kalibrierlauf schreibt in dieselbe Datei.
 
 ### `roboter_tetris/vision/*` — Bildverarbeitung
 
@@ -121,7 +122,7 @@ lesende sind in Ordnung.
 |---|---|
 | Roboter | UR10e direkt neben dem Band, etwa auf einem Drittel vom Bandende aus |
 | Greifer | Robotiq 2F-140 über USB/Modbus (nicht als ros2_control-Hardware). Verschraubte 3D-Druck-Aufsätze mit Gummi-Grippmatte, Greiffläche 20 mm hoch × 15 mm breit, Öffnungsweite 127 mm. Nutzlast in der UR-Installation 1,3 kg, Schwerpunkt 12 / 24 / 45 mm |
-| Basiskamera | RealSense L515 senkrecht über dem Bandanfang, auf einem beweglichen Gestell — daher das Kalibrierprojekt |
+| Basiskamera | RealSense L515 senkrecht über dem Bandanfang, auf einem beweglichen Gestell — daher die automatische Kalibrierung (L27) |
 | Roboterkamera | RealSense D435i am Flansch; nicht eingebunden |
 | Band | grün-türkis, konstante Geschwindigkeit ≈ 0,13 m/s, nicht einstellbar, Lauf entlang der y-Achse; Lage und Maße in `einrichtung-projektanwendung.md` §8 |
 | Klötze | rechtwinklig, unterschiedlich groß (25 bis 100 mm Kante), rot, blau, weiß; 3D-gedruckt, Oberseite matt, Seitenflächen spiegelnd |

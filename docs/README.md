@@ -1,8 +1,9 @@
 # Dokumentenlandkarte
 
-Wo was liegt und was verbindlich ist. **Stand 24.09.2026, finaler Build:** Die
-Kette greift am Aufbau Klötze vom laufenden Band und legt sie ab; gegriffen wird
-allein mit der Basiskamera.
+Wo was liegt und was verbindlich ist. **Stand 28.09.2026:** Die Kette greift am
+Aufbau Klötze vom laufenden Band und legt sie ab; gegriffen wird allein mit der
+Basiskamera (finaler Build 24.09.). Die Basiskamera kalibriert ein eigenes Verfahren
+mit dem Roboter; in Kraft ist die Handkalibrierung L6 (L27).
 
 ---
 
@@ -13,7 +14,7 @@ Was man liest, um das System zu verstehen, einzurichten und zu bedienen.
 | Dokument | Inhalt |
 |---|---|
 | `projektkontext.md` | Ziele, Aufbau, Abgrenzungen, Arbeitsweise. **Einstieg.** |
-| `Komponentenplan Robotetris - Stand 2026-09-24.docx` | Beschreibung aller Komponenten, Signale, Abläufe und Einstellungen zum Einlesen, mit Farbcode |
+| `Komponentenplan Robotetris - Stand 2026-09-28.docx` | Beschreibung aller Komponenten, Signale, Abläufe und Einstellungen zum Einlesen, mit Farbcode |
 | `systemgraph.md` | Der AICA-Graph: Komponenten mit Ein- und Ausgängen und Raten, Ablauf eines Griffs, Bezugssysteme, Kopplungen zwischen Parametern |
 | `einrichtung-projektanwendung.md` | Was beim Anlegen der AICA-Anwendung gesetzt werden muss, mit allen Messwerten des Aufbaus |
 

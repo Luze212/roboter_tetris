@@ -1,6 +1,6 @@
 # Einrichtung der Projektanwendung in AICA
 
-**Stand 24.09.2026, finaler Build.** Was beim Anlegen der AICA-Anwendung für den
+**Stand 28.09.2026: finaler Build (24.09.), Kalibrierung der Basiskamera in §10.** Was beim Anlegen der AICA-Anwendung für den
 Pick im Lauf gesetzt werden muss — und warum die AICA-Defaults nicht taugen.
 Kopplungen zwischen Parametern: `systemgraph.md`.
 
@@ -199,7 +199,7 @@ daneben.
 | Band von Rolle zu Rolle | y ≈ +1,08 … −0,375 m | Nachtrag 13 / L7 |
 | Bandgeschwindigkeit | geschätzt −127,9 mm/s; per Stoppuhr 125–133 mm/s | Ziel 3 (L9, L10) |
 | UR-Nutzlast | 1,3 kg, Schwerpunkt 12 / 24 / 45 mm | L20 |
-| Extrinsik Basiskamera | −0,7787 · 0,7934 · 0,9163 · 179,46° · 0,45° · 179,76° | Übergangskalibrierung in `world` (L6); steht in `Extrinsics/base_cam_extrinsics.json` (Parameter „Kalibrierdatei“) und als Rückfall in `cal_*`; Abweichung höchstens 6 mm |
+| Extrinsik Basiskamera | −0,7787 · 0,7934 · 0,9163 · 179,46° · 0,45° · 179,76° | Handkalibrierung L6 in `world`, in Kraft (L27); steht in `Extrinsics/base_cam_extrinsics.json` (Parameter „Kalibrierdatei“), als Rückfall in `cal_*`; Abweichung höchstens 6 mm |
 | `belt_surface_z_mm` / `top_depth_bias_mm` (`base_cam`) | 53,6 / 11,5 | Standardwerte (L6) |
 | Bild der Basiskamera | y ≈ 0,46 … 1,03 m | L7 |
 | Prozesszeiten | Einschwingen 0,23–0,33 s · Absenken 0,78–0,93 s (0,25 m/s) · Greifen 0,63–0,83 s · Ablegen 1,3–2,2 s (0,5 m/s) | `priority_handler` `t_settle_s` 0,4, `t_descend_s` 0,9, `t_grasp_s` 0,8, Faktor 1,0; Greifebene y ≈ +0,02 (L24) |
@@ -248,35 +248,48 @@ null heißt, `lead_time_s` passt zur Verstärkung des Attractors.
 
 ## 10. Kalibrierung der Basiskamera
 
-Eigene Anwendung, getrennt vom normalen Programm: Inhalt von
-`docs/uebersicht/anwendung-kalibrierung-basiskamera.yaml` in eine neue AICA-Anwendung
-(Code-Ansicht) einfügen und speichern. Hintergrund und Stand: `entscheidungen.md` L27.
-Der Lauf schreibt die **Kalibrierung für `base_cam`** (die Lage der Farbkamera mit dem
-Tiefenfehler der L515 umgerechnet) seit 28.09.2026 **direkt in die Datei, die `base_cam`
-liest**. In Kraft ist L6; die Kalibrierung vom 28.09. ist abgenommen, aber nicht übernommen
-(L27).
+Eigene AICA-Anwendung, getrennt vom normalen Programm: Inhalt von
+`docs/uebersicht/anwendung-kalibrierung-basiskamera.yaml` in eine neue Anwendung
+(Code-Ansicht) einfügen und speichern. Der Lauf schreibt die **Kalibrierung für `base_cam`**
+direkt in die Datei, die `base_cam` liest. Hintergrund, Abnahme und Grenzen:
+`entscheidungen.md` L27. In Kraft ist die Handkalibrierung L6.
+
+**Ablauf** (Band aus):
 
 1. Anwendung starten, **Greiferbacken frei**: Der Greifer fährt beim Laden einmal auf und zu.
 2. Knopf 1 fährt die Startpose an (Frame „Kalibrierstart“: Werkzeug waagerecht, Board-Mitte
    unter der Kamera auf z 0,40); Knopf 2 hält sie.
 3. Board mit Gummihülle am **kurzen Rand** flach zwischen die Backen halten, bedruckte Seite
-   oben, Knopf 3 (Greifer zu). Knopf 4 öffnet.
+   oben, Knopf 3 (Greifer zu).
 4. Knopf 5 startet Stufe 1: etwa 2 s Prüfung ohne Bewegung (Board, Kamerahöhe, Plan), dann
    45 Posen in 3–4 min, zurück in die Startpose. Knopf 6 bricht ab, der Roboter hält die
-   letzte Zielpose.
-5. Das Ergebnis ersetzt `roboter_tetris/Extrinsics/base_cam_extrinsics.json` im Container;
-   die bisherige Datei bleibt daneben als `base_cam_extrinsics_vorher.json`. `base_cam`
-   nutzt die neue ab dem nächsten Aktivieren, ohne Build. Werte und Güte im Log
-   (`basecam_gegen_vorher_band_mm_mittel`: Verschiebung gegen die bisherige Kalibrierung),
-   Rohdaten in `/tmp/base_cam_extrinsics_rohdaten.json`.
-   **Dauerhaft** wird sie erst im Repo: mit `docker cp` aus dem Container nach
-   `source/roboter_tetris/roboter_tetris/Extrinsics/` holen, committen, bauen — ein Build
-   ohne das bringt die Datei aus dem Repo zurück. **Zurück ohne Build:** im Container die
-   `_vorher.json` über die Datei kopieren oder in `base_cam` den Parameter „Kalibrierdatei“
-   auf `Extrinsics/base_cam_extrinsics_vorher.json` setzen.
-6. Knopf 7 prüft ohne Bewegung, ob sich die Kamera bewegt hat (braucht Referenzmarken).
+   letzte Zielpose. Danach Board festhalten, Knopf 4 (Greifer auf).
+5. Log prüfen (Zeile „Ergebnis: …“): `bildfehler_px` ≤ 0,5, `pruefposen_mm_mittel` ≤ 1,
+   `rutschen_mm` ≤ 0,5; `basecam_gegen_vorher_band_mm_mittel` ist die Verschiebung gegen die
+   bisherige Kalibrierung (gegen L6 rund 3 mm). Außerhalb der Gütegrenzen wird nichts
+   geschrieben; die Rohdaten liegen in jedem Fall in `/tmp/base_cam_extrinsics_rohdaten.json`.
 
-Standard-Posenplan: nur Verschiebung ±8 cm und Drehung um die Hochachse ±20°, Flansch
-höchstens 24 cm von der Startpose; in der Anwendung Untergrenze `min_flange_z_m` 0,34
-und Greifkraft 100 %.
+**Was der Lauf schreibt:** Das Ergebnis ersetzt `Extrinsics/base_cam_extrinsics.json` im
+Container, die bisherige bleibt als `base_cam_extrinsics_vorher.json` daneben. `base_cam`
+nutzt die neue ab dem nächsten Aktivieren, ohne Build. **Zurück ohne Build:** in `base_cam`
+den Parameter „Kalibrierdatei“ auf `Extrinsics/base_cam_extrinsics_vorher.json` setzen.
+**Dauerhaft** wird sie erst im Repo — ein Build ohne das bringt die Datei aus dem Repo zurück:
 
+```bash
+C=$(docker ps --format '{{.Names}}' | grep aica-launcher | head -1)
+docker cp $C:/ws/install/roboter_tetris/lib/python3.12/site-packages/roboter_tetris/Extrinsics/base_cam_extrinsics.json source/roboter_tetris/roboter_tetris/Extrinsics/
+```
+
+Danach committen, bauen, Systemabbild neu erzeugen, und `test_shipped_file_is_the_l6_calibration`
+anpassen (der Test schützt bis dahin genau die L6-Datei).
+
+**Kamera als Frame:** Beim Start lädt die Anwendung den Kalibrierblock in der Betriebsart
+`anzeigen` und einen Signal-to-Frame-Block. Die 3D-Ansicht zeigt die Basiskamera als Frame
+`basiskamera` an `world` (Farbbild-Rahmen der L515: z in Blickrichtung, x nach rechts, y nach
+unten im Bild), gelesen aus der Kalibrierdatei. Überschreibt ein Lauf die Datei, springt der
+Frame innerhalb einer Sekunde auf die neue Lage.
+
+**Standardwerte:** Posenplan nur Verschiebung ±8 cm und Drehung um die Hochachse ±20°, Flansch
+höchstens 24 cm von der Startpose; in der Anwendung gesetzt sind die Untergrenze
+`min_flange_z_m` 0,34 (Handgelenk) und die Greifkraft 100 %. Knopf 7 (`pruefen`) braucht
+Referenzmarken am Bandgestell, die nicht angebracht sind.

@@ -1,8 +1,8 @@
 {
   "name": "Base Kamera Kalibrierung",
   "description": {
-    "brief": "Kalibriert die Basiskamera für base_cam: Stufe 1 mit dem Roboter, Stufe 2 und Prüfen ohne Bewegung.",
-    "details": "Stufe 1 (mode stufe1, der Roboter bewegt sich): Der Greifer hält das AprilGrid flach, Werkzeugachse waagerecht. Der Block hält zuerst die aktuelle Flanschpose, prüft Board-Layout und Abstand des Boards vor dem Flansch, plant 40 Posen plus 4 Prüfposen um diese Startpose und fährt nur, wenn Board, Flansch und Greifer überall den Mindestabstand zum Band halten. An jeder Pose wartet er, bis der Flansch ruht, und mittelt mehrere Bilder. Am Ende fährt er zur Startpose zurück und rechnet Kamera→world und Board→Flansch gemeinsam (Hand-Auge-Startwert, dann Ausgleich über alle Tag-Ecken). Geschrieben wird nur, wenn Bildfehler, Prüfposen und Rutschprüfung in den Grenzen liegen. Referenzmarken am Bandgestell im Bild werden dabei in world vermessen. Stufe 2 (stufe2) rechnet die Kamera ohne Bewegung aus diesen Referenzmarken neu; pruefen meldet nur, ob sich die Kamera bewegt hat. Der Lauf beginnt beim Aktivieren; Entladen bricht ab, der Attractor hält dann die letzte Zielpose. Geschrieben wird die Kalibrierung für base_cam: Die Lage der Farbkamera wird mit dem Tiefenfehler der L515 (depth_error_*) auf das Tiefenbild umgerechnet, Neigung und Höhe kommen aus dem Band im Tiefenbild (L27); die Lage der Farbkamera steht im Gütebericht. Das Ergebnis liegt im Container (output_file). Testen ohne Build: in base_cam den Parameter Kalibrierdatei auf diesen Pfad setzen und base_cam neu aktivieren. Dauerhaft wird es erst, wenn es ins Repo (roboter_tetris/Extrinsics/) übernommen und das Paket gebaut ist."
+    "brief": "Kalibriert die Basiskamera für base_cam mit dem Roboter und zeigt sie als Frame: Stufe 1 mit Bewegung, Stufe 2 und Prüfen ohne, Anzeigen aus der Kalibrierdatei.",
+    "details": "Stufe 1 (mode stufe1, der Roboter bewegt sich): Der Greifer hält das AprilGrid flach, Werkzeugachse waagerecht. Der Block hält zuerst die aktuelle Flanschpose, prüft Board-Layout, Abstand des Boards vor dem Flansch und die Kamerahöhe aus dem Tiefenbild und plant 40 Posen plus 4 Prüfposen um diese Startpose (nur Verschiebung und Drehung um die Hochachse); er fährt nur, wenn Board, Flansch und Greifer überall den Mindestabstand und die Untergrenze halten. An jeder Pose wartet er, bis der Flansch ruht, und mittelt mehrere Bilder. Am Ende fährt er zur Startpose zurück und rechnet Farbkamera→world und Board→Flansch gemeinsam; daraus die Kalibrierung für base_cam (Tiefenfehler der L515 über depth_error_*, Neigung und Höhe aus dem Band im Tiefenbild, L27). Geschrieben wird nur innerhalb der Gütegrenzen (Bildfehler, Prüfposen, Rutschen), und zwar direkt in die Datei, die base_cam liest (output_file); die bisherige bleibt als ..._vorher.json. base_cam nutzt sie ab dem nächsten Aktivieren; dauerhaft erst im Repo (roboter_tetris/Extrinsics/) und nach einem Build. Rohdaten schreibt jeder Lauf (raw_file). Entladen bricht ab, der Attractor hält dann die letzte Zielpose. Stufe 2 (stufe2) rechnet die Kamera ohne Bewegung aus Referenzmarken am Bandgestell neu, pruefen meldet nur, ob sich die Kamera bewegt hat (beide brauchen Referenzmarken). anzeigen gibt die Kamera aus der Kalibrierdatei als Pose aus (für einen SignalToTf-Frame) und folgt der Datei, wenn ein Lauf sie überschreibt."
   },
   "registration": "roboter_tetris::BaseCamCalibration",
   "inherits": "modulo_components::LifecycleComponent",
@@ -48,6 +48,12 @@
       "signal_name": "debug_image",
       "signal_type": "other",
       "custom_signal_type": "sensor_msgs::msg::Image"
+    },
+    {
+      "display_name": "Kamerapose",
+      "description": "Nur Betriebsart anzeigen: die Basiskamera aus der Kalibrierdatei (output_file) als Pose in world, Name 'basiskamera' - an einen Signal-to-Frame-Block (SignalToTf) für den Frame in der 3D-Ansicht. Folgt der Datei: überschreibt ein Kalibrierlauf sie, springt der Frame auf die neue Lage. In den anderen Betriebsarten leer.",
+      "signal_name": "camera_pose",
+      "signal_type": "cartesian_pose"
     }
   ],
   "predicates": [
@@ -75,7 +81,7 @@
   "parameters": [
     {
       "display_name": "1 Betriebsart [mode]",
-      "description": "Betriebsart: stufe1 = Roboter fährt das Board ab (Grundkalibrierung), stufe2 = neu aus den Referenzmarken ohne Bewegung, pruefen = nur prüfen, ob sich die Kamera bewegt hat (schreibt nichts).",
+      "description": "Betriebsart: stufe1 = Roboter fährt das Board ab (Grundkalibrierung), stufe2 = neu aus den Referenzmarken ohne Bewegung, pruefen = nur prüfen, ob sich die Kamera bewegt hat (schreibt nichts), anzeigen = nur die Kamera aus der Kalibrierdatei (output_file) als Pose ausgeben, für einen Frame; folgt der Datei, wenn ein Lauf sie überschreibt.",
       "parameter_name": "mode",
       "parameter_type": "string",
       "default_value": "stufe1",

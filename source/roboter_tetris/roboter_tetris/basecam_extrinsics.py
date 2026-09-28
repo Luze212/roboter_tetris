@@ -1264,6 +1264,33 @@ def save_record(path: str, record: ExtrinsicsRecord) -> None:
     os.replace(tmp, path)
 
 
+class CalibrationWatch:
+    """Follows one calibration file: :meth:`poll` reloads it when it changed on disk.
+
+    For showing the camera as a frame: the calibration run overwrites the file,
+    the watch notices, the frame moves -- the file is the single source.
+    """
+
+    def __init__(self, value: str):
+        self.path = resolve_calibration_path(value)
+        self.record: Optional[ExtrinsicsRecord] = None
+        self.line = ""
+        self._stamp = ()          # never polled: differs from any stamp, also from None
+
+    def poll(self) -> bool:
+        """True when the file changed since the last poll (also: appeared or vanished)."""
+        try:
+            st = os.stat(self.path)
+            stamp = (st.st_mtime_ns, st.st_size)
+        except OSError:
+            stamp = None
+        if stamp == self._stamp:
+            return False
+        self._stamp = stamp
+        self.record, self.line = load_camera_calibration(self.path)
+        return True
+
+
 def replace_calibration(path: str, record: ExtrinsicsRecord) -> Optional[str]:
     """Write ``record`` over the calibration at ``path`` (relative = to the package),
     keeping the file it replaces as ``<name>_vorher.json``. Returns the backup path,

@@ -1,5 +1,9 @@
 # Messdaten Basiskamera-Kalibrierung, 25.09.2026
 
+> **Ausgang** (`architektur/entscheidungen.md` L27): Aus diesen Daten stammt das Modell des
+> Tiefenfehlers; die Kalibrierung für `base_cam` wurde am 28.09. am Aufbau abgenommen
+> (`../2026-09-28-basiskamera-kalibrierung/`). `base_cam` bleibt unverändert, in Kraft ist L6.
+
 Erste Läufe der Komponente `base_cam_calibration` (Stufe 1) am Aufbau und eine Messreihe
 zum Versatz zwischen Tiefen- und Farbbild der L515. Kamera: 1280 × 720, Intrinsik aus
 `color_camera_info`:
@@ -79,8 +83,8 @@ Bildern. Auswertung aus `source/roboter_tetris`:
   Pixelraster des Farbbilds). Mit der Lage der Farbkamera allein wären die Klotzhöhen am
   unteren Bildrand bis zu rund 13 mm falsch. Die frühere Aussage, eine starre
   Ersatz-Kalibrierung reiche nicht, weil das Band 0,55° bzw. 0,68° schief blieb, ist
-  überholt: Der Rest ist die echte Querneigung des Bandes (siehe unten). Bis zur Korrektur
-  in `base_cam` gilt L6.
+  überholt: Der Rest ist die echte Querneigung des Bandes (siehe unten). In Kraft ist L6
+  (L27).
 
 ## Modell des Tiefenfehlers (A2, 27.09.2026)
 
@@ -136,6 +140,6 @@ x −0,63 bis −1,05° bei x −0,94, das Band ist also auch leicht gewölbt. L
 Neigung — wie die Verkippung der Tiefe — in die Extrinsik aufgenommen, deshalb liegt das
 Band dort eben.
 
-**Offen für den Aufbau:** Materialversatz Kunststoff gegen Papier-Board (bisher
+**Nicht mehr gemessen** (in L27 als offen geführt): Materialversatz Kunststoff gegen Papier-Board (bisher
 `top_depth_bias_mm` 11,5 gegen das Band), Restversatz des Tiefenbilds in v (≈ 3 px) an
 Klotzkanten prüfen, fehlende Tiefe bei 0,44 m.

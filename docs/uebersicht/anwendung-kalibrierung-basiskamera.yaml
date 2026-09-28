@@ -24,6 +24,8 @@ on_start:
     - component: signal_point_attractor
     - component: robotiq_gripper
     - component: greifer_auf
+    - component: kalibrierung_anzeige
+    - component: kamera_frame
 components:
   signal_point_attractor:
     component: aica_core_components::motion::SignalPointAttractor
@@ -220,6 +222,44 @@ components:
       robot_state: /hardware/robot_state_broadcaster/cartesian_state
     outputs:
       debug_image: /kalibrierung/debug_image
+  kalibrierung_anzeige:
+    # Zeigt die Kamera aus der Kalibrierdatei, die ein Lauf beschreibt, und folgt ihr.
+    component: roboter_tetris::BaseCamCalibration
+    display_name: Kalibrierung anzeigen (Kamera-Frame)
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: kalibrierung_anzeige
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: kalibrierung_anzeige
+            transition: activate
+    parameters:
+      rate:
+        value: 2
+        type: double
+      mode:
+        value: anzeigen
+        type: string
+    outputs:
+      camera_pose: /kalibrierung/kamera_pose
+  kamera_frame:
+    component: aica_core_components::ros::SignalToTf
+    display_name: Frame Basiskamera
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: kamera_frame
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: kamera_frame
+            transition: activate
+    inputs:
+      pose: /kalibrierung/kamera_pose
 hardware:
   hardware:
     display_name: Hardware Interface
@@ -325,6 +365,12 @@ graph:
       robotiq_gripper:
         x: 1440
         y: 300
+      kalibrierung_anzeige:
+        x: 280
+        y: 1000
+      kamera_frame:
+        x: 820
+        y: 1000
     hardware:
       hardware:
         x: 2100

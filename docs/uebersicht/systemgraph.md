@@ -1,6 +1,6 @@
 # Systemaufbau als AICA-Graph
 
-**Stand 24.09.2026, finaler Build.** Gegriffen wird allein mit der Basiskamera; die
+**Stand 28.09.2026: finaler Build und Kalibrierung der Basiskamera.** Gegriffen wird allein mit der Basiskamera; die
 Komponenten der Roboterkamera (`robot_cam`, `robot_cam_2`) liegen im Paket, nichts
 nimmt ihr S2 ab (Nachtrag 13 / L22). Grundlage: `architektur/entscheidungen.md` (Themen 1–7, Nachträge 1–13),
 `architektur/datenvertraege.md` (S1–S10).
@@ -68,11 +68,26 @@ Blätter: Von ihnen führt keine Leitung zurück in den Regelpfad.
 
 ---
 
+## Getrennte Anwendung: Kalibrierung der Basiskamera
+
+```
+ L515 ─ color, depth, info ─▶ * base_cam_calibration (stufe1) ── Z target_pose ──▶ Signal Point Attractor ─▶ IK ─▶ UR10e
+                                 ▲ robot_state (Flansch)          ▲ Frame „Kalibrierstart“ (Knopf 1)
+ Kalibrierdatei ─▶ * base_cam_calibration (anzeigen) ── camera_pose ──▶ SignalToTf ─▶ Frame „basiskamera“
+ Knöpfe 3/4 ─▶ Greifer zu / auf ─▶ robotiq_gripper (hält das Board)
+```
+
+Eigene AICA-Anwendung (`anwendung-kalibrierung-basiskamera.yaml`), Attractor gedrosselt
+(0,1 m/s, 0,3 rad/s). Stufe 1 schreibt in dieselbe Kalibrierdatei, die `base_cam` im
+Greifgraph liest; die Anzeige folgt ihr. Bedienung: `einrichtung-projektanwendung.md` §10.
+
+---
+
 ## Die Komponenten
 
 | Komponente | Rate | Eingänge | Ausgänge | Logik ohne ROS | Anmerkung |
 |---|---|---|---|---|---|
-| `base_cam` | Kamera | color, depth, info | `objects` (S1), `debug_image` | `vision/*` | Debug-Bild an (für den Streamer) |
+| `base_cam` | Kamera | color, depth, info | `objects` (S1), `debug_image` | `vision/*` | Debug-Bild an (für den Streamer); Extrinsik aus der Kalibrierdatei (L27) |
 | `robot_cam_2`, `robot_cam` | Kamera | color, depth, info | `object_position` (S2), `debug_image` | `vision/robot_detection*` | **nicht eingebunden** (L22) — im Paket, ohne Abnehmer |
 | `vectoring` | 20 Hz | `objects` | `tracks` (S3) | `track_estimation.py` | Bandgeschwindigkeit (Ziel 3) |
 | `priority_handler` | 20 Hz | `tracks`, `picked_id`, `robot_state` | `target` (S4), `not_pickable` (S5) | `target_selection.py` | Greifzone = Arbeitsraum auf dem Band (L21) |
@@ -80,6 +95,7 @@ Blätter: Von ihnen führt keine Leitung zurück in den Regelpfad.
 | `object_follower` | 50 Hz | `target`, `robot_state`, `gripper_motion_done`, `gripper_has_object` | `target_pose` (S6), `gripper_close`, `picked_id` (S7), `follower_status` (S8) | `follower_logic.py` | Zustandsautomat, Winkel höchstens ±45° (L25) |
 | `robotiq_gripper` | 20 Hz | `gripper_close` | `motion_done`, `has_object` (S9) | `GripperMotionState` | |
 | `interface_streamer` | 10 Hz (Vortrag, L24) | `debug_image` der Basiskamera, `world_state`, `follower_status` | `interface_image` | `interface_layout.py` | nur Anzeige |
+| `base_cam_calibration` | 20 Hz, Anzeige 2 Hz | color, depth, info, `robot_state` | `target_pose` (nur `stufe1`), `camera_pose` (nur `anzeigen`), `debug_image` | `basecam_extrinsics.py`, `calibration_run.py` | **eigene Anwendung**, nicht im Greifgraph (L27) |
 
 Jede eigene Komponente ist eine dünne Schale um ein Modul ohne ROS, das die ganze
 Logik trägt und für sich getestet ist. `contracts.py` hält Kopflängen, Strides,
@@ -128,7 +144,7 @@ Ergebnisse (`outcome`): 0 abgelegt · 1 Fehlgriff · 2 verloren · 3 Greifebene
 
 **Gemeinsames Bezugssystem (Nachtrag 13 / L6):** Basiskamera und Roboter
 rechnen im selben System `world`; Abweichung höchstens 6 mm, auch für 100-mm-Klötze
-(Übergangskalibrierung der Basiskamera als Standardwert). Greifzone und
+(Kalibrierdatei `Extrinsics/base_cam_extrinsics.json` mit der Handkalibrierung L6, L27). Greifzone und
 Wartebereich liegen außerhalb des Bildes der Basiskamera (L4).
 
 ---

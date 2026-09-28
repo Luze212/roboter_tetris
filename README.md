@@ -14,6 +14,8 @@ Dieses Repository ist das AICA-Paket `roboter_tetris` mit den eigenen Komponente
 - stehende, liegende, flache (ab 20 mm) und schräg liegende Klötze (Drehung höchstens ±45°)
 - Bandgeschwindigkeit aus den Bilddaten geschätzt: −127,9 mm/s gegen 125–133 mm/s per Stoppuhr
 - Dauerlauf mit gemischten Klötzen zuverlässig
+- Kalibrierung der Basiskamera automatisch mit dem Roboter: etwa 4 min, über drei Tage auf unter
+  1 mm wiederholbar, im Greiflauf so gut wie die Handkalibrierung (die in Kraft bleibt)
 
 ## Die Kette
 
@@ -33,12 +35,13 @@ Anzeige: data_tracker, interface_streamer (RViz)
 | `object_follower` | fährt an, folgt, senkt ab, greift mitfahrend, legt ab |
 | `robotiq_gripper` | bedient den Greifer, meldet „zu“ und „Objekt gegriffen“ |
 | `data_tracker`, `interface_streamer` | Klotzliste und Übersichtsbild |
+| `base_cam_calibration` | kalibriert die Basiskamera mit dem Roboter, eigene Anwendung; zeigt die Kamera als Frame |
 
 ## Dokumentation
 
 Einstieg: **`docs/README.md`** (Landkarte) und `docs/uebersicht/projektkontext.md`.
-Alle Komponenten zum Einlesen: `docs/uebersicht/Komponentenplan Robotetris - Stand 2026-09-24.docx`.
-Einrichtung der AICA-Anwendung: `docs/uebersicht/einrichtung-projektanwendung.md`.
+Alle Komponenten zum Einlesen: `docs/uebersicht/Komponentenplan Robotetris - Stand 2026-09-28.docx`.
+Einrichtung der AICA-Anwendung und der Kalibrierung: `docs/uebersicht/einrichtung-projektanwendung.md`.
 Verbindliche AICA-Regeln: `ARCHITECTURE.md`.
 
 ## Bauen und testen
@@ -66,7 +69,8 @@ source/roboter_tetris/
   component_descriptions/         AICA-Beschreibungen der Komponenten
   roboter_tetris/                 Komponenten und Logikmodule ohne ROS
   roboter_tetris/contracts.py     Signalformate S1–S10
-  roboter_tetris/Calibration/     Kalibrierprojekt (getrennt)
+  roboter_tetris/Extrinsics/      Kalibrierdatei der Basiskamera
+  roboter_tetris/Calibration/     Kalibrierprojekt des Kommilitonen (getrennt, überholt)
   roboter_tetris/Safety/          Arbeitsraumgrenzen
   test/python_tests/              Tests
   test/tools/                     fake_objects.py, Mitlese- und Auswertewerkzeuge

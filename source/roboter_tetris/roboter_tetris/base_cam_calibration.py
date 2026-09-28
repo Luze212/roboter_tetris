@@ -30,16 +30,18 @@ from rclpy.qos import QoSProfile
 from sensor_msgs.msg import CameraInfo, Image
 
 from .basecam_extrinsics import (
-    L6_CAL, load_camera_calibration, make_tag_detector, matrix_from_cal, pose_from_quaternion,
+    L6_CAL, CalibrationWatch, load_camera_calibration, make_tag_detector, matrix_from_cal, pose_from_quaternion,
     quaternion_from_matrix, replace_calibration, required_start_height, resolve_calibration_path,
 )
 from .calibration_run import (
-    FEHLER, FERTIG, PARAMETERS, Camera, CalibrationRun, Frame, run_params,
+    DISPLAY_MODE, FEHLER, FERTIG, PARAMETERS, Camera, CalibrationRun, Frame, run_params,
 )
 from .contracts import S6_REFERENCE_FRAME
 
 #: Flange pose older than this counts as missing (as in object_follower).
 ROBOT_STATE_MAX_AGE_S = 0.5
+#: Name of the camera frame in mode "anzeigen" (becomes the TF frame via SignalToTf).
+CAMERA_FRAME = "basiskamera"
 GRID_COLOR = (0, 200, 0)
 REFERENCE_COLOR = (255, 120, 0)
 _OWN = {name for name, _, _ in PARAMETERS}
@@ -84,6 +86,11 @@ class BaseCamCalibration(LifecycleComponent):
                         MessageType.CARTESIAN_POSE_MESSAGE)
         self._debug_msg = Image()
         self.add_output("debug_image", "_debug_msg", Image, publish_on_step=False)
+        # Only in mode "anzeigen": the camera of the calibration file, for a frame
+        # (SignalToTf); empty -- and so not published -- in the other modes.
+        self._camera_pose = sr.CartesianPose(CAMERA_FRAME, S6_REFERENCE_FRAME)
+        self.add_output("camera_pose", "_camera_pose", EncodedState,
+                        MessageType.CARTESIAN_POSE_MESSAGE)
 
         self.add_predicate("is_running", False)
         self.add_predicate("is_finished", False)
@@ -91,6 +98,7 @@ class BaseCamCalibration(LifecycleComponent):
         self.add_predicate("camera_moved", False)
 
         self._run = None
+        self._watch = None           # CalibrationWatch in mode "anzeigen"
         self._detector = None
         self._detector_name = None
         self._flange = None          # (receive time s, 4x4)
@@ -134,6 +142,15 @@ class BaseCamCalibration(LifecycleComponent):
         if problems:
             self.get_logger().error("base_cam_calibration: " + "; ".join(problems))
             return False
+        if params.mode == DISPLAY_MODE:
+            self._watch = CalibrationWatch(values["output_file"])
+            self._camera_pose = sr.CartesianPose(CAMERA_FRAME, S6_REFERENCE_FRAME)
+            for name in ("is_running", "is_finished", "has_failed", "camera_moved"):
+                self.set_predicate(name, False)
+            self.get_logger().info(f"base_cam_calibration: zeigt die Kamera aus {self._watch.path} "
+                                   f"als Frame '{CAMERA_FRAME}'")
+            return True
+        self._watch = None
         try:
             if values["tag_dictionary"] != self._detector_name:
                 self._detector = make_tag_detector(values["tag_dictionary"])
@@ -168,6 +185,7 @@ class BaseCamCalibration(LifecycleComponent):
             self.get_logger().warn("base_cam_calibration: Lauf abgebrochen - der Attractor hält "
                                    "die letzte Zielpose")
         self._run = None
+        self._watch = None
         self.set_predicate("is_running", False)
         return True
 
@@ -216,7 +234,26 @@ class BaseCamCalibration(LifecycleComponent):
 
     # -- Step ---------------------------------------------------------------------
 
+    def _show_camera(self) -> None:
+        """Mode "anzeigen": follow the calibration file, publish its camera pose."""
+        if not self._watch.poll():
+            return
+        record = self._watch.record
+        if record is None:
+            self._camera_pose = sr.CartesianPose(CAMERA_FRAME, S6_REFERENCE_FRAME)  # empty
+            self.set_predicate("has_failed", True)
+            self.get_logger().warn(f"base_cam_calibration: kein Frame - {self._watch.line}")
+            return
+        T = record.world_T_cam
+        self._camera_pose.set_position(*(float(v) for v in T[:3, 3]))
+        self._camera_pose.set_orientation(list(quaternion_from_matrix(T[:3, :3])))
+        self.set_predicate("has_failed", False)
+        self.get_logger().info(f"base_cam_calibration: Frame '{CAMERA_FRAME}' - {self._watch.line}")
+
     def on_step_callback(self):
+        if self._watch is not None:
+            self._show_camera()
+            return
         run = self._run
         if run is None:
             return

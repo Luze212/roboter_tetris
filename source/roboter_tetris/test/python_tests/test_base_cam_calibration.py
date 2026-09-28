@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from roboter_tetris.basecam_extrinsics import (
-    DEFAULT_CALIBRATION_FILE, L6_CAL, ExtrinsicsRecord, cal_from_matrix,
+    DEFAULT_CALIBRATION_FILE, L6_CAL, CalibrationWatch, ExtrinsicsRecord, cal_from_matrix,
     load_camera_calibration, matrix_from_cal, pose_from_quaternion, quaternion_from_matrix,
     replace_calibration, resolve_calibration_path, rotation_angle_deg, save_record,
 )
@@ -85,6 +85,21 @@ def test_replacing_keeps_the_previous_calibration(tmp_path):
     assert load_camera_calibration(backup)[0].method == "uebergang_L6"
 
 
+def test_watch_follows_the_calibration_file(tmp_path):
+    """The camera frame shows what is in the file, and moves when a run rewrites it."""
+    path = str(tmp_path / "base_cam_extrinsics.json")
+    watch = CalibrationWatch(path)
+    assert watch.poll() and watch.record is None                   # not there yet
+    assert not watch.poll()
+    replace_calibration(path, ExtrinsicsRecord(world_T_cam=matrix_from_cal(*L6_CAL),
+                                               method="uebergang_L6"))
+    assert watch.poll() and watch.record.method == "uebergang_L6"
+    assert not watch.poll()                                         # unchanged: no reload
+    new = matrix_from_cal(-0.774, 0.794, 0.918, 179.5, 0.3, 179.8)
+    replace_calibration(path, ExtrinsicsRecord(world_T_cam=new, method="stufe1_basecam"))
+    assert watch.poll() and np.allclose(watch.record.world_T_cam, new, atol=1e-8)
+
+
 def test_quaternions_round_trip():
     for T in (matrix_from_cal(*L6_CAL), matrix_from_cal(0.1, 0.2, 0.3, 10.0, -20.0, 30.0),
               matrix_from_cal(0, 0, 0, 0, 0, 0)):
@@ -116,7 +131,7 @@ def test_description_matches_the_parameter_table():
     assert "rate" not in described                                      # K2
     signals = {s["signal_name"] for s in d["inputs"] + d["outputs"]}
     assert signals == {"color_image", "color_camera_info", "depth_image", "robot_state",
-                       "target_pose", "debug_image"}
+                       "target_pose", "debug_image", "camera_pose"}
 
 
 def test_description_defaults_give_the_default_run():
@@ -150,7 +165,7 @@ def test_every_signal_is_created(component):
     """Nachtrag 13 / L17: each signal owns a "<signal>_topic" parameter; a
     validation that refused those once left a component without ports."""
     for signal in ("color_image", "color_camera_info", "depth_image", "robot_state",
-                   "target_pose", "debug_image"):
+                   "target_pose", "debug_image", "camera_pose"):
         assert component.get_parameter(f"{signal}_topic").get_value(), signal
 
 

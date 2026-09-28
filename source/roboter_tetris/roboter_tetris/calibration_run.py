@@ -43,7 +43,10 @@ from .basecam_extrinsics import (
     solve_pnp, solve_stage1, validate,
 )
 
-MODES = ("stufe1", "stufe2", "pruefen")
+#: ``anzeigen`` runs no calibration: the component only shows the camera of the
+#: calibration file as a pose (for a TF frame), reloaded when the file changes.
+MODES = ("stufe1", "stufe2", "pruefen", "anzeigen")
+DISPLAY_MODE = "anzeigen"
 
 WARTEN = "WARTEN"
 START = "START"
@@ -110,7 +113,8 @@ PARAMETERS = (
     ("mode", "stufe1",
      "Betriebsart: stufe1 = Roboter fährt das Board ab (Grundkalibrierung), stufe2 = neu aus "
      "den Referenzmarken ohne Bewegung, pruefen = nur prüfen, ob sich die Kamera bewegt hat "
-     "(schreibt nichts)."),
+     "(schreibt nichts), anzeigen = nur die Kamera aus der Kalibrierdatei (output_file) als "
+     "Pose ausgeben, für einen Frame; folgt der Datei, wenn ein Lauf sie überschreibt."),
     ("output_file", DEFAULT_CALIBRATION_FILE,
      "Hierhin schreibt stufe1/stufe2 die Kalibrierung für base_cam, relativ zum Paket oder "
      "absolut. Standard: die Datei, die base_cam liest - sie gilt ab dem nächsten Aktivieren "
