@@ -200,7 +200,7 @@ Seine Erkenntnisse und die Regeln für ihre Verwendung stehen in
 
 ### 2.2 Koordinatensysteme und Greifgeometrie
 
-#### 2.2.1 Bezugssysteme `world`, UR-Basis und Flansch `ur_tool0`
+#### 2.2.1 Bezugssystem `world`, Roboterbasis und Flansch `ur_tool0`
 
 #### 2.2.2 TCP, Flansch und Griffpunkt
 

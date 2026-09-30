@@ -19,6 +19,14 @@ werden dort zuerst angelegt und erst bei der zentralen Integration hier ergänzt
 | Q09 | `src-intel-realsense-d435i-spezifikation` | verwendet | 2.1.1 | Produktbezeichnung der Roboterkamera, aktive Stereotiefentechnik und RGB-Sensor der Intel RealSense D435i | Intel: [Intel RealSense Depth Camera D435i, Specifications](https://www.intel.com/content/www/us/en/products/sku/190004/intel-realsense-depth-camera-d435i/specifications.html) | Herstellerquelle, Link vom Nutzer am 26.09.2026 bestätigt |
 | Q10 | `src-realsense-d400-datenblatt` | verwendet | 2.1.1 | Infrarot-Stereosystem, Infrarotprojektor und integrierte IMU der Intel RealSense D435i | RealSense: [Intel RealSense D400 Series Datasheet, September 2023](https://www.realsenseai.com/wp-content/uploads/2023/10/Intel-RealSense-D400-Series-Datasheet-September-2023.pdf) | Herstellerquelle, Link vom Nutzer am 26.09.2026 bestätigt |
 
+| — | `src-projekt-foerderband-kloetze` | verwendet | 2.1.4 | Vorhandenes Förderband, gemessene Geschwindigkeit sowie Abmessungen, Farben und Oberflächen der verwendeten Klötze | Projektgruppe Robotertetris: Angaben zum Versuchsaufbau, bestätigt im Arbeitsgespräch am 30.09.2026; ergänzt durch den lokalen Komponentenplan vom 28.09.2026 | durch Projektgruppe bestätigt am 30.09.2026 |
+
+| — | `src-projekt-basiskamera-konfiguration` | verwendet | 2.1.5 | Betriebsprofile, Sichtbereich und Montagesituation der Intel RealSense L515 im finalen Aufbau | Projektgruppe Robotertetris: Dokumentation der Projektanwendung und Komponentenplan des finalen Builds, Stand 28.09.2026; ergänzt durch Angaben der Projektgruppe im Arbeitsgespräch am 30.09.2026 | durch Projektgruppe bestätigt am 30.09.2026 |
+
+| — | `src-projekt-roboterkamera-einbindung` | verwendet | 2.1.6 | Mechanische Anordnung der Intel RealSense D435i und ihr Status im finalen Greifablauf | Projektgruppe Robotertetris: Komponentenplan des finalen Builds, Stand 28.09.2026; ergänzt durch Angaben der Projektgruppe im Arbeitsgespräch am 30.09.2026 | durch Projektgruppe bestätigt am 30.09.2026 |
+
+| — | `src-projekt-bezugssysteme` | verwendet | 2.2.1 | Bezugssystem `world`, historisches `conveyor_frame` und Flanschpose `ur_tool0` | Projektgruppe Robotertetris: Systemgraph, Architekturentscheidungen und Dokumentation der Projektanwendung, Stand 28.09.2026; ergänzt durch Angaben der Projektgruppe im Arbeitsgespräch am 30.09.2026 | durch Projektgruppe bestätigt am 30.09.2026 |
+
 ## Regeln für neue Einträge
 
 - Jede neue Quelle erhält zuerst eine eindeutige stabile Kennung und eine

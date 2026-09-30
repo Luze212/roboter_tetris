@@ -257,3 +257,101 @@ Vor dem Betrieb wird der Öffnungsbereich des Greifers kalibriert. Dadurch ist
 die Öffnungsweite im aufgebauten System als Millimeterwert verfügbar. Der
 Greifer ist über USB mit dem Rechner verbunden. Er wird damit extern
 angesteuert und nicht über die direkte Roboteransteuerung bedient.
+
+#### 2.1.4 Förderband und Klötze
+
+Das Förderband führt die Klötze vom manuellen Auflagepunkt am Bandanfang durch
+den Erfassungsbereich der Basiskamera zur Greifzone. Die Geschwindigkeit bleibt
+während eines Versuchs konstant. Vor Versuchsbeginn können verschiedene
+Geschwindigkeitsstufen eingestellt werden. Eine Stoppuhrmessung der niedrigsten
+Einstellung, Stufe 1, ergab Werte zwischen `125 mm/s` und `133 mm/s`
+([src-projekt-foerderband-kloetze](../referenzen/quellen/src-projekt-foerderband-kloetze.md)).
+Die gemessene Geschwindigkeit dient später als Gegenprobe für die aus den
+Bilddaten geschätzte Bandgeschwindigkeit.
+
+Für die Versuche wurden ausschließlich quaderförmige, 3D-gedruckte Klötze
+verwendet. Der am häufigsten verwendete flache Klotz besitzt die Abmessungen
+`25 mm × 50 mm × 75 mm`. Daneben kamen ein großer Quader mit
+`100 mm × 50 mm × 50 mm` sowie Würfel mit einer Kantenlänge von `50 mm` zum
+Einsatz. Die Klötze sind rot, blau, weiß oder schwarz. Ihre Oberseiten sind
+überwiegend matt, während einzelne Seitenflächen stärker reflektieren
+([src-projekt-foerderband-kloetze](../referenzen/quellen/src-projekt-foerderband-kloetze.md)).
+
+Die Klötze können stehend, liegend, flach oder gedreht auf dem Band liegen.
+Runde Klötze wurden bewusst ausgeschlossen. Ihre Orientierung lässt sich mit
+dem gewählten Ansatz nicht eindeutig erfassen und ist für den vorgesehenen
+Greifablauf nicht erforderlich. Die verwendeten Geometrien begrenzen den
+Funktionsnachweis damit auf quaderförmige Objekte.
+
+#### 2.1.5 Basiskamera
+
+Die Basiskamera ist die zentrale Sensorik des finalen Greifablaufs. Sie erfasst
+die Klötze am Bandanfang, bevor sie die Greifzone erreichen. Die Intel
+RealSense L515 liefert ein RGB-Bild mit `1.280 × 720 Pixel` bei `15 Hz` und
+ein Tiefenbild mit `640 × 480 Pixel` bei `30 Hz`. Die unterschiedliche Rate
+ergibt sich aus dem verwendeten Tiefenprofil der L515
+([src-projekt-basiskamera-konfiguration](../referenzen/quellen/src-projekt-basiskamera-konfiguration.md)).
+
+Der sichtbare Bandbereich reicht im Bezugssystem `world` ungefähr von
+`y = +1,03 m` bis `y = +0,46 m`. Die Greifzone beginnt unmittelbar hinter
+diesem Bildbereich. Der Roboter und sein Greifer verdecken die Kamera damit
+während des Greifvorgangs nicht. Die weitere Führung eines erkannten Klotzes
+bis zur Greifzone wird erst im Kapitel zum Greifkonzept beschrieben.
+
+Die L515 ist auf einem Gestell über dem Förderband montiert. Die Befestigung
+ist nicht ausreichend steif, um ihre Lage nach Änderungen am Aufbau dauerhaft
+als unveränderlich anzunehmen. Bereits kleine Lageänderungen beeinflussen die
+Umrechnung der Kameramessung in das Bezugssystem `world`. Deshalb ist ein
+einfach ausführbares und wiederholbares Kalibrierverfahren für den Aufbau
+erforderlich. Das Kalibrierverfahren selbst wird in Kapitel 4 erläutert
+([src-projekt-basiskamera-konfiguration](../referenzen/quellen/src-projekt-basiskamera-konfiguration.md)).
+
+#### 2.1.6 Roboterkamera
+
+Zusätzlich zur Basiskamera ist eine Intel RealSense D435i am Roboterflansch
+montiert. Sie sitzt neben der Aufnahme des Greifers. Ihre optische Achse ist
+gegenüber der Flanschmitte parallel versetzt und erfasst den Bereich direkt vor
+dem Greifer. Die Kamera bewegt sich damit gemeinsam mit dem Roboter und kann
+für eine Feinortung kurz vor dem Greifen genutzt werden. Sie stellt dafür ein
+RGB-Bild sowie Tiefendaten aus einem aktiven Infrarot-Stereosystem bereit
+([src-intel-realsense-d435i-spezifikation](../referenzen/quellen/src-intel-realsense-d435i-spezifikation.md),
+[src-realsense-d400-datenblatt](../referenzen/quellen/src-realsense-d400-datenblatt.md)).
+
+Im finalen Greifablauf ist die Roboterkamera nicht in den aktiven Regelpfad
+eingebunden. Die Lokalisierung und Verfolgung der Klötze erfolgt mit der
+Basiskamera. Die Gründe für diese Entscheidung und der mögliche spätere Einsatz
+der Roboterkamera werden in den folgenden Kapiteln behandelt
+([src-projekt-roboterkamera-einbindung](../referenzen/quellen/src-projekt-roboterkamera-einbindung.md)).
+
+### 2.2 Koordinatensysteme und Greifgeometrie
+
+#### 2.2.1 Bezugssystem `world`, Roboterbasis und Flansch `ur_tool0`
+
+Alle Positionsangaben des Regelpfads beziehen sich auf das globale
+Bezugssystem `world`. Sein Ursprung liegt in der physischen Roboterbasis. Das
+System ist fest mit dem Roboter verbunden und bewegt sich nicht mit dem
+Förderband. Die Förderbewegung erfolgt im Aufbau näherungsweise in negative
+Y-Richtung von `world`. Das Förderband liegt gemäß Abbildung
+`fig-systemaufbau-draufsicht` seitlich der Roboterbasis im Bereich negativer
+X-Koordinaten, ungefähr zwischen `x = -1,275 m` und `x = -0,480 m`. Die
+Z-Achse zeigt nach oben. Die Bandoberfläche liegt bei `z = 0,0536 m`
+([src-projekt-bezugssysteme](../referenzen/quellen/src-projekt-bezugssysteme.md)).
+
+Für die anfängliche Kamerakalibrierung wurde zusätzlich das Bezugssystem
+`conveyor_frame` verwendet. Sein Ursprung liegt mittig am Bandanfang. Seine
+Y-Achse zeigt in Bandlaufrichtung. Die X-Achse zeigt, in Bandlaufrichtung
+betrachtet, nach rechts. Die Z-Achse zeigt von der Bandebene nach oben. Im
+finalen Betrieb wird dieses Bezugssystem nicht verwendet. Kameramessung,
+Zielauswahl und Roboterbewegung werden einheitlich in `world` verarbeitet.
+Dadurch entfällt im Regelpfad eine
+zusätzliche Umrechnung zwischen Band und Roboter.
+
+Die Robotersteuerung liefert als geregelte Pose die Lage des Flansches
+`ur_tool0`. Sie ist von einem in der UR-Steuerung konfigurierten TCP zu
+unterscheiden. Die daraus folgende Lage des tatsächlichen Griffpunkts wird im
+nächsten Abschnitt bestimmt. Die räumliche Zuordnung von Roboterbasis, Flansch
+`ur_tool0` und Griffpunkt zeigt Abbildung `fig-koord-systeme`.
+
+<!-- Word-Übernahme: `fig-koord-systeme` nach dem vorstehenden Textverweis
+einfügen. Die Abbildung muss Roboterbasis, `world-Y−`, `world-Z+`, Flansch
+`ur_tool0` und Griffpunkt eindeutig unterscheiden. -->

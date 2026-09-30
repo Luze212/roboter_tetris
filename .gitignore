@@ -8,3 +8,8 @@ CLAUDE.md
 docs/archiv/2026-06-01-robotiq-gripper-component-design.md
 /FuE_Greifen-main
 GEMINI.md
+
+# Lokale Codex-Arbeitsdateien für Berichtsgrafiken und Artefaktprüfung.
+# Finale Abbildungen unter Projektbericht/abbildungen bleiben versionierbar.
+/.codex-build/
+/.codex-finalizer/
