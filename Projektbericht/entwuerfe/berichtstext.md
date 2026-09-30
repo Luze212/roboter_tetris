@@ -947,3 +947,158 @@ Ein fehlerhafter Griffversatz war nach der Kalibrierung nicht zu erkennen.
 Das automatische Verfahren steht für jede Veränderung der Kameraposition
 bereit. Ein neuer Lauf dauert einschließlich Vorbereitung rund fünf Minuten,
 und `base_cam` übernimmt das Ergebnis aus der Zieldatei der Kalibrierdaten.
+
+## 5 Inbetriebnahme und Optimierung
+
+Die Inbetriebnahme verband die einzelnen Komponenten schrittweise zu einem
+durchgängigen Regelpfad. Im Mittelpunkt stand dabei nicht nur die korrekte
+Übertragung der Daten. Die Bilddaten mussten den Roboter auch schnell genug
+erreichen, damit die Vorhersage der Objektposition während der Bewegung noch
+verwendbar bleibt. Die endgültigen Einstellungen sind daher ein Kompromiss aus
+Bewegungsdynamik, Erkennungsqualität und verfügbarer Rechenzeit.
+
+### 5.1 Integration und Inbetriebnahme des Regelpfads
+
+Der Regelpfad wurde in der Reihenfolge `base_cam`, `vectoring`,
+`priority_handler`, `object_follower`, Signal Point Attractor und IK Velocity
+Controller in Betrieb genommen. Die Basiskamera liefert erkannte Objekte. Das
+vollständige Zusammenspiel der Komponenten und ihrer in AICA verdrahteten
+Signale enthält Anhangabbildung `fig-regelpfad-aica`. Das
+Modul `vectoring` schätzt daraus die Geschwindigkeit. Anschließend wählt der
+`priority_handler` ein greifbares Objekt aus. Der Follower berechnet dessen
+vorhergesagte Zielpose, bevor der Attractor und der IK-Controller die
+Flanschbewegung umsetzen. Der Greifer und die Zustandsrückmeldungen sind in
+dieselbe Ablaufsteuerung eingebunden. Diagnosekomponenten bleiben davon
+getrennt und beeinflussen die Zielauswahl nicht
+([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
+
+Die Teilansichten im Anhang zeigen die Bildverarbeitung in
+`fig-aica-bildverarbeitung`, die Zielauswahl mit Diagnosepfad in
+`fig-aica-zielauswahl-diagnose`, den Greifablauf in `fig-aica-greifablauf`
+und die Bewegungsregelung bis zum Hardware Interface in
+`fig-aica-bewegungsregelung`. Die Reihenfolge entspricht dem Aufbau der
+Abbildungen im Anhang.
+
+Die Python-Komponenten laufen in einem gemeinsamen Prozess. Ihre
+Taktfrequenzen beanspruchen daher dieselben Rechenkerne. Zusätzliche
+Auswertung oder eine hohe Diagnoserate kann die Bildverarbeitung verzögern,
+obwohl sie nicht Teil des Regelpfads ist. Die Diagnose wurde deshalb auf 2 Hz für
+`data_tracker` und 10 Hz für `interface_streamer` begrenzt. Nicht genutzte
+Roboterkamera-Komponenten werden im finalen Betrieb nicht geladen. Die
+Basiskamera und `vectoring` arbeiten jeweils mit 15 Hz, der
+`priority_handler` mit 20 Hz und der `object_follower` mit 50 Hz. Die
+Roboterregelung selbst läuft mit 500 Hz
+([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
+
+Diese Taktfrequenzen können bei einzelnen Komponenten direkt im
+AICA-Interface eingestellt werden. Abbildung
+`fig-aica-vectoring-parameter` zeigt dies beispielhaft für den Parameter
+`Rate` von `vectoring`.
+
+<!-- Word-Übernahme: `fig-aica-vectoring-parameter` an dieser Stelle
+einfügen. Bildunterschrift: Einstellbare Taktrate und weitere Parameter der
+Komponente Vectoring im AICA-Interface. -->
+![Einstellbare Taktrate und weitere Parameter der Komponente Vectoring im AICA-Interface](../abbildungen/fig-aica-vectoring-parameter.png)
+
+*Abbildung `fig-aica-vectoring-parameter`: Einstellbare Taktrate und weitere
+Parameter der Komponente Vectoring im AICA-Interface.*
+
+Die Notwendigkeit dieser Begrenzung zeigte sich bereits während der
+Inbetriebnahme. Mit nicht angepassten Kamerakomponenten trafen durchschnittlich
+5,1 Messungen pro Sekunde ein. Das mittlere Alter einer Messung betrug dabei
+450 ms. Nach einer Begrenzung der Diagnoseraten stieg die Rate auf 7,1 Hz.
+Eine Eingangsqueue der Tiefe 1 verhinderte zusätzlich, dass alte Bilddaten
+aufgestaut verarbeitet werden. Das mittlere Messalter sank dadurch auf 139 ms;
+die mittlere Zeit bis zur nächsten Messung lag bei 266 ms. Die L515 selbst
+lieferte Bilddaten mit einem Alter von 46 bis 51 ms. Der verbleibende Anteil
+entsteht somit vor allem in Verarbeitung und Übertragung
+([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
+
+Auch die 500-Hz-Regelung reagierte empfindlich auf parallele Last. Bei
+geöffneter Visualisierung, Browser-Ansichten und weiteren Leseprozessen fiel
+ihre effektive Rate zeitweise auf 54 bis 89 % des Sollwerts. Für den Betrieb
+werden deshalb die Analyse-Software `rviz2`, nicht benötigte Browser-Ansichten und parallele
+Analyseprozesse geschlossen. Reicht die Rechenleistung trotzdem nicht aus,
+kann die Rate von `base_cam` auf 12 Hz reduziert werden. Diese Maßnahme
+verringert die Last, verlängert jedoch den Abstand zwischen zwei
+Objektmessungen
+([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
+
+### 5.2 Abstimmung der dynamischen Greifbewegung
+
+Die Bewegungsparameter wurden gemeinsam abgestimmt. Eine schnellere
+Flanschbewegung verkürzt zwar die Zeit bis zum Greifen, erhöht aber die
+Anforderungen an Vorhersage, Geschwindigkeitsregelung und Arbeitsraumgrenzen.
+Die endgültig verwendeten Größen der Bewegungsregelung sind in Tabelle
+`tab-regel-sicherheitsparameter` zusammengefasst
+([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
+
+*Tabelle `tab-regel-sicherheitsparameter`: Zusammen abgestimmte Parameter für
+Laufzeit, Bewegung und Sicherheit im finalen Regelpfad.*
+
+| Parameter | Wert | Einheit | Funktion |
+|---|---:|---|---|
+| Rate `base_cam` und `vectoring` | 15 | Hz | Objektmessung und Geschwindigkeitsschätzung |
+| Glättungsfenster der Geschwindigkeitsmessung | 20 | Messungen | Unterdrückt einzelne Ausreißer bei rund 1,3 s Historie |
+| Vorhaltezeit `lead_time_s` | 0,240 | s | Berücksichtigt die Zeit bis zum Erreichen der Greifpose |
+| Attractor- und IK-Geschwindigkeitsgrenze | 0,850 | m/s | Begrenzt die lineare Flanschgeschwindigkeit |
+| IK-Befehlsrate | 3,000 | dimensionslos | Gewichtet die Aktualisierung der Geschwindigkeitsbefehle |
+| Absenkgeschwindigkeit | 0,350 | m/s | Vertikale Bewegung zum Greifpunkt |
+| Sinkzeit `t_descend_s` | 0,700 | s | Berechnete Dauer des Absenkens |
+| Greif- und Beruhigungszeit | 0,800 / 0,400 | s | Schließen des Greifers und Stabilisierung der Zielverfolgung |
+| Maximale Extrapolation / Ziel-Timeout | 1,000 / 1,500 | s | Begrenzung der Vorhersage bei ausbleibender Messung |
+| Mindestobjekthöhe / Mindestgreifhöhe | 10 / 11 | mm | Filterung sehr flacher Objekte und Kollisionsabstand zum Band |
+
+Der Attractor und der IK-Controller verwenden beide eine maximale lineare
+Geschwindigkeit von 0,850 m/s. Eine weitere Erhöhung brachte im Aufbau keinen
+ausreichenden Vorteil gegenüber der steigenden Belastung und den
+Sicherheitsgrenzen. Die Absenkgeschwindigkeit wurde von 0,250 auf 0,350 m/s
+erhöht. Gleichzeitig verringerte sich die angesetzte Sinkzeit von 0,900 auf
+0,700 s. Die Dauer deckt die im Aufbau auftretende Hubbewegung von etwa 0,110
+bis 0,150 m einschließlich einer kurzen Reserve ab. Die Beruhigungszeit von
+0,400 s verhindert, dass die Zielverfolgung unmittelbar nach einem
+Zustandswechsel mit einer instabilen Messung weiterläuft
+([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
+
+Die Zielvorhersage verwendet eine Vorhaltezeit von 0,240 s. Fehlende Messungen
+werden höchstens 1,000 s extrapoliert. Danach bleibt das Ziel noch maximal
+1,500 s gültig. Diese Grenzen verhindern, dass ein lange nicht mehr
+beobachteter Klotz weiter verfolgt wird. Stehende Objekte werden bereits bei
+der Auswahl ausgeschlossen, wenn ihre geschätzte Geschwindigkeit unter
+0,050 m/s liegt.
+
+Die minimale Greifhöhe wurde im Verlauf von 16 auf 11 mm reduziert. In
+Verbindung mit einer minimalen erkannten Objekthöhe von 10 mm können damit
+auch flache Klötze berücksichtigt werden. Die Greifhöhe setzt dabei auf der Hälfte der gemessenen Höhe des Klotzes an. Die untere
+Arbeitsraumgrenze wurde parallel von 0,304 auf 0,299 m angepasst. Greifhöhe,
+Arbeitsraumgrenze und Greifergeometrie müssen zusammen geändert werden, damit
+die Greifbacken nicht das Band berühren
+([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
+
+### 5.3 Optimierung der Basiskamera-Erkennung
+
+Die Basiskamera verarbeitet nur den Bereich, aus dem der Roboter Klötze
+aufnehmen kann. Der Bildausschnitt beginnt bei Pixel-Spalte 342 und besitzt eine
+Breite von 618 px. Er deckt im world-System näherungsweise den für die
+Greifzone relevanten Bereich von `x = -1,000 m` bis `x = -0,530 m` und
+`y = -0,320 m` bis `y = 0,445 m` ab. Bereiche außerhalb dieser Zone würden
+keine greifbaren Ziele liefern. Ihre Ausblendung senkt deshalb die zu
+verarbeitende Bildmenge und reduziert Fehlkandidaten an Bandrand und Gestell
+([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
+
+Zusätzlich wurden die Filter für kleine und flache Objekte angepasst. Die
+Mindestkonturfläche beträgt 1.000 px statt zuvor 1.500 px. Die untere Grenze
+für die erkannte Höhe wurde auf 10 mm gesetzt. Damit bleiben auch die flachen
+verwendeten Klötze im Kandidatenpool. Die niedrigeren Grenzen erhöhen zugleich
+die Gefahr von Störungen durch Reflexionen und unvollständige Tiefenwerte. Die
+Beschränkung auf den Bildausschnitt der Greifzone und die zeitliche Glättung
+der Geschwindigkeitsmessung begrenzen diesen Effekt.
+
+Der Follower verwendet die von der Erkennung übermittelte Ausrichtung ab einer
+Qualitätskennzahl von 0,400. Zuvor lag die Grenze bei 0,700. Die Anpassung
+erlaubt mehr Kandidaten bei schwächerer Kontur. Die nachgelagerte Zielauswahl
+bewertet weiterhin nur Objekte, die innerhalb des Arbeitsraums liegen und
+rechtzeitig erreichbar sind. Die Bilderkennung muss daher nicht jedes
+sichtbare Objekt perfekt klassifizieren, sondern ausreichend verlässliche
+Messungen für die bewegungsabhängige Auswahl bereitstellen
+([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).

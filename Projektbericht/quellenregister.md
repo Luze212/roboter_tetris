@@ -43,6 +43,8 @@ werden dort zuerst angelegt und erst bei der zentralen Integration hier ergänzt
 
 | — | `src-projekt-kalibrierung` | verwendet | 4.2, 4.4 | Aufbau, Ablauf, Gütegrenzen und Messwerte der automatischen Basiskamera-Kalibrierung sowie ihre Validierung | Projektgruppe Robotertetris: Architekturentscheidungen und Messdaten der Basiskamera-Kalibrierung vom 25. und 28.09.2026 | durch Projektgruppe bestätigt am 30.09.2026 |
 
+| — | `src-projekt-inbetriebnahme-optimierung` | verwendet | 5.1 bis 5.3 | Inbetriebnahme, Raten, Latenzen, Rechenlast sowie eingestellte Parameter des finalen Regelpfads und der Basiskamera | Projektgruppe Robotertetris: Architekturentscheidungen, Systemgraph und Konfiguration des finalen Builds, Stand 28.09.2026 | durch Projektgruppe bestätigt am 30.09.2026 |
+
 | — | `src-kalibr-aprilgrid` | verwendet | 4.2 | Aufbau eines AprilGrid-Kalibrierboards aus AprilTags | Autonomous Systems Lab, ETH Zürich: [Kalibr Calibration Targets](https://github.com/ethz-asl/kalibr/wiki/calibration-targets) | durch Projektgruppe geprüft am 30.09.2026 |
 
 | — | `src-wang-apriltag2-2016` | verwendet | 4.2 | Eindeutige Kennung und Detektion von AprilTags | J. Wang, E. Olson: [AprilTag 2: Efficient and robust fiducial detection](https://doi.org/10.1109/IROS.2016.7759617), 2016 | durch Projektgruppe geprüft am 30.09.2026 |

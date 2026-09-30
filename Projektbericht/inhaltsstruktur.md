@@ -23,7 +23,7 @@ passenden Stellen ergänzt. Für den Einstieg bei paralleler Arbeit zuerst
   abgestimmten Markdown-Text ergänzt oder erzeugt. Änderungen an Word sind
   kein automatischer Folgeschritt nach einem fertig abgestimmten Abschnitt.
 - Dateien erhalten aussagekräftige, kurze Namen. Abbildungsdateien verwenden
-  ihre stabile Kennung, zum Beispiel `fig-regelpfad-aica.svg`.
+  ihre stabile Kennung, zum Beispiel `fig-regelpfad-aica.png`.
 
 ### Sprache und Stil
 
@@ -171,6 +171,15 @@ Seine Erkenntnisse und die Regeln für ihre Verwendung stehen in
   abschließende formatierte Abgabeversion.
 - Vor jeder Übernahme in die Word-Fassung wird ausdrücklich festgelegt, welche
   abgestimmten Kapitel übertragen werden sollen.
+- Bei einer späteren vollständigen Word-Zusammenführung werden die manuell
+  geschriebenen Kapitelnummern aus den Überschriften entfernt. Word vergibt
+  und aktualisiert die Kapitelnummern über die Überschriftenformate.
+- Die stabilen Kennungen für Quellen, Abbildungen und Tabellen werden vor dem
+  finalen Word-Export in fortlaufende Nummern überführt. Die Kennungen bleiben
+  bis dahin im Markdown als kollisionsfreie Arbeitsreferenzen erhalten.
+- Verweise auf andere Kapitel werden im finalen Word-Dokument als aktualisierbare
+  Querverweise angelegt. Sie zeigen nach einer Aktualisierung die jeweilige
+  Kapitelnummer an und verlinken auf die zugehörige Überschrift.
 - Nach jedem Abschnitt folgt im Chat eine kurze Einordnung: Was ist fertig,
   was bleibt offen und welcher konkrete Schritt als Nächstes sinnvoll ist.
 - Der nächste Schritt wird verständlich erläutert. Die Erklärung nennt seinen
@@ -268,19 +277,11 @@ Seine Erkenntnisse und die Regeln für ihre Verwendung stehen in
 
 ## 5. Inbetriebnahme und Optimierung
 
-### 5.1 Inbetriebnahme des Regelpfads
+### 5.1 Integration und Inbetriebnahme des Regelpfads
 
-### 5.2 Latenz, Rechenlast und Bildrate
+### 5.2 Abstimmung der dynamischen Greifbewegung
 
-### 5.3 Wahl von Vorhalt, Attractor-Gain und Geschwindigkeitslimit
-
-### 5.4 Optimierung der Basiskamera
-
-#### 5.4.1 Bildausschnitt (ROI)
-
-#### 5.4.2 Randnahe Klötze
-
-#### 5.4.3 Flache Klötze und Mindesthöhe
+### 5.3 Optimierung der Basiskamera-Erkennung
 
 ## 6. Versuchsergebnisse
 
@@ -324,13 +325,18 @@ Seine Erkenntnisse und die Regeln für ihre Verwendung stehen in
 |---|---|---|
 | `fig-aufbau-gesamtansicht-1` und `fig-aufbau-gesamtansicht-2` | Beschriftete Gesamtansichten des realen Aufbaus | 2.1 |
 | `fig-systemaufbau-uebersicht` | Systembild mit Roboter, Band, Kameras, Arbeitsraum, Greifzone und Ablage | 2.2 |
-| `fig-regelpfad-aica` | AICA-Regelpfad von `base_cam` bis IK-Controller | 2.3 oder 3.1 |
+| `fig-regelpfad-aica` | Gesamtansicht der vollständigen AICA-Anwendung mit Signalverbindungen | Anhang, Verweis in 5.1 |
+| `fig-aica-bildverarbeitung` | Kameraeingänge, Base Kamera und Vectoring | Anhang, Verweis in 5.1 |
+| `fig-aica-zielauswahl-diagnose` | Priority Handler sowie davon getrennte Diagnosekomponenten | Anhang, Verweis in 5.1 |
+| `fig-aica-greifablauf` | Robotiq Gripper, Object Follower und Signal Point Attractor | Anhang, Verweis in 5.1 |
+| `fig-aica-bewegungsregelung` | Bewegungsregelung bis Hardware Interface und IK Velocity Controller | Anhang, Verweis in 5.1 |
+| `fig-aica-vectoring-parameter` | Einstellbare Taktrate und weitere Parameter von Vectoring im AICA-Interface | Direkt in 5.1 |
 | `fig-follower-zustandsdiagramm` | Zustandsdiagramm des `object_follower` | 3.4.1 |
 | `fig-koord-systeme` | Koordinatensysteme sowie TCP, Flansch und Griffpunkt | 2.2 |
 | `fig-pick-bildfolge` | Bildfolge eines erfolgreichen Pick-on-the-Fly | 6.4 |
 | `fig-track-positionsverlauf` | Bandposition über Zeit: Messung und Track-Vorhersage | 6.2 |
 | `fig-geschwindigkeitsschaetzung` | Einzelgeschwindigkeiten, Pool-Schätzung und Stoppuhr-Gegenprobe | 6.2 |
-| `fig-basiskamera-roi-vergleich` | Alter und neuer ROI der Basiskamera | 5.4.1 |
+| `fig-basiskamera-roi-vergleich` | Alter und neuer ROI der Basiskamera | 5.3 |
 | `fig-systemleistung` | Rechenlast, Bildrate und 500-Hz-Regelschleife | 5.2 oder 6.6 |
 | `fig-greifer-robotiq-2f140-abmessungen` | Abmessungen des geöffneten Robotiq-2F-140-Greifers | 2.1.3 |
 | `fig-orbit-trajektorie` | Orbit-Trajektorie der Eye-in-Hand-Kalibrierung (Drauf- und Seitenansicht, 9 Wegpunkte, r = 50 mm) | 4.3 |
@@ -341,5 +347,5 @@ Seine Erkenntnisse und die Regeln für ihre Verwendung stehen in
 |---|---|---|
 | `tab-hardware-komponenten` | Hardwarekomponenten und Aufgaben | 2.1 |
 | `tab-regelpfad-signale` | Signale des Regelpfads | 2.3 |
-| `tab-regel-sicherheitsparameter` | Relevante Regel- und Sicherheitsparameter | 5.3 |
+| `tab-regel-sicherheitsparameter` | Relevante Parameter für Laufzeit, Regelung und Sicherheit | 5.2 |
 | `tab-versuche-greifergebnisse` | Versuchsergebnisse: Klotz, Geschwindigkeit, Regelabweichung und Ergebnis | 6.5 |
