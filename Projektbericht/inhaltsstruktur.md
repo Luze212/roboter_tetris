@@ -123,8 +123,9 @@ Seine Erkenntnisse und die Regeln für ihre Verwendung stehen in
 
 - Jedes Kapitel beantwortet eine eigene Frage. Inhalte werden nicht in mehreren
   Kapiteln wiederholt.
-- Der Systemaufbau gehört in Kapitel 2, das Konzept in Kapitel 3, die konkrete
-  Implementierung in Kapitel 4 und die Messergebnisse in Kapitel 6.
+- Der Systemaufbau gehört in Kapitel 2. Kapitel 3 verbindet Funktionskonzept
+  und konkrete Umsetzung, damit eine Entscheidung nicht getrennt von ihrer
+  Realisierung beschrieben wird. Messergebnisse stehen in Kapitel 6.
 - Ergebnisse werden mit ihren Versuchsbedingungen angegeben. Bewertungen oder
   Schlussfolgerungen folgen erst danach.
 - Abbildungen und Tabellen werden nur aufgenommen, wenn sie eine Aussage
@@ -213,105 +214,101 @@ Seine Erkenntnisse und die Regeln für ihre Verwendung stehen in
 
 #### 2.3.3 Signal- und Datenfluss
 
-## 3. Konzept für das Greifen während der Bandbewegung
+## 3. Greifkonzept und Umsetzung
 
-### 3.1 Anforderungen an den Regelpfad
+### 3.1 Funktionskette des Pick-on-the-Fly
 
-### 3.2 Objekterkennung mit der Basiskamera
+### 3.2 Erkennung, Vermessung und Vorhersage
 
-### 3.3 Geschwindigkeits- und Positionsschätzung
+#### 3.2.1 `base_cam` und Objektdaten
 
-### 3.4 Zielauswahl und Erreichbarkeitsprüfung
+#### 3.2.2 `vectoring` und Geschwindigkeits- und Positionsschätzung
 
-### 3.5 Bahnführung mit Attractor und IK-Velocity-Controller
+### 3.3 Zielauswahl und Erreichbarkeitsprüfung
 
-### 3.6 Greifablauf und Fehlerbehandlung
+#### 3.3.1 `priority_handler` und Greifebene
 
-#### 3.6.1 Anfahren
+#### 3.3.2 Greifbarkeits- und Erreichbarkeitsprüfung
 
-#### 3.6.2 Folgen
+### 3.4 Bahnführung und Greifablauf
 
-#### 3.6.3 Absenken und Greifen
+#### 3.4.1 `object_follower` und Zustandsautomat
 
-#### 3.6.4 Heben, Ablage und Abbruch
+#### 3.4.2 Anfahren und Folgen
 
-## 4. Umsetzung
+#### 3.4.3 Absenken, Greifen, Heben und Ablage
 
-### 4.1 Komponentenübersicht
+#### 3.4.4 Fehlerbehandlung und Abbruch
 
-### 4.2 `base_cam` und Objektdaten
+### 3.5 Bewegungsumsetzung in AICA
 
-### 4.3 `vectoring` und Track-Vorhersage
+#### 3.5.1 Signal Point Attractor und Vorhalt
 
-### 4.4 `priority_handler` und Greifebene
+#### 3.5.2 IK Velocity Controller und Geschwindigkeitsgrenzen
 
-### 4.5 `object_follower` und Zustandsautomat
+### 3.6 Greiferansteuerung und Rückmeldungen
 
-### 4.6 Greiferansteuerung und Rückmeldungen
+## 4. Kalibrierung
 
-### 4.7 Sicherheitsgrenzen und Arbeitsraum
+### 4.1 Kalibrierungsstrategie und Bezugssysteme
 
-## 5. Kalibrierung
+### 4.2 Extrinsische Kalibrierung der Basiskamera
 
-### 5.1 Kalibrierungsstrategie und Bezugssysteme
+### 4.3 Hand-Auge-Kalibrierung der Roboterkamera
 
-### 5.2 Extrinsische Kalibrierung der Basiskamera
+### 4.4 Validierung der Koordinatentransformation und Positionsgenauigkeit
 
-### 5.3 Hand-Auge-Kalibrierung der Roboterkamera
+## 5. Inbetriebnahme und Optimierung
 
-### 5.4 Validierung der Koordinatentransformation und Positionsgenauigkeit
+### 5.1 Inbetriebnahme des Regelpfads
 
-## 6. Inbetriebnahme und Optimierung
+### 5.2 Latenz, Rechenlast und Bildrate
 
-### 6.1 Inbetriebnahme des Regelpfads
+### 5.3 Wahl von Vorhalt, Attractor-Gain und Geschwindigkeitslimit
 
-### 6.2 Latenz, Rechenlast und Bildrate
+### 5.4 Optimierung der Basiskamera
 
-### 6.3 Wahl von Vorhalt, Attractor-Gain und Geschwindigkeitslimit
+#### 5.4.1 Bildausschnitt (ROI)
 
-### 6.4 Optimierung der Basiskamera
+#### 5.4.2 Randnahe Klötze
 
-#### 6.4.1 Bildausschnitt (ROI)
+#### 5.4.3 Flache Klötze und Mindesthöhe
 
-#### 6.4.2 Randnahe Klötze
+## 6. Versuchsergebnisse
 
-#### 6.4.3 Flache Klötze und Mindesthöhe
+### 6.1 Versuchsbedingungen
 
-## 7. Versuchsergebnisse
+### 6.2 Validierung der Geschwindigkeitsschätzung
 
-### 7.1 Versuchsbedingungen
+### 6.3 Genauigkeit der Basiskamera
 
-### 7.2 Validierung der Geschwindigkeitsschätzung
+### 6.4 Erstes Pick-on-the-Fly
 
-### 7.3 Genauigkeit der Basiskamera
+### 6.5 Wiederholversuche und Randbereich
 
-### 7.4 Erstes Pick-on-the-Fly
+### 6.6 Ergebnisbewertung
 
-### 7.5 Wiederholversuche und Randbereich
+#### 6.6.1 Erfolgreiche Griffe
 
-### 7.6 Ergebnisbewertung
+#### 6.6.2 Grenzen des aktuellen Systems
 
-#### 7.6.1 Erfolgreiche Griffe
+## 7. Diskussion und Ausblick
 
-#### 7.6.2 Grenzen des aktuellen Systems
+### 7.1 Erreichte Projektziele
 
-## 8. Diskussion und Ausblick
+### 7.2 Grenzen des aktuellen Systems
 
-### 8.1 Erreichte Projektziele
+### 7.3 Nächste technische Schritte
 
-### 8.2 Grenzen des aktuellen Systems
+#### 7.3.1 Priorisierung mehrerer Klötze
 
-### 8.3 Nächste technische Schritte
+#### 7.3.2 Robustere Basiskamera-Erkennung
 
-#### 8.3.1 Priorisierung mehrerer Klötze
+#### 7.3.3 Roboterkamera als Korrektursignal
 
-#### 8.3.2 Robustere Basiskamera-Erkennung
+#### 7.3.4 Stabilisierung der 500-Hz-Regelschleife
 
-#### 8.3.3 Roboterkamera als Korrektursignal
-
-#### 8.3.4 Stabilisierung der 500-Hz-Regelschleife
-
-## 9. Fazit
+## 8. Fazit
 
 ## Vorgesehene Abbildungen und Diagramme
 
@@ -320,13 +317,13 @@ Seine Erkenntnisse und die Regeln für ihre Verwendung stehen in
 | `fig-aufbau-gesamtansicht-1` und `fig-aufbau-gesamtansicht-2` | Beschriftete Gesamtansichten des realen Aufbaus | 2.1 |
 | `fig-systemaufbau-uebersicht` | Systembild mit Roboter, Band, Kameras, Arbeitsraum, Greifzone und Ablage | 2.2 |
 | `fig-regelpfad-aica` | AICA-Regelpfad von `base_cam` bis IK-Controller | 2.3 oder 3.1 |
-| `fig-follower-zustandsdiagramm` | Zustandsdiagramm des `object_follower` | 3.6 oder 4.5 |
+| `fig-follower-zustandsdiagramm` | Zustandsdiagramm des `object_follower` | 3.4.1 |
 | `fig-koord-systeme` | Koordinatensysteme sowie TCP, Flansch und Griffpunkt | 2.2 |
-| `fig-pick-bildfolge` | Bildfolge eines erfolgreichen Pick-on-the-Fly | 7.4 |
-| `fig-track-positionsverlauf` | Bandposition über Zeit: Messung und Track-Vorhersage | 7.2 |
-| `fig-geschwindigkeitsschaetzung` | Einzelgeschwindigkeiten, Pool-Schätzung und Stoppuhr-Gegenprobe | 7.2 |
-| `fig-basiskamera-roi-vergleich` | Alter und neuer ROI der Basiskamera | 6.4.1 |
-| `fig-systemleistung` | Rechenlast, Bildrate und 500-Hz-Regelschleife | 6.2 oder 7.6 |
+| `fig-pick-bildfolge` | Bildfolge eines erfolgreichen Pick-on-the-Fly | 6.4 |
+| `fig-track-positionsverlauf` | Bandposition über Zeit: Messung und Track-Vorhersage | 6.2 |
+| `fig-geschwindigkeitsschaetzung` | Einzelgeschwindigkeiten, Pool-Schätzung und Stoppuhr-Gegenprobe | 6.2 |
+| `fig-basiskamera-roi-vergleich` | Alter und neuer ROI der Basiskamera | 5.4.1 |
+| `fig-systemleistung` | Rechenlast, Bildrate und 500-Hz-Regelschleife | 5.2 oder 6.6 |
 | `fig-greifer-robotiq-2f140-abmessungen` | Abmessungen des geöffneten Robotiq-2F-140-Greifers | 2.1.3 |
 
 ## Vorgesehene Tabellen
@@ -335,5 +332,5 @@ Seine Erkenntnisse und die Regeln für ihre Verwendung stehen in
 |---|---|---|
 | `tab-hardware-komponenten` | Hardwarekomponenten und Aufgaben | 2.1 |
 | `tab-regelpfad-signale` | Signale des Regelpfads | 2.3 |
-| `tab-regel-sicherheitsparameter` | Relevante Regel- und Sicherheitsparameter | 6.3 |
-| `tab-versuche-greifergebnisse` | Versuchsergebnisse: Klotz, Geschwindigkeit, Regelabweichung und Ergebnis | 7.5 |
+| `tab-regel-sicherheitsparameter` | Relevante Regel- und Sicherheitsparameter | 5.3 |
+| `tab-versuche-greifergebnisse` | Versuchsergebnisse: Klotz, Geschwindigkeit, Regelabweichung und Ergebnis | 6.5 |
