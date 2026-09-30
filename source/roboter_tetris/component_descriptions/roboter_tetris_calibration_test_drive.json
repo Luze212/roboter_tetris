@@ -1,0 +1,100 @@
+{
+  "name": "Calibration Test Drive",
+
+  "description": {
+    "brief": "Testfahrt zur Validierung der Kalibrierung entlang der Förderband Y-Achse.",
+    "details": "Liest die kalibrierte Transformationsmatrix (T_robot_conveyor) sowie die Eye-in-Hand Transformation (T_ee_robot_cam) aus calibration.yaml/json. Richtet das Fadenkreuz der Kamera über der Board-Mitte aus und steuert den Roboter vor und zurück entlang der Y-Achse des Förderbandes. Wird per Service/Trigger-Button in AICA Studio gestartet."
+  },
+
+  "registration": "roboter_tetris::CalibrationTestDrive",
+
+  "inherits": "modulo_components::LifecycleComponent",
+
+  "inputs": [
+    {
+      "display_name": "Robot EE Pose",
+      "description": "Endeffektor-Pose im Roboter-Base-Frame.",
+      "signal_name": "robot_ee_pose",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Board Geometry",
+      "description": "Board-Geometrie [Zeilen, Spalten, Feldgröße in mm] von Board Detection.",
+      "signal_name": "board_geometry",
+      "signal_type": "double_array"
+    }
+  ],
+
+  "outputs": [
+    {
+      "display_name": "Target EE Pose",
+      "description": "Kartesische Zielpose des Endeffektors für die Bewegungssteuerung über den Signal Point Attractor.",
+      "signal_name": "target_ee_pose",
+      "signal_type": "cartesian_pose"
+    }
+  ],
+
+  "services": [
+    {
+      "display_name": "Testfahrt Starten",
+      "description": "Button zum manuellen Auslösen der Testfahrt entlang der Förderband-Y-Achse.",
+      "service_name": "start_test_drive"
+    }
+  ],
+
+  "predicates": [
+    {
+      "display_name": "Testfahrt läuft",
+      "description": "True während der Ausführung der Hin- und Rückfahrt.",
+      "predicate_name": "is_running"
+    },
+    {
+      "display_name": "Fehlgeschlagen",
+      "description": "True, falls calibration.yaml/json nicht gelesen werden konnte.",
+      "predicate_name": "has_failed"
+    }
+  ],
+
+  "parameters": [
+    {
+      "display_name": "Kalibrierdateipfad",
+      "description": "Pfad zur calibration.yaml oder calibration.json Datei.",
+      "parameter_name": "calibration_file_path",
+      "parameter_type": "string",
+      "default_value": "/home/tetripick/Desktop/AICA/roboter_tetris/calibration.yaml",
+      "dynamic": true
+    },
+    {
+      "display_name": "Testdistanz Y (mm)",
+      "description": "Fahrstrecke entlang der Förderband Y-Achse in mm.",
+      "parameter_name": "test_distance_y_mm",
+      "parameter_type": "double",
+      "default_value": "200.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Geschwindigkeit (m/s)",
+      "description": "Fahrgeschwindigkeit in m/s.",
+      "parameter_name": "drive_speed_m_s",
+      "parameter_type": "double",
+      "default_value": "0.05",
+      "dynamic": true
+    },
+    {
+      "display_name": "Kamera über Board-Mitte zentrieren",
+      "description": "Richtet das Fadenkreuz der Kamera (unter Berücksichtigung des Kamera-Flansch-Offsets) auf das Board-Zentrum aus. Bei korrekter Kalibrierung bleibt das Fadenkreuz zentriert.",
+      "parameter_name": "center_over_board",
+      "parameter_type": "bool",
+      "default_value": "true",
+      "dynamic": true
+    },
+    {
+      "display_name": "Pausenzeit Phasen (s)",
+      "description": "Pausenzeit in Sekunden zwischen den einzelnen Phasen der Testfahrt.",
+      "parameter_name": "phase_pause_s",
+      "parameter_type": "double",
+      "default_value": "2.0",
+      "dynamic": true
+    }
+  ]
+}

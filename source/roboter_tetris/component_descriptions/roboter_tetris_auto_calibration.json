@@ -1,0 +1,176 @@
+{
+  "name": "Auto Calibration",
+  "description": {
+    "brief": "Automatische extrinsische Hand-Eye-Kalibrierung für Roboter-Tetris.",
+    "details": "Führt eine Orbit-Trajektorie aus, sammelt Bild- und Posenproben, berechnet die Eye-in-Hand-Transformation sowie das Förderband-Koordinatensystem und speichert die Ergebnisse in YAML/JSON-Dateien."
+  },
+  "registration": "roboter_tetris::AutoCalibration",
+  "inherits": "modulo_components::LifecycleComponent",
+  "inputs": [
+    {
+      "display_name": "Base Cam Board Pose",
+      "description": "Board-Pose von der fest montierten Basis-Kamera [tx, ty, tz, rx, ry, rz].",
+      "signal_name": "base_cam_board_pose",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Robot Cam Board Pose",
+      "description": "Board-Pose von der Hand-Eye-Kamera am Roboterflansch [tx, ty, tz, rx, ry, rz].",
+      "signal_name": "robot_cam_board_pose",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Robot Cam Board Depth",
+      "description": "Tiefeninformationen des Board-Zentrums von der Roboter-Kamera [Mittelwert, Median, gültige Pixel].",
+      "signal_name": "robot_cam_board_depth",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Board Geometry",
+      "description": "Board-Geometrie [Zeilen, Spalten, Feldgröße in mm] von Board Detection.",
+      "signal_name": "board_geometry",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Robot End-Effector Pose",
+      "description": "Aktuelle kartesische Pose des Roboter-Endeffektors im Base-Frame.",
+      "signal_name": "robot_ee_pose",
+      "signal_type": "cartesian_state"
+    }
+  ],
+  "outputs": [
+    {
+      "display_name": "Target EE Pose",
+      "description": "Zielpose für den Roboter-Endeffektor zur Ansteuerung der Kalibrier-Trajektorie.",
+      "signal_name": "target_ee_pose",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Conveyor Pose",
+      "description": "Berechnetes Förderband-Koordinatensystem (conveyor_frame) zur Visualisierung.",
+      "signal_name": "conveyor_pose",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Board Pose Output",
+      "description": "Berechnetes Board-Koordinatensystem (board_frame) zur Visualisierung.",
+      "signal_name": "board_pose_out",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Robot Cam Pose Output",
+      "description": "Berechnete Pose der Roboter-Kamera am Flansch zur Visualisierung.",
+      "signal_name": "robot_cam_pose_out",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Base Cam Pose Output",
+      "description": "Berechnete Pose der statischen Base-Kamera zur Visualisierung.",
+      "signal_name": "base_cam_pose_out",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Calibration Matrix",
+      "description": "Flache 4x4-Transformationsmatrix (T_robot_base_cam).",
+      "signal_name": "calibration_matrix",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Calibration RPY",
+      "description": "Euler-Winkel (Roll, Pitch, Yaw in Grad) der Kalibrierung.",
+      "signal_name": "calibration_rpy",
+      "signal_type": "double_array"
+    }
+  ],
+  "predicates": [
+    {
+      "display_name": "Is Running",
+      "description": "True, während die Kalibriersequenz aktiv ausgeführt wird.",
+      "predicate_name": "is_running"
+    },
+    {
+      "display_name": "Is Calibrated",
+      "description": "True, wenn die Kalibrierung erfolgreich abgeschlossen und gespeichert wurde.",
+      "predicate_name": "is_calibrated"
+    },
+    {
+      "display_name": "Has Failed",
+      "description": "True, wenn bei der Berechnung oder Ausführung ein Fehler aufgetreten ist.",
+      "predicate_name": "has_failed"
+    }
+  ],
+  "services": [
+    {
+      "display_name": "Start Calibration",
+      "description": "Service zum Auslösen des automatischen Kalibrierlaufs.",
+      "service_name": "start_calibration",
+      "service_type": "modulo_interfaces::srv::StringTrigger"
+    }
+  ],
+  "parameters": [
+    {
+      "display_name": "Calibration File Path",
+      "description": "Zielpfad für die generierte YAML-Datei.",
+      "parameter_name": "calibration_file_path",
+      "parameter_type": "string",
+      "default_value": "/home/tetripick/Desktop/AICA/roboter_tetris/calibration.yaml",
+      "dynamic": true
+    },
+    {
+      "display_name": "Settle Time (s)",
+      "description": "Wartezeit in Sekunden nach Anfahren eines Wegpunkts vor der Datenaufnahme.",
+      "parameter_name": "settle_time_s",
+      "parameter_type": "double",
+      "default_value": "0.8",
+      "dynamic": true
+    },
+    {
+      "display_name": "Samples per Waypoint",
+      "description": "Anzahl zu mittelnder Detektionen pro Orbit-Wegpunkt.",
+      "parameter_name": "samples_per_waypoint",
+      "parameter_type": "int",
+      "default_value": "5",
+      "dynamic": true
+    },
+    {
+      "display_name": "Num Waypoints",
+      "description": "Anzahl der abzufahrenden Kalibrier-Wegpunkte.",
+      "parameter_name": "num_waypoints",
+      "parameter_type": "int",
+      "default_value": "9",
+      "dynamic": true
+    },
+    {
+      "display_name": "Max Orbit Radius (mm)",
+      "description": "Maximaler kartesischer Versatz-Radius um die Startposition in mm.",
+      "parameter_name": "max_orbit_radius_mm",
+      "parameter_type": "double",
+      "default_value": "50.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Conveyor Offset X (mm)",
+      "description": "X-Offset des Board-Ursprungs im Förderband-Frame in mm.",
+      "parameter_name": "conveyor_offset_x_mm",
+      "parameter_type": "double",
+      "default_value": "-130.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Conveyor Offset Y (mm)",
+      "description": "Y-Offset des Board-Ursprungs im Förderband-Frame in mm.",
+      "parameter_name": "conveyor_offset_y_mm",
+      "parameter_type": "double",
+      "default_value": "243.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Conveyor Offset Z (mm)",
+      "description": "Z-Offset des Board-Ursprungs im Förderband-Frame in mm.",
+      "parameter_name": "conveyor_offset_z_mm",
+      "parameter_type": "double",
+      "default_value": "0.0",
+      "dynamic": true
+    }
+  ]
+}
