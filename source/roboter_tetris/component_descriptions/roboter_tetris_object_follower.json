@@ -9,7 +9,7 @@
   "inputs": [
     {
       "display_name": "Roboterzustand",
-      "description": "cartesian_state des Flansches (ur_tool0) aus dem robot_state_broadcaster, in world. Füllt auch den Ringpuffer für die Roboterkamera.",
+      "description": "cartesian_state des Flansches (ur_tool0) aus dem robot_state_broadcaster, in world. Ist die letzte Pose älter als robot_state_max_age_s, gibt der Follower keine neue Zielpose aus.",
       "signal_name": "robot_state",
       "signal_type": "cartesian_state"
     },
@@ -374,7 +374,7 @@
     },
     {
       "display_name": "6 Orientierung: Montagewinkel Backen (Grad) [gripper_yaw_offset_deg]",
-      "description": "Montagewinkel der Backen gegen die Werkzeug-x-Achse (Grad). Nicht gemessen (D23).",
+      "description": "Montagewinkel der Backen gegen die Werkzeug-x-Achse (Grad). 0 = die Grundstellung greift richtig, am Aufbau bestätigt (D23, Nachtrag 13 / L25).",
       "parameter_name": "gripper_yaw_offset_deg",
       "parameter_type": "double",
       "default_value": "0.0",

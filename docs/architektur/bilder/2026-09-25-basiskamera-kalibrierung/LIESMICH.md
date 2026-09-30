@@ -1,6 +1,6 @@
 # Messdaten Basiskamera-Kalibrierung, 25.09.2026
 
-> **Ausgang** (`architektur/entscheidungen.md` L27): Aus diesen Daten stammt das Modell des
+> **Ausgang** (`architektur/entscheidungen.md` §5.4, §5.5): Aus diesen Daten stammt das Modell des
 > Tiefenfehlers; die Kalibrierung für `base_cam` wurde am 28.09. am Aufbau abgenommen
 > (`../2026-09-28-basiskamera-kalibrierung/`). `base_cam` bleibt unverändert, in Kraft ist L6.
 
@@ -140,6 +140,6 @@ x −0,63 bis −1,05° bei x −0,94, das Band ist also auch leicht gewölbt. L
 Neigung — wie die Verkippung der Tiefe — in die Extrinsik aufgenommen, deshalb liegt das
 Band dort eben.
 
-**Nicht mehr gemessen** (in L27 als offen geführt): Materialversatz Kunststoff gegen Papier-Board (bisher
+**Nicht mehr gemessen** (`entscheidungen.md` §13): Materialversatz Kunststoff gegen Papier-Board (bisher
 `top_depth_bias_mm` 11,5 gegen das Band), Restversatz des Tiefenbilds in v (≈ 3 px) an
 Klotzkanten prüfen, fehlende Tiefe bei 0,44 m.

@@ -66,7 +66,8 @@ DESCRIPTIONS = {
                              "die nähere Seite gegriffen, also höchstens 45°; bis zu diesem "
                              "Wert bleibt die zuletzt gewählte Seite (Nachtrag 13 / L25).",
     "gripper_yaw_offset_deg": "Montagewinkel der Backen gegen die Werkzeug-x-Achse "
-                              "(Grad). Nicht gemessen (D23).",
+                              "(Grad). 0 = die Grundstellung greift richtig, am Aufbau "
+                              "bestätigt (D23, Nachtrag 13 / L25).",
     "belt_surface_z_m": "Höhe der Bandoberfläche in world (m), gemessen (B17).",
     "flange_to_grip_point_m": "Flansch -> Griffpunkt (m), gemessen 0,235 - nicht der TCP "
                               "der UR-Steuerung (215 mm) (Nachtrag 6 / Z7).",

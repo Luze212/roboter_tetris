@@ -1,6 +1,6 @@
 # Kalibriertermin 28.09.2026
 
-Ergebnis und Entscheidungen: `architektur/entscheidungen.md` L27 (Abschnitt „Termin am Aufbau“).
+Ergebnis und Entscheidung: `architektur/entscheidungen.md` §5.5 (Abnahme am 28.09.2026).
 
 | Datei | Inhalt |
 |---|---|

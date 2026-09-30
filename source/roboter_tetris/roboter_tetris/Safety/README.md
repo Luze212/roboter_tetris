@@ -1,12 +1,12 @@
 # Arbeitsraum-Grenzen
 
-Dieser Ordner ist bewusst von der Kalibrierung (`../Calibration/`), der Objekterkennung und der Greifaufgabe getrennt. Er enthält keine Messwerte einer physikalischen Kamera-Roboter-Beziehung, sondern eine sicherheitsrelevante Konfigurationsentscheidung: den erlaubten kartesischen Bewegungsbereich des Roboterflansches.
+Dieser Ordner ist bewusst von der Kalibrierung der Basiskamera (`../Extrinsics/`), der Objekterkennung und der Greifaufgabe getrennt. Er enthält keine Messwerte einer physikalischen Kamera-Roboter-Beziehung, sondern eine sicherheitsrelevante Konfigurationsentscheidung: den erlaubten kartesischen Bewegungsbereich des Roboterflansches.
 
 ## Quelle der Grenzwerte
 
-`workspace_bounds.json` ist die versionierbare Ablage für die Arbeitsraum-Grenzen. Sie ist die dokumentierte Quelle der Wahrheit, nicht die Laufzeit-Konfiguration — wirksam zur Laufzeit sind die gespiegelten AICA-Parameter (`ws_x_min`/`ws_x_max`/`ws_y_min`/`ws_y_max`/`ws_z_min`/`ws_z_max` im `object_follower`), analog zu `cal_x`/`cal_y`/`cal_z` aus der Extrinsik-Kalibrierung.
+`workspace_bounds.json` ist die versionierbare Ablage für die Arbeitsraum-Grenzen. Sie ist die dokumentierte Quelle der Wahrheit, nicht die Laufzeit-Konfiguration — wirksam zur Laufzeit sind die gespiegelten AICA-Parameter (`ws_x_min`/`ws_x_max`/`ws_y_min`/`ws_y_max`/`ws_z_min`/`ws_z_max` im `object_follower`).
 
-Seit 23.09.2026 `status: "defined"` — am Aufbau abgefahren (`docs/architektur/entscheidungen.md` Nachtrag 13 / L14). Seit 24.09.2026 sind die Werte zugleich **Standardwert** im `object_follower` (`follower_logic.FollowerParams` und `component_descriptions`, L15); `test_follower_logic.py` prüft die Gleichheit mit dieser Datei. Von Hand gesetzte Werte eines Blocks in der AICA-Anwendung gehen dem Standardwert vor.
+Seit 23.09.2026 `status: "defined"` — am Aufbau abgefahren, z_min zuletzt am 28.09.2026 angepasst (`docs/architektur/entscheidungen.md` §9.3). Die Werte sind zugleich **Standardwert** im `object_follower` (`follower_logic.FollowerParams` und `component_descriptions`); `test_follower_logic.py` prüft die Gleichheit mit dieser Datei. Von Hand gesetzte Werte eines Blocks in der AICA-Anwendung gehen dem Standardwert vor.
 
 ## Vorgehen
 

@@ -136,8 +136,8 @@ class BaseCam(LifecycleComponent):
         # yaw and x/y from five touch points with the robot, 25 and 100 mm blocks,
         # residual <= 4 mm. Since the base camera calibration (stage 1/2) the
         # calibration file below holds the extrinsics; these six only apply when
-        # it is left empty or cannot be read. (Calibration/calibration.json of the
-        # separate calibration project is obsolete: predecessor values in "base".)
+        # it is left empty or cannot be read. (The predecessor project's calibration
+        # was expressed in "base" and is obsolete.)
         self.add_parameter(sr.Parameter("calibration_file", DEFAULT_CALIBRATION_FILE,
                                         sr.ParameterType.STRING),
                            "Kalibrierdatei der Basiskamera, relativ zum Paket oder absolut; "

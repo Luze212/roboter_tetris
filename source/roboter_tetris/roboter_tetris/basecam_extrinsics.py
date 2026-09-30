@@ -2,8 +2,8 @@
 
 Replaces the transitional calibration of Nachtrag 13 / L6 (``cal_*`` of
 ``base_cam``) by a measured one that can be repeated at any time. Only the base
-camera is calibrated; the robot camera is not part of the chain (L22), and the
-calibration project under ``Calibration/`` stays untouched.
+camera is calibrated; the robot camera is not part of the chain (L22). The method
+is self-contained and uses no other calibration project.
 
 Stage 1 -- robot moves (rare, about two minutes). The gripper holds the AprilGrid
 board flat, tool axis horizontal, so the printed face looks up into the static

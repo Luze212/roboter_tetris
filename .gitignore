@@ -5,6 +5,6 @@ compile_commands.json
 .*CommandMarker
 __pycache__
 CLAUDE.md
-docs/archiv/2026-06-01-robotiq-gripper-component-design.md
 /FuE_Greifen-main
 GEMINI.md
+.venv/

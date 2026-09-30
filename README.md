@@ -33,16 +33,18 @@ Anzeige: data_tracker, interface_streamer (RViz)
 | `vectoring` | schätzt Geschwindigkeit je Klotz und für das Band, führt Klötze hinter dem Bild weiter |
 | `priority_handler` | wählt den dringendsten erreichbaren Klotz, rechnet die Greifebene |
 | `object_follower` | fährt an, folgt, senkt ab, greift mitfahrend, legt ab |
-| `robotiq_gripper` | bedient den Greifer, meldet „zu“ und „Objekt gegriffen“ |
+| `robotiq_gripper` | bedient den Greifer, meldet „Bewegung fertig“ und „Objekt gegriffen“ |
 | `data_tracker`, `interface_streamer` | Klotzliste und Übersichtsbild |
 | `base_cam_calibration` | kalibriert die Basiskamera mit dem Roboter, eigene Anwendung; zeigt die Kamera als Frame |
+| `true_signal`, `toggle_signal` | Schaltsignale der Kalibrieranwendung (Greifer zu / auf) |
 
 ## Dokumentation
 
 Einstieg: **`docs/README.md`** (Landkarte) und `docs/uebersicht/projektkontext.md`.
 Alle Komponenten zum Einlesen: `docs/uebersicht/Komponentenplan Robotetris - Stand 2026-09-28.docx`.
 Einrichtung der AICA-Anwendung und der Kalibrierung: `docs/uebersicht/einrichtung-projektanwendung.md`.
-Verbindliche AICA-Regeln: `ARCHITECTURE.md`.
+Entscheidungen mit Begründung und Messwerten: `docs/architektur/entscheidungen.md`.
+Allgemeine Regeln für AICA-Komponentenpakete: `ARCHITECTURE.md`.
 
 ## Bauen und testen
 
@@ -56,24 +58,26 @@ docker build -f aica-package.toml --target test .
 
 Das neue Paket wird erst wirksam, wenn danach das AICA-Systemabbild im Launcher neu
 erzeugt wird. Die Logikmodule ohne ROS lassen sich auch lokal testen
-(`python3 -m pytest source/roboter_tetris/test/python_tests`, ohne die Dateien, die
-`state_representation` brauchen).
+(`python3 -m pytest source/roboter_tetris/test/python_tests` mit `numpy<2` und
+OpenCV 4.7, ohne die Dateien, die `state_representation` brauchen; Einzelheiten in
+`docs/uebersicht/projektkontext.md` §5).
 
 ## Aufbau des Repositorys
 
 ```
 aica-package.toml                 Build-Konfiguration (statt Dockerfile)
 ARCHITECTURE.md                   AICA-Regeln
-docs/                             Dokumentation (uebersicht/, architektur/, archiv/)
+docs/uebersicht/                  Überblick, Systemgraph, Einrichtung, Kalibrieranwendung
+docs/architektur/                 Entscheidungen, Datenverträge, Messdaten (bilder/)
 source/roboter_tetris/
   component_descriptions/         AICA-Beschreibungen der Komponenten
   roboter_tetris/                 Komponenten und Logikmodule ohne ROS
   roboter_tetris/contracts.py     Signalformate S1–S10
+  roboter_tetris/vision/          Erkennung und Verfolgung der Basiskamera
   roboter_tetris/Extrinsics/      Kalibrierdatei der Basiskamera
-  roboter_tetris/Calibration/     Kalibrierprojekt des Kommilitonen (getrennt, überholt)
   roboter_tetris/Safety/          Arbeitsraumgrenzen
   test/python_tests/              Tests
-  test/tools/                     fake_objects.py, Mitlese- und Auswertewerkzeuge
+  test/tools/                     fake_objects.py (synthetische Klötze), basecam_kalibrierung.py
 ```
 
 Das Paket entstand aus dem
