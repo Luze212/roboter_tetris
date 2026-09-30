@@ -39,6 +39,26 @@ werden dort zuerst angelegt und erst bei der zentralen Integration hier ergänzt
 
 | — | `src-projekt-softwareumgebung` | verwendet | 2.3.1, 2.3.2, 2.3.3 | Verwendete Versionen, Komponentenstruktur und projektspezifische Datenverträge | Projektgruppe Robotertetris: Dokumentation der Projektanwendung und Systemgraph, Stand 28.09.2026 | durch Projektgruppe bestätigt am 30.09.2026 |
 
+| — | `src-projekt-greifablauf` | verwendet | 3.1 bis 3.6 | Implementierte Funktionskette, Zustandsautomat, Bewegungsumsetzung und Greiferrückmeldungen | Projektgruppe Robotertetris: Systemgraph, Architekturentscheidungen, Datenverträge und Implementierung des finalen Builds, Stand 28.09.2026 | durch Projektgruppe bestätigt am 30.09.2026 |
+
+| — | `src-projekt-kalibrierung` | verwendet | 4.2, 4.4 | Aufbau, Ablauf, Gütegrenzen und Messwerte der automatischen Basiskamera-Kalibrierung sowie ihre Validierung | Projektgruppe Robotertetris: Architekturentscheidungen und Messdaten der Basiskamera-Kalibrierung vom 25. und 28.09.2026 | durch Projektgruppe bestätigt am 30.09.2026 |
+
+| — | `src-kalibr-aprilgrid` | verwendet | 4.2 | Aufbau eines AprilGrid-Kalibrierboards aus AprilTags | Autonomous Systems Lab, ETH Zürich: [Kalibr Calibration Targets](https://github.com/ethz-asl/kalibr/wiki/calibration-targets) | durch Projektgruppe geprüft am 30.09.2026 |
+
+| — | `src-wang-apriltag2-2016` | verwendet | 4.2 | Eindeutige Kennung und Detektion von AprilTags | J. Wang, E. Olson: [AprilTag 2: Efficient and robust fiducial detection](https://doi.org/10.1109/IROS.2016.7759617), 2016 | durch Projektgruppe geprüft am 30.09.2026 |
+
+| — | `src-tsai-handauge-1989` | verwendet | 4.2 | Verfahren nach Tsai und Lenz als Startwert der Hand-Auge-Kalibrierung | R. Y. Tsai, R. K. Lenz: [A new technique for fully autonomous and efficient 3D robotics hand/eye calibration](https://doi.org/10.1109/70.34770), 1989 | durch Projektgruppe geprüft am 30.09.2026 |
+
+| — | `src-park-handauge-1994` | verwendet | 4.2 | Verfahren nach Park und Martin als Startwert der Hand-Auge-Kalibrierung | F. C. Park, B. J. Martin: [Robot sensor calibration: solving AX = XB on the Euclidean group](https://doi.org/10.1109/70.326576), 1994 | durch Projektgruppe geprüft am 30.09.2026 |
+
+| — | `src-opencv-handeye` | verwendet | 4.2 | OpenCV-Implementierung der Hand-Auge-Kalibrierung und Lageschätzung | OpenCV: [Camera Calibration and 3D Reconstruction](https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html) | durch Projektgruppe geprüft am 30.09.2026 |
+
+| — | `src-mathworks-handeye-kalibrierung` | verwendet | 4.1, 4.3 | Unterschied zwischen Eye-in-Hand- und Eye-to-Hand-Kalibrierung | MathWorks: [What Is Robot Hand-Eye Calibration?](https://de.mathworks.com/help/vision/ug/what-is-robot-hand-eye-calibration.html) | durch Projektgruppe geprüft am 30.09.2026 |
+
+| — | `src-opencv-charuco-aufbau` | verwendet | 4.3 | Aufbau eines ChArUco-Boards aus Schachbrettmuster und ArUco-Markern sowie eindeutige Zuordnung der inneren Schachbrettecken | OpenCV: [Create Calibration Pattern](https://docs.opencv.org/5.0/tutorials/calib3d/camera_calibration_pattern/camera_calibration_pattern.html) | durch Projektgruppe geprüft am 30.09.2026 |
+
+| — | `src-opencv-charuco-erkennung` | verwendet | 4.3 | Verdeckungsrobuste Markererkennung und präzise Schachbrettecken von ChArUco-Boards für Kalibrieranwendungen | OpenCV: [Detection of ChArUco Boards](https://docs.opencv.org/4.12.0/df/d4a/tutorial_charuco_detection.html) | durch Projektgruppe geprüft am 30.09.2026 |
+
 ## Regeln für neue Einträge
 
 - Jede neue Quelle erhält zuerst eine eindeutige stabile Kennung und eine

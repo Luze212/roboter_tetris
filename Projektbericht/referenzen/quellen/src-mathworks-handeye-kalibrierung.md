@@ -6,4 +6,4 @@
 - Vollständige Quellenangabe: MathWorks: What Is Robot Hand-Eye Calibration? Computer Vision Toolbox Documentation.
 - Direkter Link oder lokaler Pfad: https://de.mathworks.com/help/vision/ug/what-is-robot-hand-eye-calibration.html
 - Prüfung durch Projektgruppe am: 30.09.2026
-- Status: freigegeben
+- Status: verwendet

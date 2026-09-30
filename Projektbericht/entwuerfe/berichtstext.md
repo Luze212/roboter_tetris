@@ -509,7 +509,8 @@ Schätzung laufen mit 15 Hz, der Bildrate der Kamera. Die Zielauswahl arbeitet
 mit 20 Hz, die Bahnführung mit 50 Hz. Die Regelung des Roboters läuft mit
 500 Hz. Die Roboterkamera am Flansch wird für den Greifablauf nicht benötigt.
 Gegriffen wird ausschließlich auf Grundlage der Basiskamera. Die Raten sind
-entsprechend der genutzten Hardware gewählt.
+entsprechend der genutzten Hardware gewählt
+([src-projekt-greifablauf](../referenzen/quellen/src-projekt-greifablauf.md)).
 
 ### 3.2 Erkennung, Vermessung und Vorhersage
 
@@ -562,7 +563,8 @@ Ab dem Einschwingen mittelt `vectoring` Position, Abmessungen und Drehwinkel
 Kamerabild, wird er mit der geschätzten Bandgeschwindigkeit weitergeführt.
 Seine Position wird dann vorhergesagt statt gemessen. Auf dieser Grundlage
 greift der Roboter Klötze in der Greifzone hinter dem Kamerabild, ohne ihre
-Position dort aktuell zu messen.
+Position dort aktuell zu messen
+([src-projekt-greifablauf](../referenzen/quellen/src-projekt-greifablauf.md)).
 
 ### 3.3 Zielauswahl und Erreichbarkeitsprüfung
 
@@ -593,7 +595,8 @@ Unter allen Kandidaten wählt der `priority_handler` den dringendsten noch
 greifbaren Klotz. Das ist der Klotz mit der kürzesten verbleibenden Zeit bis zur Greifebene. Die Wahl
 bleibt bestehen, bis der `object_follower` ein Ergebnis meldet. Ein
 Zielwechsel während der Bewegung ist damit ausgeschlossen. Nicht greifbare
-oder nicht erreichbare Klötze bleiben auf dem Band.
+oder nicht erreichbare Klötze bleiben auf dem Band
+([src-projekt-greifablauf](../referenzen/quellen/src-projekt-greifablauf.md)).
 
 ### 3.4 Bahnführung und Greifablauf
 
@@ -605,7 +608,10 @@ senkrecht nach unten. Abbildung `fig-follower-zustandsdiagramm` zeigt die
 Zustände und ihre Übergänge.
 
 <!-- Word-Übernahme: `fig-follower-zustandsdiagramm` an dieser Stelle
-einfügen und die nachfolgende Beschriftung übernehmen. -->
+einfügen.
+Bildunterschrift: Zustandsautomat des `object_follower`. Die gestrichelte
+Umrandung fasst die Zustände zusammen, aus denen ein Versuch abgebrochen werden
+kann, bevor der Greifer den Klotz hält. -->
 ![Zustandsautomat des object_follower](../abbildungen/fig-follower-zustandsdiagramm.png)
 
 *Abbildung `fig-follower-zustandsdiagramm`: Zustandsautomat des
@@ -663,7 +669,8 @@ Unabhängig vom Zustand durchläuft jede Zielpose vor der Ausgabe eine
 Sicherheitsprüfung. Ungültige Werte und Sprünge zwischen zwei Takten werden
 verworfen. Jede Pose wird auf den Arbeitsraum begrenzt. Ist die
 zuletzt gemeldete Roboterpose älter als 0,2 s, gibt der `object_follower`
-keine neue Zielpose aus.
+keine neue Zielpose aus
+([src-projekt-greifablauf](../referenzen/quellen/src-projekt-greifablauf.md)).
 
 ### 3.5 Bewegungsumsetzung in AICA
 
@@ -683,7 +690,8 @@ Bandrichtung voraus. Der Vorhalt ist als Zeit festgelegt und wird mit der
 geschätzten Bandgeschwindigkeit multipliziert. Er beträgt 0,24 s, also etwa
 1/K, und gilt damit für jede Bandgeschwindigkeit. Am Aufbau folgt der Flansch
 dem Klotz so mit einer Längsabweichung von rund 1 mm und damit ausreichend
-genau für einen sicheren Greifprozess.
+genau für einen sicheren Greifprozess
+([src-projekt-greifablauf](../referenzen/quellen/src-projekt-greifablauf.md)).
 
 #### 3.5.2 IK Velocity Controller und Geschwindigkeitsgrenzen
 
@@ -694,7 +702,8 @@ Geschwindigkeit ebenfalls auf 0,85 m/s und zusätzlich die Änderungsrate der
 Befehle. Geregelt wird der Flansch, da der Greifer nicht im Robotermodell
 enthalten ist. Der `object_follower` rechnet jede Greifpose deshalb um den
 Abstand von 0,235 m zwischen Flansch und Griffpunkt nach oben um. So wird der
-Greifer rechnerisch berücksichtigt.
+Greifer rechnerisch berücksichtigt
+([src-projekt-greifablauf](../referenzen/quellen/src-projekt-greifablauf.md)).
 
 ### 3.6 Greiferansteuerung und Rückmeldungen
 
@@ -708,7 +717,8 @@ dass die Finger beim Schließen auf Widerstand getroffen sind.
 Aus beiden Meldungen entscheidet der `object_follower`, ob ein Griff gelungen
 ist. Schließt der Greifer vollständig ohne Widerstand, liegt ein Fehlgriff vor.
 Entfällt die Meldung „Klotz gehalten“ auf dem Weg zur Kiste, gilt der Klotz
-als verloren.
+als verloren
+([src-projekt-greifablauf](../referenzen/quellen/src-projekt-greifablauf.md)).
 
 ## 4 Kalibrierung
 
@@ -760,7 +770,9 @@ Abbildung `fig-kalibrierung-board-greifer` zeigt diese Anordnung aus Sicht der
 Kamera.
 
 <!-- Word-Übernahme: `fig-kalibrierung-board-greifer` an dieser Stelle
-einfügen und die nachfolgende Beschriftung übernehmen. -->
+einfügen.
+Bildunterschrift: AprilGrid-Kalibrierboard im Greifer in der Startpose,
+aufgenommen von der Basiskamera (Graubild der Farbkamera, `0,53 m` Abstand). -->
 ![Kalibrierboard im Greifer aus Sicht der Basiskamera](../abbildungen/fig-kalibrierung-board-greifer.png)
 
 *Abbildung `fig-kalibrierung-board-greifer`: AprilGrid-Kalibrierboard im
@@ -793,7 +805,8 @@ gehen nicht in die Berechnung ein und zeigen die Genauigkeit an unabhängigen
 Daten. Die wiederholte Pose deckt ein Verrutschen des Boards im Greifer auf.
 Ein Durchlauf dauert rund vier Minuten. Das Ergebnis wird nur gespeichert,
 wenn der mittlere Bildfehler höchstens 1 px, die Abweichung der Prüfposen
-höchstens 2 mm und das Verrutschen höchstens 0,5 mm beträgt.
+höchstens 2 mm und das Verrutschen höchstens 0,5 mm beträgt
+([src-projekt-kalibrierung](../referenzen/quellen/src-projekt-kalibrierung.md)).
 
 Der Greifer konnte im Rahmen des Projekts nicht verändert werden. Das Board
 wird deshalb mit einem Gummigreifsatz zwischen die Backen geklemmt und muss
@@ -816,7 +829,8 @@ Drehung um die Hochachse und die horizontale Lage werden aus Punkten auf
 Arbeitshöhe übertragen, vom Band bis 100 mm darüber. Für diese Punkte ist
 bekannt, wo die Farbkamera sie sieht und wo `base_cam` sie mit dem gemessenen
 Tiefenfehler abbildet. Die Objekterkennung in `base_cam` bleibt dadurch
-unverändert.
+unverändert
+([src-projekt-kalibrierung](../referenzen/quellen/src-projekt-kalibrierung.md)).
 
 ### 4.3 Hand-Auge-Kalibrierung der Roboterkamera
 
@@ -841,7 +855,9 @@ seine Ecken zuverlässig zu erkennen. Stattdessen wird ein ChArUco-Board
 verwendet. Es kombiniert ein Schachbrettmuster mit ArUco-Markierungen. Jede
 Ecke des Schachbrettmusters ist über die umliegenden Marker eindeutig
 identifizierbar. Das Board ist physisch größer und kann von beiden Kameras aus
-unterschiedlichen Abständen sicher erkannt werden.
+unterschiedlichen Abständen sicher erkannt werden
+([src-opencv-charuco-aufbau](../referenzen/quellen/src-opencv-charuco-aufbau.md),
+[src-opencv-charuco-erkennung](../referenzen/quellen/src-opencv-charuco-erkennung.md)).
 
 Das Board liegt für die Kalibrierung fest am Rand des Förderbands. Der Roboter
 wird zunächst manuell so positioniert, dass das Board im Kamerabild sichtbar
@@ -856,7 +872,10 @@ Abbildung `fig-orbit-trajektorie` zeigt die Trajektorie mit den Standardwerten
 von 9 Wegpunkten und einem Kreisradius von 50 mm in Drauf- und Seitenansicht.
 
 <!-- Word-Übernahme: `fig-orbit-trajektorie` an dieser Stelle einfügen und die
-nachfolgende Beschriftung übernehmen. -->
+Bildunterschrift: Orbit-Trajektorie der Eye-in-Hand-Kalibrierung. Draufsicht:
+9 Wegpunkte (Startpose 0 im Zentrum, Wegpunkte 1–8 auf dem Kreisring mit
+r = 50 mm, 45°-Abstände). Seitenansicht: Die Kamera zeigt an jedem Wegpunkt
+auf das Board-Zentrum. (KI generiert.) -->
 ![Orbit-Trajektorie der Eye-in-Hand-Kalibrierung](../abbildungen/fig-orbit-trajektorie.jpg)
 
 *Abbildung `fig-orbit-trajektorie`: Orbit-Trajektorie der Eye-in-Hand-Kalibrierung.
@@ -899,7 +918,8 @@ für eine spätere Einbindung als Korrektursignal nahe dem Greifpunkt.
 Die Validierung prüft das automatische Verfahren in drei Schritten: die Güte
 eines einzelnen Laufs, die Wiederholbarkeit über mehrere Tage und die
 Positionsgenauigkeit im Greifbetrieb. Tabelle `tab-kalibrierung-vergleich`
-fasst die Ergebnisse zusammen.
+fasst die Ergebnisse zusammen
+([src-projekt-kalibrierung](../referenzen/quellen/src-projekt-kalibrierung.md)).
 
 *Tabelle `tab-kalibrierung-vergleich`: Prüfungen des automatischen
 Kalibrierverfahrens.*

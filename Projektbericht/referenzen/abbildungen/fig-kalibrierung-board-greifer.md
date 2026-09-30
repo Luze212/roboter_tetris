@@ -1,7 +1,7 @@
 # fig-kalibrierung-board-greifer
 
 - Bearbeitet von: Lukas
-- Vorgesehener Abschnitt: 4.2.2
+- Vorgesehener Abschnitt: 4.2
 - Datei oder geplanter Dateiname: `abbildungen/fig-kalibrierung-board-greifer.png`
 - Zweck der Abbildung: Anordnung des automatischen Kalibrierverfahrens zeigen: AprilGrid im Greifer unter der Basiskamera.
 - Referenzsatz im Fließtext: „Abbildung `fig-kalibrierung-board-greifer` zeigt diese Anordnung aus Sicht der Kamera.“
