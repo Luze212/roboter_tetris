@@ -27,8 +27,15 @@ dieser Reihenfolge zu lesen:
   und erst nach Prüfung durch die Projektgruppe im Text verwendet.
 - Der Stil ist deutsch, wissenschaftlich und klar. Sätze bleiben prägnant.
   Keine unnötigen Erklärungen, Wiederholungen oder Gedankenstriche.
+- Zahlenwerte im Berichtstext, in Tabellen und in Bildunterschriften werden
+  auf höchstens drei Nachkommastellen gerundet. Rohdaten und Quellendateien
+  behalten ihre ursprüngliche Genauigkeit.
 - Abbildungen, Tabellen und Gleichungen werden vor ihrem Auftreten im Text
   referenziert und danach fachlich eingeordnet.
+- Zu jeder Abbildung wird im Berichtstext am vorgesehenen Einfügepunkt bereits
+  eine Bildunterschrift gespeichert. Sie wird beim späteren Word-Export
+  unverändert übernommen und muss mit dem Eintrag im Abbildungsregister
+  übereinstimmen.
 
 ## Parallele Arbeit
 
@@ -57,4 +64,3 @@ zentralen Integration.
 - Quellen-, Abbildungs- und Tabellenmetadaten: `referenzen/`
 - Zentrale historische Zuordnung: `quellenregister.md` und
   `abbildungen/abbildungsplan.md`
-

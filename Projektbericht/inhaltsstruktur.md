@@ -42,6 +42,9 @@ passenden Stellen ergänzt. Für den Einstieg bei paralleler Arbeit zuerst
   Sie werden bei der ersten Verwendung knapp eingeordnet.
 - Messwerte, Schlussfolgerungen und offene Punkte werden klar voneinander
   getrennt.
+- Werte im Berichtstext, in Tabellen und in Bildunterschriften werden auf
+  höchstens drei Nachkommastellen gerundet. Rohdaten und Quellendateien
+  bleiben unverändert.
 - Ein später bereitgestelltes Sprachbeispiel ist für Wortwahl, Satzlänge und
   Ton verbindlich.
 
@@ -93,6 +96,11 @@ jeder neuen Berichtsfassung zu beachten.
   …“ oder „Die Ergebnisse sind in Tabelle `tab-versuche-greifergebnisse`
   zusammengefasst“. Der Verweis nennt, welche Aussage das Element unterstützt.
   Ein Element darf nicht ohne vorherigen Textverweis erscheinen.
+- Für jede Abbildung wird am vorgesehenen Einfügepunkt im Berichtstext die
+  endgültig geplante Bildunterschrift gespeichert. Sie steht im
+  `Word-Übernahme`-Kommentar als `Bildunterschrift:` und wird beim späteren
+  Word-Export unverändert verwendet. Der Wortlaut muss mit dem
+  Abbildungsregister übereinstimmen.
 - Besteht eine Abbildung aus Teilbildern, werden die Teilbilder eindeutig über
   eigene stabile Kennungen referenziert. Die endgültige Nummerierung wird erst
   beim Word-Export vergeben.

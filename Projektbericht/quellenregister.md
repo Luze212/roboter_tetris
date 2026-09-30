@@ -27,6 +27,18 @@ werden dort zuerst angelegt und erst bei der zentralen Integration hier ergänzt
 
 | — | `src-projekt-bezugssysteme` | verwendet | 2.2.1 | Bezugssystem `world`, historisches `conveyor_frame` und Flanschpose `ur_tool0` | Projektgruppe Robotertetris: Systemgraph, Architekturentscheidungen und Dokumentation der Projektanwendung, Stand 28.09.2026; ergänzt durch Angaben der Projektgruppe im Arbeitsgespräch am 30.09.2026 | durch Projektgruppe bestätigt am 30.09.2026 |
 
+| — | `src-projekt-greifgeometrie` | verwendet | 2.2.2 | Gemessene Abstände vom Flansch zur Backenspitze und zum Griffpunkt des geschlossenen Greifers | Projektgruppe Robotertetris: Messwerte zur Greifgeometrie vom 15.09.2026, dokumentiert in Architekturentscheidungen und Datenverträgen; ergänzt durch Angaben der Projektgruppe im Arbeitsgespräch am 30.09.2026 | durch Projektgruppe bestätigt am 30.09.2026 |
+
+| — | `src-projekt-arbeitsraum-greifzone` | verwendet | 2.2.3 | Im Projekt hinterlegte Arbeitsraumgrenzen, abgegrenzte Greifzone und Transferhöhe des Flansches | Projektgruppe Robotertetris: Arbeitsraummessung am Aufbau vom 23.09.2026 und aktuelle Parameterkonfiguration, Stand 28.09.2026; ergänzt durch Angaben der Projektgruppe im Arbeitsgespräch am 30.09.2026 | durch Projektgruppe bestätigt am 30.09.2026 |
+
+| — | `src-aica-system-uebersicht` | verwendet | 2.3.1 | Einordnung von AICA Core und AICA Studio sowie Grundlage in ROS 2 | AICA: [Getting Started](https://docs.aica.tech/) und [Built on ROS 2](https://docs.aica.tech/docs/concepts/ros-concepts/built-on-ros/) | Links durch Projektgruppe am 30.09.2026 bestätigt |
+
+| — | `src-aica-komponenten` | verwendet | 2.3.1, 2.3.2 | Komponentenmodell, periodische Ausführung, Parameter und Predicates | AICA: [Components](https://docs.aica.tech/docs/concepts/building-blocks/components/) | Link durch Projektgruppe am 30.09.2026 bestätigt |
+
+| — | `src-aica-signale` | verwendet | 2.3.3 | Periodische Datenübertragung über AICA-Signale und Anbindung an ROS-2-Topics | AICA: [Signals](https://docs.aica.tech/docs/concepts/building-blocks/signals/) | Link durch Projektgruppe am 30.09.2026 bestätigt |
+
+| — | `src-projekt-softwareumgebung` | verwendet | 2.3.1, 2.3.2, 2.3.3 | Verwendete Versionen, Komponentenstruktur und projektspezifische Datenverträge | Projektgruppe Robotertetris: Dokumentation der Projektanwendung und Systemgraph, Stand 28.09.2026 | durch Projektgruppe bestätigt am 30.09.2026 |
+
 ## Regeln für neue Einträge
 
 - Jede neue Quelle erhält zuerst eine eindeutige stabile Kennung und eine

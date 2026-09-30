@@ -13,3 +13,11 @@ GEMINI.md
 # Finale Abbildungen unter Projektbericht/abbildungen bleiben versionierbar.
 /.codex-build/
 /.codex-finalizer/
+
+# Lokale Zwischenstände für Systemskizzen und Koordinatengrafiken.
+# Finale Bilddateien wie fig-*.png und freigegebene PDFs bleiben versionierbar.
+/Projektbericht/.skizzen-build/
+/Projektbericht/abbildungen/koordinatensysteme_layout_v*.pptx
+/Projektbericht/abbildungen/koordinatensysteme_seitenansicht_v*.pptx
+/Projektbericht/abbildungen/systemskizzen_layout*.pptx
+/Projektbericht/abbildungen/erzeuge_systemskizzen.py

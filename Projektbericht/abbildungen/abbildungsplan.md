@@ -12,7 +12,7 @@ Dokument übernommen. Die Zuordnung wird während der Textabstimmung ergänzt.
 | `fig-systemaufbau-draufsicht` | `systemskizzen_layout_v02.pdf`, Seite 1 | Schematische Abbildung in 2.1.1 | Draufsicht mit Förderband, Base-Kamera, Ablagekiste, Arbeitsbereich und den Bezugssystemen `conveyor_frame` sowie `world`. | „Die Lage von Förderband, Kamera, Roboter, Ablagekiste und Arbeitsbereich wird in Abbildung `fig-systemaufbau-draufsicht` schematisch verdeutlicht.“ |
 | `fig-systemaufbau-seitenansicht` | `systemskizzen_layout_v02.pdf`, Seite 2 | Schematische Abbildung in 2.1.1 | Seitenansicht mit Base-Kamera sowie Arbeitsraum-, Folge- und Transferhöhen im Bezugssystem `world`. | „Die zugehörigen Höhen und die Position der Basiskamera über dem Förderband sind in Abbildung `fig-systemaufbau-seitenansicht` dargestellt.“ |
 | `fig-greifer-robotiq-2f140-abmessungen` | `robotiq_2f140_abmessungen_geoeffnet.png` | Abbildung in 2.1.3 | Herstellerabmessungen des geöffneten Robotiq-2F-140-Greifers. | „Die Herstellerabmessungen des geöffneten Greifers zeigt Abbildung `fig-greifer-robotiq-2f140-abmessungen`." |
-| `fig-koord-systeme` | `koordinatensysteme_seitenansicht_v02.pptx` | Schematische Abbildung in 2.2.1 | Seitenansicht mit Roboterbasis, `world-Y−`, `world-Z+`, Flansch `ur_tool0` und Griffpunkt. | „Die räumliche Zuordnung von Roboterbasis, Flansch `ur_tool0` und Griffpunkt zeigt Abbildung `fig-koord-systeme`." |
+| `fig-koord-systeme` | `fig-koord-systeme.png` | Schematische Abbildung in 2.2.1 | Seitenansicht des Roboters mit Bezugssystem `world`, Flansch `ur_tool0` und Griffpunkt. | „Die räumliche Zuordnung von Roboterbasis, Flansch `ur_tool0` und Griffpunkt zeigt Abbildung `fig-koord-systeme`." |
 
 ## Arbeitsstände, nicht zur Übernahme in Word vorgesehen
 

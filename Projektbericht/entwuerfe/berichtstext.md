@@ -178,10 +178,20 @@ in Abbildung `fig-systemaufbau-seitenansicht` dargestellt.
 
 <!-- Word-Übernahme Skizzen: `fig-systemaufbau-draufsicht` und
 `fig-systemaufbau-seitenansicht` nach den jeweiligen Textverweisen einfügen.
-Die Beschriftungen beruhen auf der Konfiguration vom 24.09.2026. -->
+Die Beschriftungen beruhen auf der Konfiguration vom 24.09.2026.
+Bildunterschrift `fig-systemaufbau-draufsicht`: Draufsicht mit Förderband,
+Base-Kamera, Ablagekiste, Arbeitsbereich sowie den Bezugssystemen
+`conveyor_frame` und `world`.
+Bildunterschrift `fig-systemaufbau-seitenansicht`: Seitenansicht mit
+Base-Kamera sowie Arbeitsraum-, Folge- und Transferhöhen im Bezugssystem
+`world`. -->
 
 <!-- Word-Übernahme Gesamtaufnahmen: `fig-aufbau-gesamtansicht-1` und
-`fig-aufbau-gesamtansicht-2` unmittelbar nach dem Textverweis einfügen. -->
+`fig-aufbau-gesamtansicht-2` unmittelbar nach dem Textverweis einfügen.
+Bildunterschrift `fig-aufbau-gesamtansicht-1`: Versuchsaufbau mit Förderband,
+UR10e und Ablagekiste.
+Bildunterschrift `fig-aufbau-gesamtansicht-2`: Arbeitsbereich des Roboters
+über dem Förderband. -->
 
 #### 2.1.2 UR10e
 
@@ -216,7 +226,9 @@ zeigt Abbildung `fig-greifer-robotiq-2f140-abmessungen`
 ([src-robotiq-2f140-spezifikation](../referenzen/quellen/src-robotiq-2f140-spezifikation.md)).
 
 <!-- Word-Übernahme: `fig-greifer-robotiq-2f140-abmessungen` an dieser Stelle
-einfügen und die nachfolgende Beschriftung übernehmen. -->
+einfügen.
+Bildunterschrift: Herstellerabmessungen des geöffneten
+Robotiq-2F-140-Greifers (Quelle: `src-robotiq-2f140-spezifikation`). -->
 ![Abmessungen des geöffneten Robotiq-2F-140-Greifers](../abbildungen/robotiq_2f140_abmessungen_geoeffnet.png)
 
 *Abbildung `fig-greifer-robotiq-2f140-abmessungen`: Herstellerabmessungen des
@@ -334,7 +346,7 @@ Förderband. Die Förderbewegung erfolgt im Aufbau näherungsweise in negative
 Y-Richtung von `world`. Das Förderband liegt gemäß Abbildung
 `fig-systemaufbau-draufsicht` seitlich der Roboterbasis im Bereich negativer
 X-Koordinaten, ungefähr zwischen `x = -1,275 m` und `x = -0,480 m`. Die
-Z-Achse zeigt nach oben. Die Bandoberfläche liegt bei `z = 0,0536 m`
+Z-Achse zeigt nach oben. Die Bandoberfläche liegt bei `z = 0,054 m`
 ([src-projekt-bezugssysteme](../referenzen/quellen/src-projekt-bezugssysteme.md)).
 
 Für die anfängliche Kamerakalibrierung wurde zusätzlich das Bezugssystem
@@ -354,4 +366,119 @@ nächsten Abschnitt bestimmt. Die räumliche Zuordnung von Roboterbasis, Flansch
 
 <!-- Word-Übernahme: `fig-koord-systeme` nach dem vorstehenden Textverweis
 einfügen. Die Abbildung muss Roboterbasis, `world-Y−`, `world-Z+`, Flansch
-`ur_tool0` und Griffpunkt eindeutig unterscheiden. -->
+`ur_tool0` und Griffpunkt eindeutig unterscheiden.
+Bildunterschrift: Seitenansicht des Roboters mit Bezugssystem `world`, Flansch
+`ur_tool0` und Griffpunkt. -->
+![Seitenansicht des Roboters mit Bezugssystem `world`, Flansch `ur_tool0` und Griffpunkt](../abbildungen/fig-koord-systeme.png)
+
+#### 2.2.2 TCP, Flansch und Griffpunkt
+
+Der Greifer ist in der regulären Greifpose senkrecht nach unten ausgerichtet.
+Der Klotz wird mittig zwischen den Backen auf Höhe der Auflageflächen gegriffen.
+Für die Kalibrierung ist die Flanschposition bei geschlossenem Greifer
+maßgebend.
+
+Vom Flansch bis zur geschlossenen Backenspitze wurden `0,245 m` gemessen. Dieser
+Abstand dient zur Bestimmung der Bandhöhe und zur Beurteilung des Abstandes zum
+Förderband. Die Auflageflächen der Backen sind `20 mm` hoch. Der für die
+Greifbewegung verwendete Griffpunkt liegt in ihrer Mitte. Sein Abstand zum
+Flansch beträgt damit `0,235 m` ([src-projekt-greifgeometrie](../referenzen/quellen/src-projekt-greifgeometrie.md)).
+
+Die erkannte Klotzposition beschreibt den Griffpunkt, nicht die Flanschpose.
+Der `object_follower` addiert daher den festen Versatz von `0,235 m` in
+Z-Richtung auf die berechnete Greifposition. Da der Greifer senkrecht bleibt und
+der Griffpunkt auf der Flanschachse liegt, ist keine weitere räumliche
+Transformation erforderlich. Die sich beim Öffnen und Schließen verändernde
+Greifergeometrie wird im folgenden Abschnitt beim Arbeitsraum betrachtet.
+
+#### 2.2.3 Bandhöhe, Arbeitsraum und Greifzone
+
+Die Bandoberfläche liegt bei `z = 0,054 m` im Bezugssystem `world`
+([src-projekt-bezugssysteme](../referenzen/quellen/src-projekt-bezugssysteme.md)).
+Die im Projekt hinterlegten Arbeitsraumgrenzen bilden den zulässigen Raum für
+Flanschzielposen im Bezugssystem `world`. Sie begrenzen damit auch den Raum, in
+dem die Greifzone liegen darf. Der Flansch wurde hierfür am Aufbau per
+Handführung über den Bandbereich bewegt. Die Grenzen wurden so gewählt, dass
+keine Kollision und keine auffällige Singularität auftrat. Sie betragen
+`x = -1,000 m` bis `-0,300 m`, `y = -0,320 m` bis `0,480 m` und
+`z = 0,299 m` bis `0,600 m`.
+
+Die Ablagepose des Flansches liegt bei `x = -0,316 m`,
+`y = 0,476 m` und `z = 0,420 m`. Sie liegt innerhalb des Arbeitsraums.
+Die Grenzen wurden in positive Y-Richtung und zu größeren X-Werten gezielt bis
+zu dieser Position erweitert. Die Ablagebox ist damit kein Bereich außerhalb
+des zulässigen Arbeitsraums.
+
+Die Warte- und Beobachtungsposition des Flansches liegt bei
+`x = -0,816 m`, `y = 0,350 m` und `z = 0,450 m`. Die Backen sind dort mit einer
+Gier von `90°` quer zur Bandrichtung ausgerichtet. Die Position befindet sich
+am Beginn der Greifzone über der Bandmitte. Ohne ausgewähltes Ziel wartet der
+Roboter dort und beobachtet die einfahrenden Klötze.
+
+Die Greifzone ist eine engere Teilmenge des Arbeitsraums. Sie umfasst auf dem
+Förderband den Bereich von `x = -1,000 m` bis `-0,530 m` und von
+`y = -0,320 m` bis `0,445 m`. Die Erweiterung des Arbeitsraums in positive
+Y-Richtung und zu größeren X-Werten dient ausschließlich der Ablagebox. Sie
+wird bei der Zielauswahl auf dem Förderband nicht verwendet. Die räumliche
+Anordnung von Förderband, Roboter und Ablagebox zeigt Abbildung
+`fig-systemaufbau-draufsicht`
+([src-projekt-arbeitsraum-greifzone](../referenzen/quellen/src-projekt-arbeitsraum-greifzone.md)).
+
+Nach einem erfolgreichen Griff fährt der Flansch auf die Transferhöhe
+`z = 0,490 m`. Der Roboter bewegt sich zunächst noch mit der letzten
+Bandgeschwindigkeit, bis der Klotz die Bandoberfläche verlassen hat. Anschließend
+hebt er senkrecht auf die Transferhöhe und fährt erst danach zur Ablagebox.
+
+Die gekrümmte Bewegung der Greiferphalangen verändert beim Öffnen und Schließen
+den räumlichen Bauraum des Greifers. Die Arbeitsraumgrenzen müssen daher für
+beide Greiferzustände betrachtet werden. Für diese Abgrenzung wird kein
+zusätzlicher Höhenwert verwendet.
+
+### 2.3 Softwareumgebung
+
+#### 2.3.1 AICA und ROS 2
+
+Die Projektanwendung basiert auf dem AICA System. AICA Core stellt einen
+vorkonfigurierten Robotik-Workspace mit Komponenten, Controllern und
+Hardware-Interfaces bereit. AICA Studio dient als grafische Umgebung, um diese
+Bausteine zu einer Anwendung zu verbinden, zu konfigurieren und zu überwachen.
+Das System baut auf ROS 2 auf. ROS 2 übernimmt dabei die Kommunikation zwischen
+den Prozessen sowie die Anbindung von Kameras und Roboterhardware
+([src-aica-system-uebersicht](../referenzen/quellen/src-aica-system-uebersicht.md)).
+
+Die verwendete Anwendung basiert auf dem AICA-Systemabbild `v2.0.5-jazzy` mit
+AICA Core `v5.0.0`. AICA-Komponenten werden periodisch ausgeführt. Ihre
+Arbeitsrate, Parameter, Eingangssignale und Ausgänge sind innerhalb der
+Anwendung festgelegt
+([src-aica-komponenten](../referenzen/quellen/src-aica-komponenten.md),
+[src-projekt-softwareumgebung](../referenzen/quellen/src-projekt-softwareumgebung.md)).
+
+#### 2.3.2 Komponentenstruktur
+
+Die Projektspezifik ist in eigenen Python-Komponenten umgesetzt. Sie kapseln
+Erkennung, Bahnverfolgung, Zielauswahl, Greifablauf und Diagnose. Die zugehörige
+Fachlogik ist von den ROS-Schnittstellen getrennt. Dadurch können die
+Berechnungen unabhängig von der Laufzeitumgebung geprüft werden. Alle eigenen
+Python-Komponenten laufen gemeinsam in einem Prozess. Ihre Callbacks dürfen
+deshalb die periodische Verarbeitung nicht blockieren
+([src-projekt-softwareumgebung](../referenzen/quellen/src-projekt-softwareumgebung.md)).
+
+AICA ergänzt diese Komponenten um die Hardwareanbindung und die
+Bewegungsumsetzung. Dazu gehören die Schnittstelle zum UR10e, der
+Inverse-Kinematik-Controller und der Signal Point Attractor. Die konkrete
+Aufgabenverteilung der Komponenten und Controller wird in Kapitel 3 beschrieben.
+
+#### 2.3.3 Signal- und Datenfluss
+
+Die Komponenten tauschen ihre Daten über AICA-Signale aus. Diese bilden eine
+periodische Abstraktion für die Datenübertragung und können mit ROS-2-Topics
+verbunden werden. Im Projekt sind Aufbau und Bedeutung der Datenfelder zentral
+in Datenverträgen festgelegt. Dazu gehören Einheiten, Feldreihenfolge und
+Zeitstempel. Dadurch verwenden Sender und Empfänger dieselbe Bedeutung eines
+Signals
+([src-aica-signale](../referenzen/quellen/src-aica-signale.md),
+[src-projekt-softwareumgebung](../referenzen/quellen/src-projekt-softwareumgebung.md)).
+
+Der Datenfluss verbindet die Bildverarbeitung, die Berechnung der Objektbahn,
+die Zielauswahl und die Bewegungsregelung. Die vollständige Kette sowie die
+einzelnen Signale werden im folgenden Kapitel erläutert.
