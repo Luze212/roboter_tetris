@@ -2,7 +2,8 @@
 
 Diese Datei ist die verbindliche Arbeitsgrundlage für den Projektbericht.
 Unterkapitel, Abbildungen, Messergebnisse und Quellen werden direkt an den
-passenden Stellen ergänzt.
+passenden Stellen ergänzt. Für den Einstieg bei paralleler Arbeit zuerst
+[`README.md`](README.md) lesen.
 
 ## Arbeitsregeln
 
@@ -21,8 +22,8 @@ passenden Stellen ergänzt.
 - Die aktuelle Word-Fassung wird erst auf ausdrückliche Anweisung aus dem
   abgestimmten Markdown-Text ergänzt oder erzeugt. Änderungen an Word sind
   kein automatischer Folgeschritt nach einem fertig abgestimmten Abschnitt.
-- Dateien erhalten aussagekräftige, kurze Namen. Abbildungsdateien beginnen mit
-  ihrer Nummer, zum Beispiel `A3_aica_regelpfad.svg`.
+- Dateien erhalten aussagekräftige, kurze Namen. Abbildungsdateien verwenden
+  ihre stabile Kennung, zum Beispiel `fig-regelpfad-aica.svg`.
 
 ### Sprache und Stil
 
@@ -56,11 +57,17 @@ passenden Stellen ergänzt.
 - Projektinterne Aufgabenstellung, aktuelle Dokumentation und eigene
   Versuche werden als solche gekennzeichnet. Sie ersetzen keine externe Quelle
   für allgemeine technische Grundlagen.
-- Jede verwendete Quelle erhält eine Kennung im
-  [`quellenregister.md`](quellenregister.md). Der Eintrag enthält Abschnitt,
-  Aussage, vollständige Quelle und Link.
-- Die Kennung steht im Markdown-Entwurf direkt an der belegten Aussage. Beim
-  späteren Word-Export wird sie in den endgültigen Zitierstil überführt.
+- Während der parallelen Bearbeitung erhält jede neue Quelle zunächst eine
+  eindeutige fachliche Kennung und eine Einzeldatei unter
+  [`referenzen/quellen/`](referenzen/quellen/). So können keine doppelten
+  fortlaufenden Quellennummern entstehen.
+- Bei der zentralen Integration wird die Quelle in
+  [`quellenregister.md`](quellenregister.md) aufgenommen. Der Eintrag enthält
+  Abschnitt, Aussage, vollständige Quelle und Link. Erst dann wird die
+  endgültige Kennung für den Word-Export vergeben.
+- Die fachliche Kennung steht im Markdown-Entwurf direkt an der belegten
+  Aussage. Beim späteren Word-Export wird sie in den endgültigen Zitierstil
+  überführt.
 
 ### Stilreferenz Bachelorarbeit Wertstromoptimierung
 
@@ -81,6 +88,14 @@ jeder neuen Berichtsfassung zu beachten.
   Zusammenhang erklärt.
 - Abbildungen, Tabellen und Gleichungen werden im Text angekündigt und danach
   inhaltlich ausgewertet. Sie stehen nicht ohne Einordnung im Bericht.
+- Vor jeder Abbildung, Tabelle oder Gleichung steht im Fließtext mindestens ein
+  kurzer Verweis, zum Beispiel „Abbildung `fig-systemaufbau-draufsicht` zeigt
+  …“ oder „Die Ergebnisse sind in Tabelle `tab-versuche-greifergebnisse`
+  zusammengefasst“. Der Verweis nennt, welche Aussage das Element unterstützt.
+  Ein Element darf nicht ohne vorherigen Textverweis erscheinen.
+- Besteht eine Abbildung aus Teilbildern, werden die Teilbilder eindeutig über
+  eigene stabile Kennungen referenziert. Die endgültige Nummerierung wird erst
+  beim Word-Export vergeben.
 - Ursache und Wirkung werden direkt benannt, zum Beispiel mit Formulierungen
   wie „Daraus ergibt sich“, „Dies führt zu“ oder „Auf dieser Grundlage“.
 - Belegte Aussagen erhalten die Quelle unmittelbar im Satz oder Absatz.
@@ -114,15 +129,21 @@ Seine Erkenntnisse und die Regeln für ihre Verwendung stehen in
   Schlussfolgerungen folgen erst danach.
 - Abbildungen und Tabellen werden nur aufgenommen, wenn sie eine Aussage
   schneller oder klarer vermitteln als Text.
-- Jede Abbildung und Tabelle wird im Text eingeführt und fachlich ausgewertet.
+- Jede Abbildung und Tabelle wird vor ihrem Erscheinen im Text eingeführt und
+  anschließend fachlich ausgewertet.
 - Quellen, Annahmen und Unsicherheiten stehen dort, wo sie für die jeweilige
   Aussage relevant sind.
 
 ### Zusammenarbeit und Ablauf
 
-- Berichtstexte werden ausschließlich in der Branch `Codex_systemtest_Tobi`
-  erstellt und geändert. Vor einer Berichtänderung wird der Branchname
-  rein lesend geprüft. Weicht er ab, wird nicht am Bericht gearbeitet.
+- Die Branch `Codex_systemtest_Tobi` ist die Integrationsbranch. Bei paralleler
+  Arbeit erhält jede Person eine eigene Themen-Branch. Erst nach Prüfung werden
+  deren Änderungen in die Integrationsbranch übernommen.
+- Fortlaufende Kennungen für Quellen, Abbildungen und Tabellen werden nur bei
+  der Integration vergeben. In Themen-Branches gelten die fachlichen
+  Kennungen und Einzeldateien unter `referenzen/`.
+- Die verbindliche Arbeitsorganisation, Branch-Namen und Prüfschritte stehen
+  in [`arbeitsorganisation.md`](arbeitsorganisation.md).
 - Vor jedem neuen Kapitel oder Unterkapitel steht im Chat eine Gliederung in
   Stichpunkten. Sie nennt die beabsichtigten Aussagen, benötigte Belege,
   Messwerte sowie mögliche Abbildungen oder Tabellen.
@@ -230,79 +251,89 @@ Seine Erkenntnisse und die Regeln für ihre Verwendung stehen in
 
 ### 4.7 Sicherheitsgrenzen und Arbeitsraum
 
-## 5. Inbetriebnahme und Optimierung
+## 5. Kalibrierung
 
-### 5.1 Kalibrierung und Positionsgenauigkeit
+### 5.1 Kalibrierungsstrategie und Bezugssysteme
 
-### 5.2 Latenz, Rechenlast und Bildrate
+### 5.2 Extrinsische Kalibrierung der Basiskamera
 
-### 5.3 Wahl von Vorhalt, Attractor-Gain und Geschwindigkeitslimit
+### 5.3 Hand-Auge-Kalibrierung der Roboterkamera
 
-### 5.4 Optimierung der Basiskamera
+### 5.4 Validierung der Koordinatentransformation und Positionsgenauigkeit
 
-#### 5.4.1 Bildausschnitt (ROI)
+## 6. Inbetriebnahme und Optimierung
 
-#### 5.4.2 Randnahe Klötze
+### 6.1 Inbetriebnahme des Regelpfads
 
-#### 5.4.3 Flache Klötze und Mindesthöhe
+### 6.2 Latenz, Rechenlast und Bildrate
 
-## 6. Versuchsergebnisse
+### 6.3 Wahl von Vorhalt, Attractor-Gain und Geschwindigkeitslimit
 
-### 6.1 Versuchsbedingungen
+### 6.4 Optimierung der Basiskamera
 
-### 6.2 Validierung der Geschwindigkeitsschätzung
+#### 6.4.1 Bildausschnitt (ROI)
 
-### 6.3 Genauigkeit der Basiskamera
+#### 6.4.2 Randnahe Klötze
 
-### 6.4 Erstes Pick-on-the-Fly
+#### 6.4.3 Flache Klötze und Mindesthöhe
 
-### 6.5 Wiederholversuche und Randbereich
+## 7. Versuchsergebnisse
 
-### 6.6 Ergebnisbewertung
+### 7.1 Versuchsbedingungen
 
-#### 6.6.1 Erfolgreiche Griffe
+### 7.2 Validierung der Geschwindigkeitsschätzung
 
-#### 6.6.2 Grenzen des aktuellen Systems
+### 7.3 Genauigkeit der Basiskamera
 
-## 7. Diskussion und Ausblick
+### 7.4 Erstes Pick-on-the-Fly
 
-### 7.1 Erreichte Projektziele
+### 7.5 Wiederholversuche und Randbereich
 
-### 7.2 Grenzen des aktuellen Systems
+### 7.6 Ergebnisbewertung
 
-### 7.3 Nächste technische Schritte
+#### 7.6.1 Erfolgreiche Griffe
 
-#### 7.3.1 Priorisierung mehrerer Klötze
+#### 7.6.2 Grenzen des aktuellen Systems
 
-#### 7.3.2 Robustere Basiskamera-Erkennung
+## 8. Diskussion und Ausblick
 
-#### 7.3.3 Roboterkamera als Korrektursignal
+### 8.1 Erreichte Projektziele
 
-#### 7.3.4 Stabilisierung der 500-Hz-Regelschleife
+### 8.2 Grenzen des aktuellen Systems
 
-## 8. Fazit
+### 8.3 Nächste technische Schritte
+
+#### 8.3.1 Priorisierung mehrerer Klötze
+
+#### 8.3.2 Robustere Basiskamera-Erkennung
+
+#### 8.3.3 Roboterkamera als Korrektursignal
+
+#### 8.3.4 Stabilisierung der 500-Hz-Regelschleife
+
+## 9. Fazit
 
 ## Vorgesehene Abbildungen und Diagramme
 
-| Nr. | Inhalt | Vorgesehene Stelle |
+| Stabile Kennung | Inhalt | Vorgesehene Stelle |
 |---|---|---|
-| A1 | Beschriftete Gesamtansicht des realen Aufbaus | 2.1 |
-| A2 | Systembild mit Roboter, Band, Kameras, Arbeitsraum, Greifzone und Ablage | 2.2 |
-| A3 | AICA-Regelpfad von `base_cam` bis IK-Controller | 2.3 oder 3.1 |
-| A4 | Zustandsdiagramm des `object_follower` | 3.6 oder 4.5 |
-| A5 | Koordinatensysteme sowie TCP, Flansch und Griffpunkt | 2.2 |
-| A6 | Bildfolge eines erfolgreichen Pick-on-the-Fly | 6.4 |
-| A7 | Bandposition über Zeit: Messung und Track-Vorhersage | 6.2 |
-| A8 | Einzelgeschwindigkeiten, Pool-Schätzung und Stoppuhr-Gegenprobe | 6.2 |
-| A9 | Alter und neuer ROI der Basiskamera | 5.4.1 |
-| A10 | Rechenlast, Bildrate und 500-Hz-Regelschleife | 5.2 oder 6.6 |
-| A11 | Abmessungen des geöffneten Robotiq-2F-140-Greifers | 2.1.3 |
+| `fig-aufbau-gesamtansicht-1` und `fig-aufbau-gesamtansicht-2` | Beschriftete Gesamtansichten des realen Aufbaus | 2.1 |
+| `fig-systemaufbau-uebersicht` | Systembild mit Roboter, Band, Kameras, Arbeitsraum, Greifzone und Ablage | 2.2 |
+| `fig-regelpfad-aica` | AICA-Regelpfad von `base_cam` bis IK-Controller | 2.3 oder 3.1 |
+| `fig-follower-zustandsdiagramm` | Zustandsdiagramm des `object_follower` | 3.6 oder 4.5 |
+| `fig-koord-systeme` | Koordinatensysteme sowie TCP, Flansch und Griffpunkt | 2.2 |
+| `fig-pick-bildfolge` | Bildfolge eines erfolgreichen Pick-on-the-Fly | 7.4 |
+| `fig-track-positionsverlauf` | Bandposition über Zeit: Messung und Track-Vorhersage | 7.2 |
+| `fig-geschwindigkeitsschaetzung` | Einzelgeschwindigkeiten, Pool-Schätzung und Stoppuhr-Gegenprobe | 7.2 |
+| `fig-basiskamera-roi-vergleich` | Alter und neuer ROI der Basiskamera | 6.4.1 |
+| `fig-systemleistung` | Rechenlast, Bildrate und 500-Hz-Regelschleife | 6.2 oder 7.6 |
+| `fig-greifer-robotiq-2f140-abmessungen` | Abmessungen des geöffneten Robotiq-2F-140-Greifers | 2.1.3 |
 
 ## Vorgesehene Tabellen
 
-| Nr. | Inhalt | Vorgesehene Stelle |
+| Stabile Kennung | Inhalt | Vorgesehene Stelle |
 |---|---|---|
-| T1 | Hardwarekomponenten und Aufgaben | 2.1 |
-| T2 | Signale des Regelpfads | 2.3 |
-| T3 | Relevante Regel- und Sicherheitsparameter | 5.3 |
-| T4 | Versuchsergebnisse: Klotz, Geschwindigkeit, Regelabweichung und Ergebnis | 6.5 |
+| `tab-hardware-komponenten` | Hardwarekomponenten und Aufgaben | 2.1 |
+| `tab-regelpfad-signale` | Signale des Regelpfads | 2.3 |
+| `tab-regel-sicherheitsparameter` | Relevante Regel- und Sicherheitsparameter | 6.3 |
+| `tab-versuche-greifergebnisse` | Versuchsergebnisse: Klotz, Geschwindigkeit, Regelabweichung und Ergebnis | 7.5 |
