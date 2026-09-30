@@ -325,6 +325,7 @@ Seine Erkenntnisse und die Regeln für ihre Verwendung stehen in
 | `fig-basiskamera-roi-vergleich` | Alter und neuer ROI der Basiskamera | 5.4.1 |
 | `fig-systemleistung` | Rechenlast, Bildrate und 500-Hz-Regelschleife | 5.2 oder 6.6 |
 | `fig-greifer-robotiq-2f140-abmessungen` | Abmessungen des geöffneten Robotiq-2F-140-Greifers | 2.1.3 |
+| `fig-orbit-trajektorie` | Orbit-Trajektorie der Eye-in-Hand-Kalibrierung (Drauf- und Seitenansicht, 9 Wegpunkte, r = 50 mm) | 4.3 |
 
 ## Vorgesehene Tabellen
 
