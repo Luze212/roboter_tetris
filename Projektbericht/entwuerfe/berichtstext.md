@@ -482,3 +482,448 @@ Signals
 Der Datenfluss verbindet die Bildverarbeitung, die Berechnung der Objektbahn,
 die Zielauswahl und die Bewegungsregelung. Die vollständige Kette sowie die
 einzelnen Signale werden im folgenden Kapitel erläutert.
+
+## 3 Greifkonzept und Umsetzung
+
+### 3.1 Funktionskette des Pick-on-the-Fly
+
+Der Prozess beginnt bei der Basiskamera. Diese erfasst nur den Anfang des
+Förderbands. Die Greifzone liegt in Bandlaufrichtung dahinter und außerhalb des
+Kamerabilds. Der Roboter greift einen Klotz deshalb an einer Stelle, an der er
+nicht mehr gemessen wird. Das Konzept beruht darauf, Lage und Geschwindigkeit im Kamerabild so genau zu
+bestimmen, dass die weitere Bewegung des Klotzes vorhergesagt werden kann.
+
+Daraus ergibt sich eine Kette von fünf Schritten. `base_cam` erkennt und
+vermisst die Klötze im Kamerabild. `vectoring` schätzt ihre Geschwindigkeit und
+berechnet ihre Position über das Kamerabild hinaus weiter. Der `priority_handler` ermittelt
+den nächsten erreichbaren Klotz. Der `object_follower` führt den Greifer über
+den Klotz, greift ihn mitfahrend und legt ihn in der Ablagekiste ab.
+Die Komponente `robotiq_gripper` steuert den Greifer. Das Ergebnis jedes
+Greifversuchs geht an den `priority_handler` zurück, der daraufhin das nächste
+Ziel wählt.
+
+Für Bahnführung und Regelung des Roboters werden vorhandene AICA-Bausteine genutzt.
+
+Die Komponenten arbeiten mit unterschiedlichen Raten. Bildverarbeitung und
+Schätzung laufen mit 15 Hz, der Bildrate der Kamera. Die Zielauswahl arbeitet
+mit 20 Hz, die Bahnführung mit 50 Hz. Die Regelung des Roboters läuft mit
+500 Hz. Die Roboterkamera am Flansch wird für den Greifablauf nicht benötigt.
+Gegriffen wird ausschließlich auf Grundlage der Basiskamera. Die Raten sind
+entsprechend der genutzten Hardware gewählt.
+
+### 3.2 Erkennung, Vermessung und Vorhersage
+
+#### 3.2.1 `base_cam` und Objektdaten
+
+`base_cam` wertet Farb- und Tiefenbild der Basiskamera aus. Im Tiefenbild gilt
+alles als Objekt, was innerhalb eines festgelegten Bildausschnitts eine
+Mindesthöhe über der Bandoberfläche überschreitet. Aus dem Umriss jedes Objekts
+wird das
+kleinste umschließende Rechteck bestimmt. Es liefert Mittelpunkt, Länge, Breite
+und Drehwinkel des Klotzes. Die Tiefe der Oberseite ergibt sich als Median über
+den Umriss. Randpixel, die bereits das Band messen, verfälschen die Höhe
+dadurch nicht. Die Farbe wird im Farbbild über den Farbton bestimmt.
+
+Mit der Kalibrierung (Kapitel 4) rechnet `base_cam` alle Werte in das
+Bezugssystem `world` um. Die Messungen aufeinanderfolgender Bilder werden
+einander zugeordnet, und jeder Klotz erhält eine feste Kennung. Farbe und
+Abmessungen werden je Klotz erfasst. Die Zielauswahl nutzt lediglich die
+Abmessungen und die Position.
+
+Die Position eines Klotzes streut von Bild zu Bild nur um Bruchteile eines
+Millimeters. Die gemessene Grundfläche schwankt dagegen deutlich. Geometrische
+Prüfungen erfolgen deshalb erst auf den geglätteten Werten aus `vectoring`.
+
+#### 3.2.2 `vectoring` und Geschwindigkeits- und Positionsschätzung
+
+Die Bandgeschwindigkeit wird aus den Bilddaten geschätzt. `vectoring` verfolgt
+dazu für jeden Klotz den Verlauf seiner Position über der Zeit.
+
+Ein aufgelegter Klotz kann beim Aufsetzen kippen oder noch schwanken. Seine ersten
+Messungen sind für eine Geschwindigkeitsschätzung deshalb ungeeignet.
+`vectoring` teilt die jüngsten Messungen in zwei aufeinanderfolgende Fenster
+von je fünf Messungen und bestimmt in jedem die Geschwindigkeit. Stimmen beide
+auf 0,01 m/s überein, gilt der Klotz als eingeschwungen. Ein Kippen erzeugt
+einen Sprung in der Position, der zunächst in einem der Fenster liegt. Der
+Klotz gilt so erst als eingeschwungen, wenn der Sprung beide Fenster verlassen
+hat. Nur eingeschwungene Klötze können als Ziel gewählt werden. Einzelne
+Messungen, die weit von der erwarteten Position abweichen, werden als Ausreißer
+verworfen.
+
+Alle Klötze liegen frei auf dem Band und bewegen sich mit derselben
+Geschwindigkeit. `vectoring` fasst deshalb die Messungen aller eingeschwungenen
+Klötze eines Durchlaufs in einer gemeinsamen Ausgleichsrechnung zusammen. Sie
+liefert die Bandgeschwindigkeit nach Betrag und Richtung. Lange, ungestörte
+Messreihen gehen dabei stärker ein als kurze. Mit jedem weiteren Klotz wird die
+Schätzung genauer.
+
+Ab dem Einschwingen mittelt `vectoring` Position, Abmessungen und Drehwinkel
+über die letzten 20 Messungen. Verlässt ein eingeschwungener Klotz das
+Kamerabild, wird er mit der geschätzten Bandgeschwindigkeit weitergeführt.
+Seine Position wird dann vorhergesagt statt gemessen. Auf dieser Grundlage
+greift der Roboter Klötze in der Greifzone hinter dem Kamerabild, ohne ihre
+Position dort aktuell zu messen.
+
+### 3.3 Zielauswahl und Erreichbarkeitsprüfung
+
+#### 3.3.1 `priority_handler` und Greifebene
+
+Der `priority_handler` ermittelt, welcher Klotz als nächster gegriffen wird.
+Grundlage sind die Greifzone und die Greifebene. Die Greifzone ist der Bereich
+des Bandes, in dem der Roboter greifen darf. Sie entspricht dem Arbeitsraum
+aus Abschnitt 2.2.3. Die Greifebene ist die letzte Position entlang des
+Bandes, an der das Absenken beginnen darf. Von dort aus muss der Greifprozess
+vor dem Ende der Greifzone abgeschlossen sein. Ihre Lage ergibt sich aus der
+Dauer dieses Prozesses, der Bandgeschwindigkeit und einem Zuschlag von 20 %. Bei höherer Bandgeschwindigkeit rückt die Greifebene
+daher weiter an den Anfang der Greifzone.
+
+#### 3.3.2 Greifbarkeits- und Erreichbarkeitsprüfung
+
+Ein Klotz kommt als Ziel in Frage, wenn er drei Bedingungen erfüllt. Er muss
+eingeschwungen sein und seine Spur muss in die Greifzone führen. Er muss
+greifbar sein: Seine Höhe beträgt mindestens 20 mm, und seine Diagonale passt
+mit 10 mm Reserve in die Greiferöffnung von 127 mm. Die Diagonale deckt dabei
+jede Greifrichtung ab. Außerdem muss er rechtzeitig erreichbar sein. Die Zeit,
+bis der Klotz die Greifebene erreicht, muss länger sein als die Zeit, die der
+Roboter bis zur Freigabe des Absenkens benötigt. Diese setzt sich aus dem
+waagerechten Anfahrweg bei Höchstgeschwindigkeit und dem Einschwingen der
+Bewegung zusammen.
+
+Unter allen Kandidaten wählt der `priority_handler` den dringendsten noch
+greifbaren Klotz. Das ist der Klotz mit der kürzesten verbleibenden Zeit bis zur Greifebene. Die Wahl
+bleibt bestehen, bis der `object_follower` ein Ergebnis meldet. Ein
+Zielwechsel während der Bewegung ist damit ausgeschlossen. Nicht greifbare
+oder nicht erreichbare Klötze bleiben auf dem Band.
+
+### 3.4 Bahnführung und Greifablauf
+
+#### 3.4.1 `object_follower` und Zustandsautomat
+
+Der `object_follower` setzt den Greifablauf als Zustandsautomaten um. In jedem
+Zustand gibt er eine Zielpose des Flansches aus, der Greifer zeigt dabei stets
+senkrecht nach unten. Abbildung `fig-follower-zustandsdiagramm` zeigt die
+Zustände und ihre Übergänge.
+
+<!-- Word-Übernahme: `fig-follower-zustandsdiagramm` an dieser Stelle
+einfügen und die nachfolgende Beschriftung übernehmen. -->
+![Zustandsautomat des object_follower](../abbildungen/fig-follower-zustandsdiagramm.png)
+
+*Abbildung `fig-follower-zustandsdiagramm`: Zustandsautomat des
+`object_follower`. Die gestrichelte Umrandung fasst die Zustände zusammen, aus
+denen ein Versuch abgebrochen werden kann, bevor der Greifer den Klotz hält.*
+
+Der `object_follower` startet im Zustand `ABBRUCH` und fährt senkrecht auf eine
+Freihöhe. Dadurch ist der Start aus jeder Roboterstellung sicher. Anschließend
+wartet er in einer Beobachtungspose über dem Band (`WARTEN`). Ein vollständiger
+Greifversuch durchläuft die Zustände von `ANFAHREN` bis `LOESEN` und endet
+wieder in `WARTEN`.
+
+#### 3.4.2 Anfahren und Folgen
+
+Mit einem gewählten Ziel fährt der Flansch auf einer Höhe von 0,45 m über den
+Klotz (`ANFAHREN`). Die Zielpose ist die vorhergesagte Position des Klotzes,
+ergänzt um einen Vorhalt in Bandrichtung (Abschnitt 3.5.1). Liegt der Klotz
+noch vor der Greifzone, wartet der Flansch am Zonenrand auf der Spur des
+Klotzes in Bandrichtung. Sobald der Klotz die Greifzone erreicht, folgt der
+Flansch ihm (`FOLGEN`). Dabei dreht sich der Greifer in den Winkel des Klotzes.
+Ein Quader kann über beide Seitenpaare gegriffen werden. Eine Drehung um
+höchstens ±45° genügt deshalb für jede Lage und stellt sicher, dass der
+vorhandene Kameraaufbau nicht beschädigt wird.
+
+Das Absenken wird freigegeben, wenn die Abweichung zwischen Flansch und Ziel
+über zehn Takte innerhalb enger Toleranzen bleibt. Zusätzlich darf der
+Klotz die Greifebene noch nicht erreicht haben.
+
+#### 3.4.3 Absenken, Greifen, Heben und Ablage
+
+Beim Absenken fährt der Flansch auf die Greifhöhe und folgt dem Klotz dabei
+weiter (`ABSENKEN`). Der Winkel bleibt ab diesem Zeitpunkt unverändert. Die
+Greifhöhe fasst den Klotz auf halber Höhe, mindestens aber 11 mm
+(geschlossene Greiferhöhe) über dem Band. So werden auch flache Klötze sicher
+gegriffen, ohne dass das Risiko einer Kollision von Greifer und Band besteht.
+
+Im Zustand `GREIFEN` schließt der Greifer, während der Flansch weiter
+mitfährt. Meldet der Greifer einen gehaltenen Klotz, hebt der Flansch ihn
+zunächst mitfahrend um 0,1 m an und fährt dann auf die Freihöhe von 0,49 m
+(`HEBEN`). Über der Ablagekiste öffnet der Greifer (`ABLEGEN`, `LOESEN`).
+Danach kehrt der `object_follower` in die Beobachtungspose zurück und meldet
+das Ergebnis an den `priority_handler`.
+
+#### 3.4.4 Fehlerbehandlung und Abbruch
+
+Bis der Greifer den Klotz hält, beendet jede Unstimmigkeit den Versuch. Dazu
+gehören ein Überschreiten der Greifebene vor dem Absenken, ein entzogenes oder
+veraltetes Ziel, eine Zeitüberschreitung und ein Fehlgriff. Der Flansch fährt
+dann senkrecht auf die Freihöhe und kehrt in die Beobachtungspose zurück. Der
+Klotz bleibt auf dem Band. Hält der Greifer bereits einen Klotz, wird dieser
+auch bei einem Abbruch in der Kiste abgelegt. So fällt kein Klotz
+unkontrolliert aus dem Greifer.
+
+Unabhängig vom Zustand durchläuft jede Zielpose vor der Ausgabe eine
+Sicherheitsprüfung. Ungültige Werte und Sprünge zwischen zwei Takten werden
+verworfen. Jede Pose wird auf den Arbeitsraum begrenzt. Ist die
+zuletzt gemeldete Roboterpose älter als 0,2 s, gibt der `object_follower`
+keine neue Zielpose aus.
+
+### 3.5 Bewegungsumsetzung in AICA
+
+#### 3.5.1 Signal Point Attractor und Vorhalt
+
+Der `object_follower` gibt keine Geschwindigkeit, sondern eine Zielpose aus.
+Die Umsetzung in eine Bewegung übernimmt der AICA-Baustein Signal Point
+Attractor. Er erzeugt eine kartesische Geschwindigkeit, die proportional zur
+Abweichung zwischen aktueller Flanschpose und Zielpose ist. Die Verstärkung
+beträgt K = 5 1/s, die Geschwindigkeit ist auf 0,85 m/s begrenzt.
+
+Ein Proportionalregler folgt einem gleichförmig bewegten Ziel mit einem
+bleibenden Nachlauf. Bei der Bandgeschwindigkeit v beträgt er v/K. Ohne
+Ausgleich würde der Greifer deshalb stets hinter dem Klotz zufassen. Der
+`object_follower` setzt das Ziel aus diesem Grund um einen Vorhalt in
+Bandrichtung voraus. Der Vorhalt ist als Zeit festgelegt und wird mit der
+geschätzten Bandgeschwindigkeit multipliziert. Er beträgt 0,24 s, also etwa
+1/K, und gilt damit für jede Bandgeschwindigkeit. Am Aufbau folgt der Flansch
+dem Klotz so mit einer Längsabweichung von rund 1 mm und damit ausreichend
+genau für einen sicheren Greifprozess.
+
+#### 3.5.2 IK Velocity Controller und Geschwindigkeitsgrenzen
+
+Der IK Velocity Controller rechnet die kartesische Geschwindigkeit über die
+inverse Kinematik in Gelenkgeschwindigkeiten um. Die Hardwareschnittstelle des
+UR10e setzt sie mit 500 Hz um. Der Controller begrenzt die lineare
+Geschwindigkeit ebenfalls auf 0,85 m/s und zusätzlich die Änderungsrate der
+Befehle. Geregelt wird der Flansch, da der Greifer nicht im Robotermodell
+enthalten ist. Der `object_follower` rechnet jede Greifpose deshalb um den
+Abstand von 0,235 m zwischen Flansch und Griffpunkt nach oben um. So wird der
+Greifer rechnerisch berücksichtigt.
+
+### 3.6 Greiferansteuerung und Rückmeldungen
+
+Der Robotiq 2F-140 wird über die eigene Komponente `robotiq_gripper`
+angesteuert. Sie kommuniziert über USB mit dem Protokoll Modbus RTU. Der
+`object_follower` gibt nur einen Schaltbefehl aus: Greifer schließen oder
+öffnen. Die Komponente meldet zwei Zustände zurück. „Bewegung beendet“ zeigt
+an, dass der Greifer seine Endlage erreicht hat. „Klotz gehalten“ zeigt an,
+dass die Finger beim Schließen auf Widerstand getroffen sind.
+
+Aus beiden Meldungen entscheidet der `object_follower`, ob ein Griff gelungen
+ist. Schließt der Greifer vollständig ohne Widerstand, liegt ein Fehlgriff vor.
+Entfällt die Meldung „Klotz gehalten“ auf dem Weg zur Kiste, gilt der Klotz
+als verloren.
+
+## 4 Kalibrierung
+
+### 4.1 Kalibrierungsstrategie und Bezugssysteme
+
+<!-- Hier vlt Unterschied Hand-to-eye in Kap. 4.2 und eye-in-hand in Kap. 4.3 klarstellen -->
+
+Alle Komponenten des Regelpfads rechnen im Bezugssystem `world`, dessen
+Ursprung in der Roboterbasis liegt. Die Messungen der Basiskamera werden
+entsprechend in dieses System überführt. Dafür werden die Eigenschaften der
+Kamera und ihre Lage relativ zum Roboter benötigt. Tabelle
+`tab-kalibrierung-groessen` ordnet diese Größen ihrer Herkunft zu.
+
+*Tabelle `tab-kalibrierung-groessen`: Geometrische Größen des Regelpfads und
+ihre Herkunft.*
+
+| Größe | Herkunft | Abschnitt |
+|---|---|---|
+| Intrinsische Parameter der Basiskamera | Werkskalibrierung, vom Kameratreiber bereitgestellt | 4.1 |
+| Lage der Basiskamera in `world` | Kalibrierung | 4.2 |
+| Abstand zwischen Flansch und Griffpunkt | Messung am Aufbau, 0,235 m | 2.2 |
+| Bandrichtung und Bandgeschwindigkeit | Schätzung zur Laufzeit aus den Bilddaten | 3.2.2 |
+
+Die intrinsischen Parameter werden durch den Hersteller kalibriert und stehen
+über den Kameratreiber zur Verfügung. Bandrichtung und Bandgeschwindigkeit
+werden bewusst nicht kalibriert. Das System schätzt sie aus den Bilddaten und
+bleibt so auch bei einer veränderten Bandgeschwindigkeit verwendbar. Dafür
+genügt ein Neustart, der die errechnete mittlere Objektgeschwindigkeit
+zurücksetzt.
+
+Zu bestimmen bleibt die Lage der Basiskamera. Sie legt unmittelbar fest, wo
+der Roboter einen Klotz erwartet. Ein Fehler in der Kameralage erscheint als
+Versatz zwischen gemessener und tatsächlicher Klotzposition. Die Kamera ist
+an einem nicht vollständig starren Gestell montiert und muss nach einer
+Berührung des Gestells neu kalibriert werden. Das Projekt fordert dafür ein
+schnelles Verfahren. Umgesetzt wurde deshalb ein automatisches und einfach
+wiederholbares Kalibrierverfahren.
+
+<!-- Hier vlt Unterschied Hand-to-eye in Kap. 4.2 und eye-in-hand in Kap. 4.3 klarstellen -->
+Je nachdem, ob die Kamera ortsfest oder
+am Roboter montiert ist, unterscheidet sich das Kalibrierverfahren grundlegend
+([src-mathworks-handeye-kalibrierung](../referenzen/quellen/src-mathworks-handeye-kalibrierung.md)).
+
+### 4.2 Extrinsische Kalibrierung der Basiskamera
+
+Für die automatische Kalibrierung wird der Roboter als Messmittel eingesetzt.
+Der Greifer hält ein Kalibrierboard unter die fest montierte Basiskamera.
+Abbildung `fig-kalibrierung-board-greifer` zeigt diese Anordnung aus Sicht der
+Kamera.
+
+<!-- Word-Übernahme: `fig-kalibrierung-board-greifer` an dieser Stelle
+einfügen und die nachfolgende Beschriftung übernehmen. -->
+![Kalibrierboard im Greifer aus Sicht der Basiskamera](../abbildungen/fig-kalibrierung-board-greifer.png)
+
+*Abbildung `fig-kalibrierung-board-greifer`: AprilGrid-Kalibrierboard im
+Greifer in der Startpose, aufgenommen von der Basiskamera (Graubild der
+Farbkamera, 0,53 m Abstand).*
+
+Das Board ist ein AprilGrid aus 7 × 11 AprilTags
+([src-kalibr-aprilgrid](../referenzen/quellen/src-kalibr-aprilgrid.md)).
+Jeder Tag trägt eine eindeutige Kennung. Seine Ecken lassen sich deshalb auch
+bei teilweiser Verdeckung sicher zuordnen
+([src-wang-apriltag2-2016](../referenzen/quellen/src-wang-apriltag2-2016.md)).
+Aus den erkannten Ecken wird für jede Pose die Lage des Boards relativ zur
+Kamera berechnet. Gleichzeitig liefert der Roboter die Lage seines Flansches in
+`world`.
+
+Die Anordnung entspricht einer Hand-Auge-Kalibrierung mit ortsfester Kamera.
+Unbekannt sind zwei Transformationen: die Lage der Kamera in `world` und die
+Lage des Boards am Flansch. Beide werden gemeinsam bestimmt. Einen Startwert
+liefern die Verfahren nach Tsai und Lenz sowie nach Park und Martin
+([src-tsai-handauge-1989](../referenzen/quellen/src-tsai-handauge-1989.md),
+[src-park-handauge-1994](../referenzen/quellen/src-park-handauge-1994.md))
+in der Implementierung von OpenCV
+([src-opencv-handeye](../referenzen/quellen/src-opencv-handeye.md)).
+Anschließend werden beide Transformationen so angepasst, dass der Abstand
+zwischen erkannten und vorhergesagten Tag-Ecken über alle Posen minimal wird.
+
+Der Ablauf ist weitestgehend automatisiert. Der Roboter fährt 40 Posen an,
+danach vier Prüfposen und zum Abschluss die erste Pose erneut. Die Prüfposen
+gehen nicht in die Berechnung ein und zeigen die Genauigkeit an unabhängigen
+Daten. Die wiederholte Pose deckt ein Verrutschen des Boards im Greifer auf.
+Ein Durchlauf dauert rund vier Minuten. Das Ergebnis wird nur gespeichert,
+wenn der mittlere Bildfehler höchstens 1 px, die Abweichung der Prüfposen
+höchstens 2 mm und das Verrutschen höchstens 0,5 mm beträgt.
+
+Der Greifer konnte im Rahmen des Projekts nicht verändert werden. Das Board
+wird deshalb mit einem Gummigreifsatz zwischen die Backen geklemmt und muss
+dafür von Hand eingelegt werden. Dieser Teil des Ablaufs ist der einzige, der
+im Rahmen des Versuchsaufbaus nicht automatisiert werden konnte.
+
+Die Kalibrierung über das Board bestimmt die Lage des Farbbilds. `base_cam`
+ermittelt Umriss und Höhe der Klötze jedoch aus dem Tiefenbild. Beide Bilder
+müssten dieselbe Geometrie liefern. Um dies zu prüfen, wurde dieselbe
+Board-Ebene in 13 Aufnahmen gleichzeitig über die Tags im Farbbild und über
+das Tiefenbild gemessen. Die Tiefenebene ist gegenüber der Farbebene um 1,0
+bis 1,8° verkippt. Am Ort eines Klotzes misst die Tiefe 5,5 bis 13,5 mm zu
+tief. Der Fehler wächst zum unteren Bildrand hin.
+
+Mit der reinen Lage der Farbkamera wären die von `base_cam` gemessenen
+Klotzhöhen am unteren Bildrand um bis zu 13 mm falsch. Das Verfahren bestimmt
+deshalb die Lage, mit der `base_cam` aus dem Tiefenbild richtig rechnet.
+Neigung und Höhe werden aus der Bandebene im Tiefenbild bestimmt. Die
+Drehung um die Hochachse und die horizontale Lage werden aus Punkten auf
+Arbeitshöhe übertragen, vom Band bis 100 mm darüber. Für diese Punkte ist
+bekannt, wo die Farbkamera sie sieht und wo `base_cam` sie mit dem gemessenen
+Tiefenfehler abbildet. Die Objekterkennung in `base_cam` bleibt dadurch
+unverändert.
+
+### 4.3 Hand-Auge-Kalibrierung der Roboterkamera
+
+Die Roboterkamera bewegt sich mit dem Flansch. Ihre Messungen sind nur dann in
+`world` auswertbar, wenn die feste Transformation zwischen Flansch und Kamera
+bekannt ist. Dieses Problem ist von dem in Abschnitt 4.2 zu unterscheiden. Dort
+ist die Kamera ortsfest und das Board wird bewegt. Hier ist das Board fest und
+die Kamera wird bewegt. Das Verfahren wird als Eye-in-Hand-Kalibrierung
+bezeichnet
+([src-mathworks-handeye-kalibrierung](../referenzen/quellen/src-mathworks-handeye-kalibrierung.md)).
+
+Unbekannt sind zwei Transformationen: die Lage der Kamera relativ zum Flansch
+(`T_ee_cam`) und die Lage des Boards im Bezugssystem `world`. Beide werden
+gemeinsam bestimmt. Als Nebenprodukt entsteht die Transformation zwischen
+Roboterbasis und Förderband-Koordinatensystem (`T_robot_conveyor`). Dafür wird
+der Ursprung des Boards als bekannter Punkt im Förderband-Koordinatensystem
+festgelegt. Die Berechnung nutzt dieselben Verfahren wie in Abschnitt 4.2.
+
+Das in Abschnitt 4.2 verwendete AprilGrid-Board ist für die Roboterkamera nicht
+geeignet. Aus wechselnden Abständen und Blickwinkeln ist das Board zu klein, um
+seine Ecken zuverlässig zu erkennen. Stattdessen wird ein ChArUco-Board
+verwendet. Es kombiniert ein Schachbrettmuster mit ArUco-Markierungen. Jede
+Ecke des Schachbrettmusters ist über die umliegenden Marker eindeutig
+identifizierbar. Das Board ist physisch größer und kann von beiden Kameras aus
+unterschiedlichen Abständen sicher erkannt werden.
+
+Das Board liegt für die Kalibrierung fest am Rand des Förderbands. Der Roboter
+wird zunächst manuell so positioniert, dass das Board im Kamerabild sichtbar
+ist. Anschließend übernimmt eine eigene AICA-Kalibrieranwendung den Ablauf.
+
+Der Roboter fährt automatisch eine Orbit-Trajektorie ab. Sie besteht aus einem
+Mittelpunkt und einer konfigurierbaren Anzahl gleichmäßig verteilter Punkte auf
+einem Kreisring. An jedem Wegpunkt schwenkt die Kamera auf das Board-Zentrum.
+Der Roboter wartet, bis er ausgeschwungen ist, und mittelt dann mehrere
+Detektionen. Nach dem letzten Wegpunkt kehrt er zur Startposition zurück.
+Abbildung `fig-orbit-trajektorie` zeigt die Trajektorie mit den Standardwerten
+von 9 Wegpunkten und einem Kreisradius von 50 mm in Drauf- und Seitenansicht.
+
+<!-- Word-Übernahme: `fig-orbit-trajektorie` an dieser Stelle einfügen und die
+nachfolgende Beschriftung übernehmen. -->
+![Orbit-Trajektorie der Eye-in-Hand-Kalibrierung](../abbildungen/fig-orbit-trajektorie.jpg)
+
+*Abbildung `fig-orbit-trajektorie`: Orbit-Trajektorie der Eye-in-Hand-Kalibrierung.
+Draufsicht: 9 Wegpunkte (Startpose 0 im Zentrum, Wegpunkte 1–8 auf dem Kreisring
+mit r = 50 mm, 45°-Abstände). Seitenansicht: Die Kamera zeigt an jedem Wegpunkt
+auf das Board-Zentrum. (KI generiert.)*
+
+Die Basiskamera erkennt das Board während der Trajektorie ebenfalls. Sie liefert
+zu jeder Flanschpose eine Board-Pose aus ihrer festen Perspektive. Weil die
+Basiskamera nicht mitbewegt wird, deckt sie dabei nur einen Blickwinkel ab.
+Diese Messungen ergänzen die Messungen der Roboterkamera, ohne sie zu ersetzen.
+
+Aus den gesammelten Flanschposen und Board-Posen berechnet OpenCV die
+Transformation `T_ee_cam`. Daraus folgen `T_robot_conveyor` und die Lage der
+Basiskamera in `world`. Alle drei Transformationen werden in der Datei
+`calibration.yaml` gespeichert. Die Hauptanwendung liest diese Datei beim Start
+ein. Damit ist keine laufende Signalverbindung zwischen Kalibrierung und Betrieb
+erforderlich.
+
+Der Positionsfehler über alle Wegpunkte wird als RMSE im Log ausgegeben. Im
+durchgeführten Kalibrierlauf lag er bei etwa 1,5 bis 2 mm.
+
+<!-- Merker: RMSE-Wert aus dem Log nachtragen, sobald ein genauer Wert vorliegt. -->
+
+Die Kalibrierung wird anschließend mit einer Testfahrt überprüft. Die
+Kalibrieranwendung fährt den Flansch so, dass das Fadenkreuz des Kamerabilds
+auf der Mitte des Boards steht. Dabei wird der physische Versatz zwischen
+Flansch und Kameraoptik über `T_ee_cam` eingerechnet. Ein korrekt kalibriertes
+System platziert das Fadenkreuz mittig auf dem Board. Danach fährt der Flansch
+200 mm entlang der Förderband-Y-Achse vorwärts und zurück. Bleibt die Bewegung
+parallel zur Bandkante ohne seitliche Abweichung, bestätigt das die berechnete
+Ausrichtung des Förderband-Koordinatensystems.
+
+Im finalen Greifablauf ist die Roboterkamera nicht in den aktiven Regelpfad
+eingebunden (Abschnitt 3.1). Die Kalibrierung schafft jedoch die Voraussetzung
+für eine spätere Einbindung als Korrektursignal nahe dem Greifpunkt.
+
+### 4.4 Validierung der Koordinatentransformation und Positionsgenauigkeit
+
+Die Validierung prüft das automatische Verfahren in drei Schritten: die Güte
+eines einzelnen Laufs, die Wiederholbarkeit über mehrere Tage und die
+Positionsgenauigkeit im Greifbetrieb. Tabelle `tab-kalibrierung-vergleich`
+fasst die Ergebnisse zusammen.
+
+*Tabelle `tab-kalibrierung-vergleich`: Prüfungen des automatischen
+Kalibrierverfahrens.*
+
+| Prüfung | Bedingung | Ergebnis |
+|---|---|---|
+| Mittlerer Bildfehler | Kalibrierlauf am 28.09.2026, 40 Posen | 0,34 px |
+| Abweichung der Prüfposen | 4 Posen, nicht in der Berechnung | 0,54 mm |
+| Verrutschen des Boards | Wiederholung der ersten Pose | 0,04 mm |
+| Wiederholbarkeit der Kameralage | Läufe vom 25.09. und 28.09.2026 | höchstens 0,8 mm und 0,03°, auf dem Band 0,9 mm im Mittel |
+| Lageabweichung | 12 Board-Aufnahmen auf dem Band und auf einem 100-mm-Klotz | 3,3 mm im Mittel, höchstens 7,0 mm |
+| Greiflauf | Kalibrierung in `base_cam`, mehrere Tests im regulären Systemablauf | alle Klötze gegriffen und abgelegt |
+
+Die Gütewerte des Laufs liegen deutlich innerhalb der Grenzen aus Abschnitt
+4.2. Zwischen zwei Läufen im Abstand von drei Tagen unterscheidet sich die
+Kameralage um weniger als einen Millimeter. Das Verfahren reproduziert sein
+Ergebnis damit bei unveränderter Kamera. Für die Lageabweichung wurde
+verglichen, wo `base_cam` das Board mit der Kalibrierung abbildet und wo es
+laut Farbbild liegt. Die abschließende Prüfung ist der
+Greiflauf, weil er die gesamte Kette von der Erkennung bis zur Ablage
+einschließt. Mit den ermittelten Kalibrierwerten konnten in mehreren Tests
+alle Griffe im regulären Systemablauf ohne Einschränkung durchgeführt werden.
+Ein fehlerhafter Griffversatz war nach der Kalibrierung nicht zu erkennen.
+
+Das automatische Verfahren steht für jede Veränderung der Kameraposition
+bereit. Ein neuer Lauf dauert einschließlich Vorbereitung rund fünf Minuten,
+und `base_cam` übernimmt das Ergebnis aus der Zieldatei der Kalibrierdaten.
