@@ -1011,7 +1011,8 @@ Eine Eingangsqueue der Tiefe 1 verhinderte zusätzlich, dass alte Bilddaten
 aufgestaut verarbeitet werden. Das mittlere Messalter sank dadurch auf 139 ms;
 die mittlere Zeit bis zur nächsten Messung lag bei 266 ms. Die L515 selbst
 lieferte Bilddaten mit einem Alter von 46 bis 51 ms. Der verbleibende Anteil
-entsteht somit vor allem in Verarbeitung und Übertragung
+entsteht somit vor allem in Verarbeitung und Übertragung. Im finalen Betrieb
+liefert `base_cam` rund 8,6 neue Messungen pro Sekunde
 ([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
 
 Auch die 500-Hz-Regelung reagierte empfindlich auf parallele Last. Bei
@@ -1039,14 +1040,14 @@ Laufzeit, Bewegung und Sicherheit im finalen Regelpfad.*
 | Parameter | Wert | Einheit | Funktion |
 |---|---:|---|---|
 | Rate `base_cam` und `vectoring` | 15 | Hz | Objektmessung und Geschwindigkeitsschätzung |
-| Glättungsfenster der Geschwindigkeitsmessung | 20 | Messungen | Unterdrückt einzelne Ausreißer bei rund 1,3 s Historie |
-| Vorhaltezeit `lead_time_s` | 0,240 | s | Berücksichtigt die Zeit bis zum Erreichen der Greifpose |
+| Glättungsfenster für Position, Abmessungen und Winkel | 20 | Messungen | Mittelung über rund 1,3 s Historie |
+| Vorhaltezeit `lead_time_s` | 0,240 | s | Gleicht den Nachlauf des Attractors aus (etwa 1/K) |
 | Attractor- und IK-Geschwindigkeitsgrenze | 0,850 | m/s | Begrenzt die lineare Flanschgeschwindigkeit |
-| IK-Befehlsrate | 3,000 | dimensionslos | Gewichtet die Aktualisierung der Geschwindigkeitsbefehle |
+| IK-Befehlsratengrenze `command_rate_limit` | 3,000 | rad/s² | Begrenzt die Gelenkbeschleunigung beim Anfahren |
 | Absenkgeschwindigkeit | 0,350 | m/s | Vertikale Bewegung zum Greifpunkt |
 | Sinkzeit `t_descend_s` | 0,700 | s | Berechnete Dauer des Absenkens |
-| Greif- und Beruhigungszeit | 0,800 / 0,400 | s | Schließen des Greifers und Stabilisierung der Zielverfolgung |
-| Maximale Extrapolation / Ziel-Timeout | 1,000 / 1,500 | s | Begrenzung der Vorhersage bei ausbleibender Messung |
+| Greif- und Beruhigungszeit | 0,800 / 0,400 | s | Schließen des Greifers und Einschwingen des Followers bis zur Freigabe des Absenkens |
+| Maximale Extrapolation / Ziel-Timeout | 1,000 / 1,500 | s | Begrenzung der Vorhersage im Follower / Abbruch bei ausbleibendem Zielsatz |
 | Mindestobjekthöhe / Mindestgreifhöhe | 10 / 11 | mm | Filterung sehr flacher Objekte und Kollisionsabstand zum Band |
 
 Der Attractor und der IK-Controller verwenden beide eine maximale lineare
@@ -1056,33 +1057,32 @@ Sicherheitsgrenzen. Die Absenkgeschwindigkeit wurde von 0,250 auf 0,350 m/s
 erhöht. Gleichzeitig verringerte sich die angesetzte Sinkzeit von 0,900 auf
 0,700 s. Die Dauer deckt die im Aufbau auftretende Hubbewegung von etwa 0,110
 bis 0,150 m einschließlich einer kurzen Reserve ab. Die Beruhigungszeit von
-0,400 s verhindert, dass die Zielverfolgung unmittelbar nach einem
-Zustandswechsel mit einer instabilen Messung weiterläuft
+0,400 s berücksichtigt in der Erreichbarkeitsprüfung das Einschwingen des
+Followers bis zur Freigabe des Absenkens
 ([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
 
-Die Zielvorhersage verwendet eine Vorhaltezeit von 0,240 s. Fehlende Messungen
-werden höchstens 1,000 s extrapoliert. Danach bleibt das Ziel noch maximal
-1,500 s gültig. Diese Grenzen verhindern, dass ein lange nicht mehr
-beobachteter Klotz weiter verfolgt wird. Stehende Objekte werden bereits bei
-der Auswahl ausgeschlossen, wenn ihre geschätzte Geschwindigkeit unter
-0,050 m/s liegt.
+Die Zielvorhersage verwendet eine Vorhaltezeit von 0,240 s. Der Follower
+rechnet die Zielposition ab ihrem Zeitstempel höchstens 1,000 s voraus. Kommt
+1,500 s lang kein neuer Zielsatz, bricht er den Versuch ab. Diese Grenzen
+verhindern, dass ein Klotz ohne aktuelle Zieldaten weiter verfolgt wird.
+Stehende Objekte gehen nicht in die Schätzung der Bandgeschwindigkeit ein,
+wenn ihre geschätzte Geschwindigkeit unter 0,050 m/s liegt.
 
 Die minimale Greifhöhe wurde im Verlauf von 16 auf 11 mm reduziert. In
 Verbindung mit einer minimalen erkannten Objekthöhe von 10 mm können damit
-auch flache Klötze berücksichtigt werden. Die Greifhöhe setzt dabei auf der Hälfte der gemessenen Höhe des Klotzes an. Die untere
-Arbeitsraumgrenze wurde parallel von 0,304 auf 0,299 m angepasst. Greifhöhe,
+auch flache Klötze berücksichtigt werden. Die Greifhöhe setzt dabei auf der
+Hälfte der gemessenen Höhe des Klotzes an. Die untere Arbeitsraumgrenze wurde parallel von 0,304 auf 0,299 m angepasst. Greifhöhe,
 Arbeitsraumgrenze und Greifergeometrie müssen zusammen geändert werden, damit
 die Greifbacken nicht das Band berühren
 ([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
 
 ### 5.3 Optimierung der Basiskamera-Erkennung
 
-Die Basiskamera verarbeitet nur den Bereich, aus dem der Roboter Klötze
-aufnehmen kann. Der Bildausschnitt beginnt bei Pixel-Spalte 342 und besitzt eine
-Breite von 618 px. Er deckt im world-System näherungsweise den für die
-Greifzone relevanten Bereich von `x = -1,000 m` bis `x = -0,530 m` und
-`y = -0,320 m` bis `y = 0,445 m` ab. Bereiche außerhalb dieser Zone würden
-keine greifbaren Ziele liefern. Ihre Ausblendung senkt deshalb die zu
+Die Basiskamera verarbeitet nur den Teil des Bandes, dessen Klötze der Roboter
+erreichen kann. Der Bildausschnitt beginnt bei Pixel-Spalte 342 und besitzt
+eine Breite von 618 px. Er reicht quer zum Band vom Bandrand am Roboter bis
+`x = -1,000 m`, der Grenze des Arbeitsraums. Klötze jenseits dieser Grenze sind
+nicht erreichbar und würden keine greifbaren Ziele liefern. Ihre Ausblendung senkt deshalb die zu
 verarbeitende Bildmenge und reduziert Fehlkandidaten an Bandrand und Gestell
 ([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
 
@@ -1091,14 +1091,17 @@ Mindestkonturfläche beträgt 1.000 px statt zuvor 1.500 px. Die untere Grenze
 für die erkannte Höhe wurde auf 10 mm gesetzt. Damit bleiben auch die flachen
 verwendeten Klötze im Kandidatenpool. Die niedrigeren Grenzen erhöhen zugleich
 die Gefahr von Störungen durch Reflexionen und unvollständige Tiefenwerte. Die
-Beschränkung auf den Bildausschnitt der Greifzone und die zeitliche Glättung
-der Geschwindigkeitsmessung begrenzen diesen Effekt.
+Beschränkung auf den erreichbaren Bildausschnitt und die zeitliche Glättung
+der Messwerte begrenzen diesen Effekt. Die nachgelagerte Zielauswahl bewertet
+weiterhin nur Objekte, die innerhalb der Greifzone liegen und rechtzeitig
+erreichbar sind. Die Bilderkennung muss daher nicht jedes sichtbare Objekt
+perfekt klassifizieren, sondern ausreichend verlässliche Messungen für die
+bewegungsabhängige Auswahl bereitstellen.
 
-Der Follower verwendet die von der Erkennung übermittelte Ausrichtung ab einer
-Qualitätskennzahl von 0,400. Zuvor lag die Grenze bei 0,700. Die Anpassung
-erlaubt mehr Kandidaten bei schwächerer Kontur. Die nachgelagerte Zielauswahl
-bewertet weiterhin nur Objekte, die innerhalb des Arbeitsraums liegen und
-rechtzeitig erreichbar sind. Die Bilderkennung muss daher nicht jedes
-sichtbare Objekt perfekt klassifizieren, sondern ausreichend verlässliche
-Messungen für die bewegungsabhängige Auswahl bereitstellen
+Der Follower dreht den Greifer ab einer Qualitätskennzahl der Ausrichtung von
+0,400 in den Winkel des Klotzes. Zuvor lag die Grenze bei 0,700. Die Kennzahl
+ergibt sich in `vectoring` aus der Streuung der gemessenen Winkel. Unterhalb
+der Grenze greift der Follower in Grundstellung. Mit 0,700 wurden kleine,
+hochkant stehende Klötze nicht gedreht, obwohl ihr gemittelter Winkel
+stimmte
 ([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
