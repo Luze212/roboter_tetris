@@ -1139,17 +1139,19 @@ Konfigurationen und sind keine gemeinsame Versuchsreihe.*
 | Lauf | Konfiguration oder Versuchsbedingung | Dokumentiertes Ergebnis |
 |---|---|---|
 | Erste reale Griffe | Bandgeschwindigkeit etwa `0,130 m/s`, zwei einzeln aufgelegte Klötze | 2 von 2 während der Bandbewegung gegriffen und abgelegt |
-|  |
+| Schutzstopp und Korrektur der Nutzlast | Zwei weitere Griffe, dann Schutzstopp beim Anfahren; nach Korrektur von Nutzlast und Beschleunigungsgrenze drei Griffe, unter anderem am Bandrand bei `x = -0,940 m` | 5 von 5 abgelegt; kumuliert seit dem ersten realen Griff 7 von 7 |
 | Ohne Roboterkamera | Drei Positionen über die erweiterte Bandbreite | 3 von 3 abgelegt; kumuliert seit dem ersten realen Griff 10 von 10 |
 | Vor Anpassung der Zeitgrenzen | Extrapolationsgrenze `0,600 s`, Ziel-Timeout `1,000 s` | 3 von 7 abgelegt; Abbrüche wegen veralteter Messungen |
 | Nach Anpassung der Zeitgrenzen | Extrapolationsgrenze `1,000 s`, Ziel-Timeout `1,500 s` | 9 von 9 abgelegt, keine Deckelmeldung |
-| Optimierter Dauerlauf | Horizontal `0,500 m/s`, Absenken `0,250 m/s` | 15 Ablagen in rund 2 min, 1 Fehlgriff und 9 durchgelaufene Klötze |
-| Kalibrier-Greiflauf | Neue Basiskamera-Kalibrierung, sieben vollständige Zustandszyklen | 7 von 7 abgelegt, kein Fehlgriff; als Kalibrierungsnachweis in Abschnitt 4.4 bewertet |
+| Optimierter Dauerlauf | Horizontal `0,500 m/s`, Absenken `0,250 m/s` (Stand 24.09.2026) | 15 Ablagen in rund 2 min, 1 Fehlgriff und 9 durchgelaufene Klötze |
+| Kalibrier-Greiflauf | Neue Basiskamera-Kalibrierung, protokollierter Lauf mit sieben vollständigen Zustandszyklen | 7 von 7 abgelegt, kein Fehlgriff; weitere Tests ohne Protokoll ohne Einschränkung; als Kalibrierungsnachweis in Abschnitt 4.4 bewertet |
+| Weitere Läufe ohne Messprotokoll | Dauerlauf mit gemischten und gedrehten Klötzen, finale Geschwindigkeitswerte (Abschnitt 5.2), höhere Bandstufen bis Stufe 3 | nach Beobachtung der Projektgruppe zuverlässig; keine Zählung und keine Messwerte |
 
-Die letzte Zeile bestätigt zusätzlich, dass die automatische Kalibrierung mit
-dem Greifablauf zusammenwirkt. Sie wird in diesem Kapitel nicht als weiterer
-unabhängiger Greifversuch gewertet, da sie bereits die Validierung aus Abschnitt
-4.4 stützt.
+Der Kalibrier-Greiflauf bestätigt zusätzlich, dass die automatische
+Kalibrierung mit dem Greifablauf zusammenwirkt. Er wird in diesem Kapitel nicht
+als weiterer unabhängiger Greifversuch gewertet, da er bereits die Validierung
+aus Abschnitt 4.4 stützt. Die letzte Zeile fasst Läufe zusammen, die nur
+beobachtet und nicht protokolliert wurden.
 
 ### 6.2 Nachweis des Greifens während der Bandbewegung
 
@@ -1164,14 +1166,14 @@ zwischen `+0,300` und `+1,100 mm`. Die Querabweichungen betrugen höchstens
 Von der Auswahl bis zur Ablage vergingen jeweils rund neun Sekunden
 ([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
 
-Nach der Korrektur der Roboter-Nutzlast wurden weitere Klötze auch an
-Randpositionen gegriffen. Drei Griffe mit einem `100-mm`-Klotz bei
-`x = -0,721 m`, `x = -0,933 m` und `x = -0,571 m` wurden vollständig
+Nach der Korrektur der Roboter-Nutzlast wurden weitere Klötze auch am
+Bandrand gegriffen, unter anderem bei `x = -0,940 m`. Nach dem Entfernen der
+Roboterkamera aus dem Regelpfad wurden drei Griffe mit einem `100-mm`-Klotz bei
+`x = -0,721 m`, `x = -0,933 m` und `x = -0,571 m` vollständig
 abgeschlossen. Die Längsabweichung lag dabei zwischen `-1,800` und
 `+0,600 mm`, die Querabweichung bei `±0,100 mm`. Damit wurde auch der
-erweiterte Bereich in Bandquerrichtung praktisch geprüft. Die Roboterkamera
-war zu diesem Zeitpunkt nicht Teil des Regelpfads. Die Ergebnisse belegen
-somit das Greifen mit der Basiskamera als alleiniger Messquelle
+erweiterte Bereich in Bandquerrichtung praktisch geprüft. Die Ergebnisse
+belegen somit das Greifen mit der Basiskamera als alleiniger Messquelle
 ([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
 
 Der umfangreichste Dauerlauf wurde mit einer horizontalen
@@ -1182,7 +1184,7 @@ Klötze lagen jeweils kurz hinter einem gerade gegriffenen Objekt. Der Roboter
 war dadurch noch mit Heben, Ablage, Öffnen oder Rückfahrt beschäftigt. Das
 System wählte diese Klötze nicht fehlerhaft aus, sondern konnte sie innerhalb
 der verbleibenden Zeit nicht mehr sicher erreichen. Der knappste erfolgreiche
-Griff begann `0,340 s` vor der hinteren Begrenzung des Griffbereichs
+Griff begann `0,340 s` vor der Greifebene
 ([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
 
 Auch die Ausrichtung rechteckiger Klötze wurde geprüft. Fünf Klötze wurden im
@@ -1203,8 +1205,8 @@ einer Reihe wurden nur 3 von 7 Klötzen abgelegt. Viermal hatte ein Klotz die
 Greifebene bereits überschritten, bevor der Roboter absenken konnte. Einmal
 lief der Ziel-Timeout während des Greifens ab. Nach der Anhebung von
 `max_extrapolation_s` auf `1,000 s` und des Ziel-Timeouts auf `1,500 s` wurden
-mit denselben Klötzen 9 von 9 Ablagen dokumentiert. Die größte beobachtete
-Messlatenz betrug dabei `0,890 s`
+mit denselben Klötzen 9 von 9 Ablagen dokumentiert. Das größte beobachtete
+Alter des Zielsatzes im Follower betrug dabei `0,890 s`
 ([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
 
 Der Verlauf der Zustandsübergänge wurde zusätzlich in Softwaretests geprüft.
@@ -1216,36 +1218,31 @@ der Implementierung. Sie ersetzt keine erneute reale Abnahme des Roboters
 
 ### 6.4 Aussagekraft und Grenzen der Abnahme
 
-Die realen Läufe zeigen, dass das System Klötze ohne Encoder am Förderband
-während der Bewegung auswählen, verfolgen, greifen und ablegen kann. Dies
-gilt für unterschiedliche Klotzgrößen, Randpositionen und gedrehte
-quaderförmige Klötze. Die Zielauswahl erkennt außerdem Situationen, in denen
-ein nachfolgender Klotz wegen des laufenden Ablagezyklus nicht mehr rechtzeitig
-erreichbar ist. In diesem Fall wird der Klotz durchgelassen, statt einen
-unsicheren Greifversuch zu erzwingen
-([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
-
 Die Entwicklungsabnahme bestätigt die durchgängige Funktion des Systems am
 realen Aufbau. Die Basiskamera erkennt die Klötze, `vectoring` schätzt ihre
-Bewegung aus den Bilddaten und der `priority_handler` wählt rechtzeitig
-erreichbare Ziele aus. Der Roboter fährt die vorhergesagte Pose an, greift den
-Klotz während der Bandbewegung und legt ihn in der Ablagebox ab. Dieser Ablauf
-wurde für verschiedene Klotzgrößen, Randpositionen und gedrehte
-quaderförmige Klötze durchgeführt.
+Bewegung ohne Encoder am Förderband allein aus den Bilddaten, und der
+`priority_handler` wählt rechtzeitig erreichbare Ziele aus. Der Roboter fährt
+die vorhergesagte Pose an, greift den Klotz während der Bandbewegung und legt
+ihn in der Ablagebox ab. Dieser Ablauf wurde für unterschiedliche
+Klotzgrößen, Randpositionen und gedrehte quaderförmige Klötze nachgewiesen
+([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
 
 Die dokumentierten Läufe zeigen außerdem, dass das System nicht jeden sichtbaren
-Klotz zwingend erreichen muss. Liegt ein Klotz zu dicht hinter einem bereits gewählten
-Objekt, wird er nicht mehr als sicher erreichbar bewertet und läuft durch. Bei
-veralteten Messdaten oder einer nicht mehr erreichbaren Greifebene bricht der
-Follower kontrolliert ab. Die Korrektur der Roboter-Nutzlast und der
+Klotz zwingend erreichen muss. Liegt ein Klotz zu dicht hinter einem bereits
+gewählten Objekt, ist er wegen des laufenden Ablagezyklus nicht mehr sicher
+erreichbar. Er läuft dann durch, statt einen unsicheren Greifversuch zu
+erzwingen. Bei veralteten Messdaten oder einer nicht mehr erreichbaren
+Greifebene bricht der Follower kontrolliert ab. Die Korrektur der Roboter-Nutzlast und der
 Beschleunigungsbegrenzung beseitigte einen beim schnellen Anfahren beobachteten
 Schutzstopp.
 
 Das Projekt erreicht damit den vorgesehenen Konzeptnachweis für ein
 Pick-on-the-Fly-System mit Förderband ohne Encoder. Die Geschwindigkeit des
 Förderbands wird allein aus den Kameradaten geschätzt. Die Zielauswahl und die
-Greifbewegung reagieren auf die aktuelle Lage der Klötze. Auch höhere
-Bandgeschwindigkeiten wurden erfolgreich erprobt, sodass das Förderband bis auf Stufe 3 gestellt werden konnte, um ein sicheres Detektieren der Objekte und Picken zu garantieren
+Greifbewegung reagieren auf die aktuelle Lage der Klötze. Nach Beobachtung der
+Projektgruppe wurden Klötze auch bei höheren Bandgeschwindigkeiten bis Stufe 3
+sicher erkannt und gegriffen. Messwerte der Geschwindigkeit liegen für diese
+Stufen nicht vor
 ([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
 
 ## 7 Diskussion und Ausblick
@@ -1269,12 +1266,11 @@ parallele Leseprozesse nach Möglichkeit geschlossen bleiben
 
 Flache Klötze liegen nahe an der unteren Erkennungs- und Greifgrenze. Die
 Basiskamera steht außerdem auf einem beweglichen Gestell. Ihre Kalibrierung
-muss deshalb nach einer Veränderung ihrer Lage wiederholt werden. Neben der
-erprobten Handkalibrierung durch Antasten der Klötze steht ein automatisches Kalibrierverfahren zur
-Verfügung. Dieses erreichte im Greiflauf vergleichbare Ergebnisse und
+muss deshalb nach einer Veränderung ihrer Lage wiederholt werden. Dafür steht
+das automatische Kalibrierverfahren aus Kapitel 4 zur Verfügung. Mit ihm
+wurden im Greifbetrieb alle Griffe ohne Einschränkung ausgeführt, und es
 wiederholte seine Kameralage über drei Tage mit einer Abweichung von weniger
-als einem Millimeter. Die Handkalibrierung bleibt im finalen Aufbau aktiv, da diese Kalibrierung
-dort bereits erprobt ist und geringfügig genauer bewertet wurde
+als einem Millimeter
 ([src-projekt-kalibrierung](../referenzen/quellen/src-projekt-kalibrierung.md)).
 
 ### 7.3 Weiterentwicklung
