@@ -283,39 +283,23 @@ Seine Erkenntnisse und die Regeln für ihre Verwendung stehen in
 
 ### 5.3 Optimierung der Basiskamera-Erkennung
 
-## 6. Versuchsergebnisse
+## 6. Entwicklungsabnahme und Versuchsergebnisse
 
-### 6.1 Versuchsbedingungen
+### 6.1 Einordnung und Datengrundlage
 
-### 6.2 Validierung der Geschwindigkeitsschätzung
+### 6.2 Nachweis des Greifens während der Bandbewegung
 
-### 6.3 Genauigkeit der Basiskamera
+### 6.3 Abbrüche, Schutzfunktionen und Optimierungserfolg
 
-### 6.4 Erstes Pick-on-the-Fly
-
-### 6.5 Wiederholversuche und Randbereich
-
-### 6.6 Ergebnisbewertung
-
-#### 6.6.1 Erfolgreiche Griffe
-
-#### 6.6.2 Grenzen des aktuellen Systems
+### 6.4 Aussagekraft und Grenzen der Abnahme
 
 ## 7. Diskussion und Ausblick
 
-### 7.1 Erreichte Projektziele
+### 7.1 Einordnung des Konzeptnachweises
 
-### 7.2 Grenzen des aktuellen Systems
+### 7.2 Grenzen des aktuellen Aufbaus
 
-### 7.3 Nächste technische Schritte
-
-#### 7.3.1 Priorisierung mehrerer Klötze
-
-#### 7.3.2 Robustere Basiskamera-Erkennung
-
-#### 7.3.3 Roboterkamera als Korrektursignal
-
-#### 7.3.4 Stabilisierung der 500-Hz-Regelschleife
+### 7.3 Weiterentwicklung
 
 ## 8. Fazit
 
@@ -348,4 +332,4 @@ Seine Erkenntnisse und die Regeln für ihre Verwendung stehen in
 | `tab-hardware-komponenten` | Hardwarekomponenten und Aufgaben | 2.1 |
 | `tab-regelpfad-signale` | Signale des Regelpfads | 2.3 |
 | `tab-regel-sicherheitsparameter` | Relevante Parameter für Laufzeit, Regelung und Sicherheit | 5.2 |
-| `tab-versuche-greifergebnisse` | Versuchsergebnisse: Klotz, Geschwindigkeit, Regelabweichung und Ergebnis | 6.5 |
+| `tab-versuche-greifergebnisse` | Dokumentierte Entwicklungsläufe und ihre Ergebnisse | 6.1 |

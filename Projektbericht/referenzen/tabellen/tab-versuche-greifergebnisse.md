@@ -1,10 +1,12 @@
 # tab-versuche-greifergebnisse
 
 - Bestandskennung: keine
-- Vorgesehener Abschnitt: 7.5
-- Zweck der Tabelle: Versuche mit Klotz, Geschwindigkeit, Regelabweichung und Ergebnis zusammenfassen.
-- Referenzsatz im Fließtext: Beim Schreiben von 7.5 festlegen.
-- Spalten und Einheiten: Versuch, Klotz, Bandgeschwindigkeit, Regelabweichung, Ergebnis.
-- Datenquelle: Eigene Versuchsprotokolle und Messdaten.
-- Status: geplant
-
+- Vorgesehener Abschnitt: 6.1
+- Zweck der Tabelle: Die zeitlich aufeinander folgenden Entwicklungsläufe mit
+  abweichender Konfiguration getrennt zusammenfassen.
+- Referenzsatz im Fließtext: Tabelle `tab-versuche-greifergebnisse` fasst die
+  dokumentierten Entwicklungsläufe zusammen.
+- Spalten und Einheiten: Lauf, Konfiguration oder Versuchsbedingung,
+  dokumentiertes Ergebnis.
+- Datenquelle: `src-projekt-entwicklungsabnahme`.
+- Status: verwendet

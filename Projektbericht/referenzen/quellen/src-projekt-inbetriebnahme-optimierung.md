@@ -1,7 +1,7 @@
 # src-projekt-inbetriebnahme-optimierung
 
 - Bestandskennung: keine
-- Verwendet in Abschnitt: 5.1 bis 5.3
+- Verwendet in Abschnitt: 5.1 bis 5.3, 7.2 und 7.3
 - Aussage im Bericht: Inbetriebnahme, Raten, Latenzen, Rechenlast und die am
   finalen Aufbau eingestellten Parameter des Regelpfads und der Basiskamera.
 - Vollständige Quellenangabe: Projektgruppe Robotertetris: *Architekturentscheidungen*,

@@ -1,7 +1,7 @@
 # src-projekt-kalibrierung
 
 - Bearbeitet von: Projektgruppe Robotertetris
-- Verwendet in Abschnitt: 4.2 und 4.4
+- Verwendet in Abschnitt: 4.2, 4.4, 7.2 und 7.3
 - Aussage im Bericht: Aufbau, Ablauf, Gütegrenzen und Messwerte der
   automatischen Kalibrierung der Basiskamera sowie die Validierung im
   Greifbetrieb.

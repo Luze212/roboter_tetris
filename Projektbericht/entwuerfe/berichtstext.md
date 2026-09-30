@@ -1102,3 +1102,189 @@ rechtzeitig erreichbar sind. Die Bilderkennung muss daher nicht jedes
 sichtbare Objekt perfekt klassifizieren, sondern ausreichend verlässliche
 Messungen für die bewegungsabhängige Auswahl bereitstellen
 ([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
+
+## 6 Entwicklungsabnahme und Versuchsergebnisse
+
+Die Abnahme erfolgte als schrittweise Entwicklung am realen Aufbau. Sie ist
+keine statistisch geplante Versuchsreihe mit unveränderter Konfiguration. Nach
+jedem Befund wurden einzelne Parameter oder Komponenten angepasst und erneut
+am Förderband geprüft. Die Ergebnisse belegen deshalb die Funktionsfähigkeit
+des Systems und die Wirkung der Änderungen. Sie erlauben jedoch keine
+allgemeine Erfolgswahrscheinlichkeit für beliebige Bandgeschwindigkeiten,
+Klotzfarben oder Oberflächen.
+
+### 6.1 Einordnung und Datengrundlage
+
+Als erfolgreicher Greifvorgang gilt, dass ein auf dem laufenden Band erkannter
+Klotz ausgewählt, angefahren, während der Bewegung gegriffen, angehoben und in
+der Ablagebox abgelegt wird. Die Dokumentation enthält Zustandsprotokolle,
+Beobachtungen am Aufbau und Messwerte der Regelabweichung. Die einzelnen
+Läufe unterscheiden sich in Geschwindigkeitsgrenzen, Zeitparametern und
+Bildverarbeitung. Ihre Ergebnisse dürfen daher nicht zu einer gemeinsamen
+Erfolgsquote addiert werden. Tabelle `tab-versuche-greifergebnisse` fasst die
+dokumentierten Entwicklungsläufe getrennt zusammen
+([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
+
+*Tabelle `tab-versuche-greifergebnisse`: Dokumentierte Entwicklungsläufe der
+realen Entwicklungsabnahme. Die Läufe besitzen unterschiedliche
+Konfigurationen und sind keine gemeinsame Versuchsreihe.*
+
+| Lauf | Konfiguration oder Versuchsbedingung | Dokumentiertes Ergebnis |
+|---|---|---|
+| Erste reale Griffe | Bandgeschwindigkeit etwa `0,130 m/s`, zwei einzeln aufgelegte Klötze | 2 von 2 während der Bandbewegung gegriffen und abgelegt |
+|  |
+| Ohne Roboterkamera | Drei Positionen über die erweiterte Bandbreite | 3 von 3 abgelegt; kumuliert seit dem ersten realen Griff 10 von 10 |
+| Vor Anpassung der Zeitgrenzen | Extrapolationsgrenze `0,600 s`, Ziel-Timeout `1,000 s` | 3 von 7 abgelegt; Abbrüche wegen veralteter Messungen |
+| Nach Anpassung der Zeitgrenzen | Extrapolationsgrenze `1,000 s`, Ziel-Timeout `1,500 s` | 9 von 9 abgelegt, keine Deckelmeldung |
+| Optimierter Dauerlauf | Horizontal `0,500 m/s`, Absenken `0,250 m/s` | 15 Ablagen in rund 2 min, 1 Fehlgriff und 9 durchgelaufene Klötze |
+| Kalibrier-Greiflauf | Neue Basiskamera-Kalibrierung, sieben vollständige Zustandszyklen | 7 von 7 abgelegt, kein Fehlgriff; als Kalibrierungsnachweis in Abschnitt 4.4 bewertet |
+
+Die letzte Zeile bestätigt zusätzlich, dass die automatische Kalibrierung mit
+dem Greifablauf zusammenwirkt. Sie wird in diesem Kapitel nicht als weiterer
+unabhängiger Greifversuch gewertet, da sie bereits die Validierung aus Abschnitt
+4.4 stützt.
+
+### 6.2 Nachweis des Greifens während der Bandbewegung
+
+Die ersten beiden realen Griffe erfolgten bei einer Bandgeschwindigkeit von
+etwa `0,130 m/s`. Ein `50 × 50 × 100 mm` großer Klotz wurde hochkant bei
+`x = -0,770 m` gegriffen. Ein zweiter Klotz mit den Abmessungen
+`50 × 75 × 25 mm` stand auf seiner Schmalseite bei `x = -0,694 m` nahe dem
+Bandrand. Beide Ziele wurden etwa `4,500 s` beziehungsweise `4,900 s` vor der
+Greifebene gewählt. Beim Absenken und Greifen lagen die Längsabweichungen
+zwischen `+0,300` und `+1,100 mm`. Die Querabweichungen betrugen höchstens
+`±0,200 mm`. Beide Klötze wurden angehoben und an der Ablageposition abgelegt.
+Von der Auswahl bis zur Ablage vergingen jeweils rund neun Sekunden
+([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
+
+Nach der Korrektur der Roboter-Nutzlast wurden weitere Klötze auch an
+Randpositionen gegriffen. Drei Griffe mit einem `100-mm`-Klotz bei
+`x = -0,721 m`, `x = -0,933 m` und `x = -0,571 m` wurden vollständig
+abgeschlossen. Die Längsabweichung lag dabei zwischen `-1,800` und
+`+0,600 mm`, die Querabweichung bei `±0,100 mm`. Damit wurde auch der
+erweiterte Bereich in Bandquerrichtung praktisch geprüft. Die Roboterkamera
+war zu diesem Zeitpunkt nicht Teil des Regelpfads. Die Ergebnisse belegen
+somit das Greifen mit der Basiskamera als alleiniger Messquelle
+([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
+
+Der umfangreichste Dauerlauf wurde mit einer horizontalen
+Geschwindigkeitsgrenze von `0,500 m/s` und einer Absenkgeschwindigkeit von
+`0,250 m/s` durchgeführt. In rund zwei Minuten wurden 15 Klötze abgelegt. Ein
+Fehlgriff und neun durchgelaufene Klötze traten auf. Die durchgelaufenen
+Klötze lagen jeweils kurz hinter einem gerade gegriffenen Objekt. Der Roboter
+war dadurch noch mit Heben, Ablage, Öffnen oder Rückfahrt beschäftigt. Das
+System wählte diese Klötze nicht fehlerhaft aus, sondern konnte sie innerhalb
+der verbleibenden Zeit nicht mehr sicher erreichen. Der knappste erfolgreiche
+Griff begann `0,340 s` vor der hinteren Begrenzung des Griffbereichs
+([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
+
+Auch die Ausrichtung rechteckiger Klötze wurde geprüft. Fünf Klötze wurden im
+Stand vermessen. Die Streuung der gemessenen Winkel lag bei höchstens
+`±1,900°`. In einem Lauf mit fünf gemischten und gedrehten Klötzen trat kein
+unerwünschter Wechsel der Greiferausrichtung um 90° auf. Die Drehung des
+Greifers blieb auf höchstens `±45°` aus der Grundstellung begrenzt. Eine
+systematische Auswertung der Farberkennung oder eine getrennte Versuchsreihe
+für mehrere definierte Bandgeschwindigkeiten liegt dagegen nicht vor
+([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
+
+### 6.3 Abbrüche und Optimierungserfolg
+
+Die Entwicklungsabnahme dokumentiert auch Fälle, in denen das System einen
+Griff nicht ausführte oder sicher abbrach. Vor der Anpassung der
+Extrapolationsgrenze war das Alter der Positionsdaten teilweise zu groß. In
+einer Reihe wurden nur 3 von 7 Klötzen abgelegt. Viermal hatte ein Klotz die
+Greifebene bereits überschritten, bevor der Roboter absenken konnte. Einmal
+lief der Ziel-Timeout während des Greifens ab. Nach der Anhebung von
+`max_extrapolation_s` auf `1,000 s` und des Ziel-Timeouts auf `1,500 s` wurden
+mit denselben Klötzen 9 von 9 Ablagen dokumentiert. Die größte beobachtete
+Messlatenz betrug dabei `0,890 s`
+([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
+
+Der Verlauf der Zustandsübergänge wurde zusätzlich in Softwaretests geprüft.
+Nach dem Entfernen der Roboterkamera aus dem Regelpfad wurden 27.200
+aufgezeichnete Takte ohne Abweichung von Zielpose, Zustand, Greiferbefehl und
+Abschlussmeldung verglichen. Diese Prüfung bestätigt die interne Konsistenz
+der Implementierung. Sie ersetzt keine erneute reale Abnahme des Roboters
+([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
+
+### 6.4 Aussagekraft und Grenzen der Abnahme
+
+Die realen Läufe zeigen, dass das System Klötze ohne Encoder am Förderband
+während der Bewegung auswählen, verfolgen, greifen und ablegen kann. Dies
+gilt für unterschiedliche Klotzgrößen, Randpositionen und gedrehte
+quaderförmige Klötze. Die Zielauswahl erkennt außerdem Situationen, in denen
+ein nachfolgender Klotz wegen des laufenden Ablagezyklus nicht mehr rechtzeitig
+erreichbar ist. In diesem Fall wird der Klotz durchgelassen, statt einen
+unsicheren Greifversuch zu erzwingen
+([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
+
+Die Entwicklungsabnahme bestätigt die durchgängige Funktion des Systems am
+realen Aufbau. Die Basiskamera erkennt die Klötze, `vectoring` schätzt ihre
+Bewegung aus den Bilddaten und der `priority_handler` wählt rechtzeitig
+erreichbare Ziele aus. Der Roboter fährt die vorhergesagte Pose an, greift den
+Klotz während der Bandbewegung und legt ihn in der Ablagebox ab. Dieser Ablauf
+wurde für verschiedene Klotzgrößen, Randpositionen und gedrehte
+quaderförmige Klötze durchgeführt.
+
+Die dokumentierten Läufe zeigen außerdem, dass das System nicht jeden sichtbaren
+Klotz zwingend erreichen muss. Liegt ein Klotz zu dicht hinter einem bereits gewählten
+Objekt, wird er nicht mehr als sicher erreichbar bewertet und läuft durch. Bei
+veralteten Messdaten oder einer nicht mehr erreichbaren Greifebene bricht der
+Follower kontrolliert ab. Die Korrektur der Roboter-Nutzlast und der
+Beschleunigungsbegrenzung beseitigte einen beim schnellen Anfahren beobachteten
+Schutzstopp.
+
+Das Projekt erreicht damit den vorgesehenen Konzeptnachweis für ein
+Pick-on-the-Fly-System mit Förderband ohne Encoder. Die Geschwindigkeit des
+Förderbands wird allein aus den Kameradaten geschätzt. Die Zielauswahl und die
+Greifbewegung reagieren auf die aktuelle Lage der Klötze. Auch höhere
+Bandgeschwindigkeiten wurden erfolgreich erprobt, sodass das Förderband bis auf Stufe 3 gestellt werden konnte, um ein sicheres Detektieren der Objekte und Picken zu garantieren
+([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
+
+## 7 Diskussion und Ausblick
+
+### 7.1 Einordnung des Konzeptnachweises
+
+Der Konzeptnachweis ist erbracht. Das System greift quaderförmige Klötze in beliebiger Orientierung von
+einem laufenden Förderband, ohne dessen Geschwindigkeit über einen Encoder zu
+erfassen. Die Basiskamera liefert die Grundlage für Erkennung,
+Geschwindigkeitsschätzung und Zielauswahl. Auch bei dicht aufeinander folgenden
+Klötzen entscheidet das System, welche Ziele noch sicher erreichbar sind
+([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
+
+### 7.2 Grenzen des aktuellen Aufbaus
+
+Der Durchsatz wird vor allem durch Heben, Ablage, Öffnen und Rückfahrt
+begrenzt. Bei dichter Folge ist etwa ein Klotz je sieben Sekunden möglich. Die
+Bildverarbeitung arbeitet zudem an der Leistungsgrenze des Rechners. Im Betrieb müssen deshalb nicht benötigte Ansichten und
+parallele Leseprozesse nach Möglichkeit geschlossen bleiben
+([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
+
+Flache Klötze liegen nahe an der unteren Erkennungs- und Greifgrenze. Die
+Basiskamera steht außerdem auf einem beweglichen Gestell. Ihre Kalibrierung
+muss deshalb nach einer Veränderung ihrer Lage wiederholt werden. Neben der
+erprobten Handkalibrierung durch Antasten der Klötze steht ein automatisches Kalibrierverfahren zur
+Verfügung. Dieses erreichte im Greiflauf vergleichbare Ergebnisse und
+wiederholte seine Kameralage über drei Tage mit einer Abweichung von weniger
+als einem Millimeter. Die Handkalibrierung bleibt im finalen Aufbau aktiv, da diese Kalibrierung
+dort bereits erprobt ist und geringfügig genauer bewertet wurde
+([src-projekt-kalibrierung](../referenzen/quellen/src-projekt-kalibrierung.md)).
+
+### 7.3 Weiterentwicklung
+
+Eine näher am Band liegende Ablageposition würde den Rückweg verkürzen und
+mehr dicht aufeinander folgende Klötze erreichbar machen. Eine leistungsfähigere
+Rechenplattform oder eine Trennung von Bildverarbeitung und Diagnose würde die
+Regelung zusätzlich stabilisieren.
+
+Für die Basiskamera bieten sich drei Weiterentwicklungen an. Eine
+Tiefenkorrektur würde den positions- und höhenabhängigen Fehler der L515
+ausgleichen. Eine Entzerrung würde die Abbildung am Bildrand geometrisch
+korrigieren. Feste Referenzmarken am Bandgestell könnten eine Nachkalibrierung
+ohne AprilGrid und ohne Bewegungen des Roboters ermöglichen. Dadurch ließe sich
+die Erkennung flacher Klötze verbessern und die Nachkalibrierung vereinfachen.
+Die Roboterkamera sollte erst dann wieder eingebunden werden, wenn sie nahe dem
+Greifer einen nachweisbaren Zusatznutzen liefert und die Rechenlast nicht
+erhöht
+([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md),
+[src-projekt-kalibrierung](../referenzen/quellen/src-projekt-kalibrierung.md)).
