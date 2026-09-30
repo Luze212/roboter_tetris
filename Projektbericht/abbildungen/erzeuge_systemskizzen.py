@@ -6,6 +6,9 @@ from PIL import Image, ImageDraw, ImageFont
 HERE = Path(__file__).parent
 FONT_PATH = Path(r"C:\Windows\Fonts\arial.ttf")
 FONT_BOLD_PATH = Path(r"C:\Windows\Fonts\arialbd.ttf")
+if not FONT_PATH.exists():  # macOS
+    FONT_PATH = Path("/System/Library/Fonts/Supplemental/Arial.ttf")
+    FONT_BOLD_PATH = Path("/System/Library/Fonts/Supplemental/Arial Bold.ttf")
 
 
 def font(size: int, bold: bool = False):
@@ -88,7 +91,7 @@ def plan_view():
     draw.rounded_rectangle((band_left, band_top, band_right, band_bottom), radius=8,
                            fill=BELT, outline=BELT_EDGE, width=4)
     text_box(draw, (band_left + 145, band_top + 28), "Förderband", HEADING)
-    work_left, work_top = point(-1.200, 0.430)
+    work_left, work_top = point(-1.000, 0.445)
     work_right, work_bottom = point(-0.530, -0.320)
     dashed_rect(draw, (work_left, work_top, work_right, work_bottom), BLUE)
 
@@ -98,12 +101,12 @@ def plan_view():
     text_box(draw, (band_right + 55, (band_top + band_bottom) / 2 - 30),
              "Bandlaufrichtung", LABEL, ORANGE)
 
-    # Base-Kamera
+    # Basiskamera
     cam_x, cam_y = point(-0.880, 1.140)
     draw.rounded_rectangle((cam_x - 42, cam_y - 52, cam_x + 42, cam_y - 20), radius=4,
                            fill=CAMERA, outline=MUTED, width=3)
     draw.line((cam_x, cam_y - 20, cam_x, cam_y), fill=MUTED, width=3)
-    text_box(draw, (90, 160), "Base-Kamera", HEADING)
+    text_box(draw, (90, 160), "Basiskamera", HEADING)
     draw.line((260, 180, cam_x - 48, cam_y - 36), fill=MUTED, width=2)
     text_box(draw, (90, 199), "mittig am Bandanfang, ca. 0,850 m über Band", NOTE, MUTED)
 
@@ -137,8 +140,8 @@ def plan_view():
     # Nicht überlappende Maß- und Arbeitsbereichshinweise
     draw.line((work_right, work_top, 950, 340), fill=BLUE, width=2)
     text_box(draw, (970, 305), "Greifbarer Arbeitsbereich", HEADING, BLUE)
-    text_box(draw, (970, 346), "x = -1,200 bis -0,530 m", LABEL, BLUE)
-    text_box(draw, (970, 383), "y = -0,320 bis 0,430 m", LABEL, BLUE)
+    text_box(draw, (970, 346), "x = -1,000 bis -0,530 m", LABEL, BLUE)
+    text_box(draw, (970, 383), "y = -0,320 bis 0,445 m", LABEL, BLUE)
     text_box(draw, (970, 466), "Ablagepose", HEADING)
     text_box(draw, (970, 507), "x = -0,316 m", LABEL)
     text_box(draw, (970, 544), "y = 0,476 m", LABEL)
@@ -182,7 +185,7 @@ def side_view():
         (0.600, "obere Arbeitsraumgrenze: z = 0,600 m", BLUE, 3, None, 392),
         (0.490, "Transferhöhe: z = 0,490 m", "#6d9bc1", 2, (10, 8), 454),
         (0.450, "Folge- und Beobachtungshöhe: z = 0,450 m", "#6d9bc1", 2, (10, 8), 525),
-        (0.309, "untere Arbeitsraumgrenze: z = 0,309 m", BLUE, 3, None, 570),
+        (0.299, "untere Arbeitsraumgrenze: z = 0,299 m", BLUE, 3, None, 570),
     ]
     for z, label, color, width, dash, label_y in levels:
         y = y_of_z(z)
@@ -196,7 +199,7 @@ def side_view():
         draw.line((880, y, 900, y, 915, label_y + 16), fill=color, width=2)
         text_box(draw, (930, label_y), label, LABEL, color)
 
-    text_box(draw, (660, camera_y - 6), "Base-Kamera", HEADING)
+    text_box(draw, (660, camera_y - 6), "Basiskamera", HEADING)
     text_box(draw, (660, camera_y + 32), "ca. 0,850 m über Band", LABEL, MUTED)
     arrow(draw, (145, belt_y), (145, camera_y), ORANGE, 4, 14)
     text_box(draw, (65, (belt_y + camera_y) / 2 - 15), "ca. 0,850 m", LABEL, ORANGE)

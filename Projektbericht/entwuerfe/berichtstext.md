@@ -75,16 +75,15 @@ Klötze auf dem bewegten Förderband. Zum Funktionsnachweis gehören das Anheben
 eines erfolgreich gegriffenen Klotzes und seine sichere Ablage an einem
 vorgegebenen Abgabeort.
 
-Die Form- und Farbkategorisierung unterstützt die Beschreibung und Auswahl der
-Klötze. Eine vollständige Sortier- oder Ablageanlage gehört nicht zum
+Die Form- und Farbkategorisierung dient der Beschreibung der Klötze. Die
+Auswahl eines Ziels erfolgt anhand von Position und Abmessungen. Eine
+vollständige Sortier- oder Ablageanlage gehört nicht zum
 Projektumfang. Ebenso wird kein fehlerfreies Greifen aller Klötze gefordert.
 Das System darf Klötze verwerfen, wenn diese im verbleibenden Arbeitsbereich
 nicht sicher erreichbar sind ([src-projekt-inversetetris-aufgabenstellung](../referenzen/quellen/src-projekt-inversetetris-aufgabenstellung.md)).
 
-Das neue Förderband mit variabler Geschwindigkeit wurde innerhalb des
-Projektrahmens nicht in die Anlage integriert. Die Versuche erfolgen deshalb
-mit dem vorhandenen Förderband bei ausgewählten Geschwindigkeiten. Die
-Ergebnisse gelten für den bestehenden Arbeitsraum sowie die vorhandenen
+Die Versuche erfolgen bei ausgewählten Geschwindigkeiten des vorhandenen
+Förderbands (Abschnitt 1.2). Die Ergebnisse gelten für den bestehenden Arbeitsraum sowie die vorhandenen
 Lichtverhältnisse und Reflexionen. Das Projekt zielt nicht auf den Nachweis
 einer vollständigen industriellen Anwendung.
 
@@ -114,13 +113,13 @@ ab.
 #### 2.1.1 Allgemeine Geometrie und Aufbau
 
 Der Versuchsaufbau besteht aus einem Förderband, dem seitlich angeordneten
-UR10e mit Greifer, einer Base-Kamera und einer Ablagekiste. In Bandlaufrichtung
+UR10e mit Greifer, einer Basiskamera und einer Ablagekiste. In Bandlaufrichtung
 steht der Roboter auf der linken Seite nahe dem Bandende. Die Ablagekiste liegt
 links neben dem Förderband und in Bandlaufrichtung vor dem Roboter. Ihre
 Ablageposition beträgt im globalen Bezugssystem `world`
 `x = -0,316 m`, `y = 0,476 m` und `z = 0,420 m`.
 
-Als Base-Kamera wird eine Intel RealSense L515 eingesetzt. Sie kombiniert eine
+Als Basiskamera wird eine Intel RealSense L515 eingesetzt. Sie kombiniert eine
 RGB-Kamera mit einem LiDAR-Tiefensensor. Die Tiefenmessung basiert auf einem
 abtastenden Infrarotlaser. Damit stehen Farbinformationen zur Kategorisierung
 und Tiefeninformationen zur räumlichen Einordnung der Klötze zur Verfügung
@@ -155,8 +154,8 @@ von etwa `0,80 m`. Das Förderband ist physisch etwas länger. Die gekrümmten
 Bereiche über den Bandrollen stehen jedoch nicht als Greifbereich zur
 Verfügung. Die Bandkanten liegen im globalen System ungefähr bei
 `x = -1,275 m` und `x = -0,480 m`. Der für das Greifen nutzbare rechteckige
-Bereich reicht von `x = -1,200 m` bis `-0,530 m` sowie von
-`y = -0,320 m` bis `0,430 m`. Er wird in der Draufsicht als Arbeitsbereich
+Bereich reicht von `x = -1,000 m` bis `-0,530 m` sowie von
+`y = -0,320 m` bis `0,445 m`. Er wird in der Draufsicht als Arbeitsbereich
 dargestellt. Der festgelegte Arbeitsraum des Flansches erweitert diesen
 Bereich für die Ablage der Objekte auf `x = -1,000 m` bis `-0,300 m` und
 `y = -0,320 m` bis `0,480 m`.
@@ -166,12 +165,14 @@ Die räumliche Anordnung des realen Aufbaus zeigen die Abbildungen
 Die Lage von Förderband, Kamera, Roboter, Ablagekiste und Arbeitsbereich wird
 in Abbildung `fig-systemaufbau-draufsicht` schematisch verdeutlicht.
 
-Die festgelegten zulässigen Höhen im Arbeitsbereich des Flansches betragen `z = 0,309 m` , womit sich der geschlossene Greifer knapp über der Oberfläche des Förderbandes befindet, und
-`z = 0,600 m`. Die Bewegung, mit der den fahrenden Objekten auf dem Fließband gefolgt wird, erfolgt auf `z = 0,450 m`, für den Transfer
-zur Ablage wird eine Freihöhe von `z = 0,490 m` verwendet. Die untere
-Z-Grenze hält die geschlossene Backenspitze mit einem Abstand von `10 mm` über
-der Bandebene. Oberhalb von `z = 0,600 m` wurde im hinteren Bereich des
-Arbeitsraums eine mögliche Singularität beobachtet zudem wird die Höhe durch die ber dem Förderband befindliche Base-Kamera limitiert.
+Die festgelegten zulässigen Höhen im Arbeitsbereich des Flansches betragen
+`z = 0,299 m` und `z = 0,600 m`. An der unteren Grenze erreicht die
+geschlossene Backenspitze die Oberfläche des Förderbandes. Die Bewegung, mit
+der den fahrenden Objekten auf dem Förderband gefolgt wird, erfolgt auf
+`z = 0,450 m`. Für den Transfer zur Ablage wird eine Freihöhe von
+`z = 0,490 m` verwendet. Oberhalb von `z = 0,600 m` wurde im hinteren Bereich
+des Arbeitsraums eine mögliche Singularität beobachtet. Zudem wird die Höhe
+durch die über dem Förderband befindliche Basiskamera begrenzt.
 
 Die zugehörigen Höhen und die Position der Basiskamera über dem Förderband sind
 in Abbildung `fig-systemaufbau-seitenansicht` dargestellt.
@@ -180,10 +181,10 @@ in Abbildung `fig-systemaufbau-seitenansicht` dargestellt.
 `fig-systemaufbau-seitenansicht` nach den jeweiligen Textverweisen einfügen.
 Die Beschriftungen beruhen auf der Konfiguration vom 24.09.2026.
 Bildunterschrift `fig-systemaufbau-draufsicht`: Draufsicht mit Förderband,
-Base-Kamera, Ablagekiste, Arbeitsbereich sowie den Bezugssystemen
+Basiskamera, Ablagekiste, Arbeitsbereich sowie den Bezugssystemen
 `conveyor_frame` und `world`.
 Bildunterschrift `fig-systemaufbau-seitenansicht`: Seitenansicht mit
-Base-Kamera sowie Arbeitsraum-, Folge- und Transferhöhen im Bezugssystem
+Basiskamera sowie Arbeitsraum-, Folge- und Transferhöhen im Bezugssystem
 `world`. -->
 
 <!-- Word-Übernahme Gesamtaufnahmen: `fig-aufbau-gesamtansicht-1` und
@@ -297,9 +298,8 @@ Funktionsnachweis damit auf quaderförmige Objekte.
 
 #### 2.1.5 Basiskamera
 
-Die Basiskamera ist die zentrale Sensorik des finalen Greifablaufs. Sie erfasst
-die Klötze am Bandanfang, bevor sie die Greifzone erreichen. Die Intel
-RealSense L515 liefert ein RGB-Bild mit `1.280 × 720 Pixel` bei `15 Hz` und
+Die Basiskamera ist die zentrale Sensorik des finalen Greifablaufs. Die
+L515 liefert ein RGB-Bild mit `1.280 × 720 Pixel` bei `15 Hz` und
 ein Tiefenbild mit `640 × 480 Pixel` bei `30 Hz`. Die unterschiedliche Rate
 ergibt sich aus dem verwendeten Tiefenprofil der L515
 ([src-projekt-basiskamera-konfiguration](../referenzen/quellen/src-projekt-basiskamera-konfiguration.md)).
@@ -310,8 +310,7 @@ diesem Bildbereich. Der Roboter und sein Greifer verdecken die Kamera damit
 während des Greifvorgangs nicht. Die weitere Führung eines erkannten Klotzes
 bis zur Greifzone wird erst im Kapitel zum Greifkonzept beschrieben.
 
-Die L515 ist auf einem Gestell über dem Förderband montiert. Die Befestigung
-ist nicht ausreichend steif, um ihre Lage nach Änderungen am Aufbau dauerhaft
+Das Gestell der Kamera ist nicht ausreichend steif, um ihre Lage nach Änderungen am Aufbau dauerhaft
 als unveränderlich anzunehmen. Bereits kleine Lageänderungen beeinflussen die
 Umrechnung der Kameramessung in das Bezugssystem `world`. Deshalb ist ein
 einfach ausführbares und wiederholbares Kalibrierverfahren für den Aufbau
@@ -320,19 +319,11 @@ erforderlich. Das Kalibrierverfahren selbst wird in Kapitel 4 erläutert
 
 #### 2.1.6 Roboterkamera
 
-Zusätzlich zur Basiskamera ist eine Intel RealSense D435i am Roboterflansch
-montiert. Sie sitzt neben der Aufnahme des Greifers. Ihre optische Achse ist
-gegenüber der Flanschmitte parallel versetzt und erfasst den Bereich direkt vor
-dem Greifer. Die Kamera bewegt sich damit gemeinsam mit dem Roboter und kann
-für eine Feinortung kurz vor dem Greifen genutzt werden. Sie stellt dafür ein
-RGB-Bild sowie Tiefendaten aus einem aktiven Infrarot-Stereosystem bereit
-([src-intel-realsense-d435i-spezifikation](../referenzen/quellen/src-intel-realsense-d435i-spezifikation.md),
-[src-realsense-d400-datenblatt](../referenzen/quellen/src-realsense-d400-datenblatt.md)).
-
-Im finalen Greifablauf ist die Roboterkamera nicht in den aktiven Regelpfad
-eingebunden. Die Lokalisierung und Verfolgung der Klötze erfolgt mit der
-Basiskamera. Die Gründe für diese Entscheidung und der mögliche spätere Einsatz
-der Roboterkamera werden in den folgenden Kapiteln behandelt
+Die in Abschnitt 2.1.1 beschriebene Roboterkamera bewegt sich gemeinsam mit
+dem Flansch. Im finalen Greifablauf ist sie nicht in den aktiven Regelpfad
+eingebunden. Die Gründe für diese Entscheidung erläutert Abschnitt 3.1. Die
+für einen späteren Einsatz vorbereitete Kalibrierung der Roboterkamera
+beschreibt Abschnitt 4.3
 ([src-projekt-roboterkamera-einbindung](../referenzen/quellen/src-projekt-roboterkamera-einbindung.md)).
 
 ### 2.2 Koordinatensysteme und Greifgeometrie
@@ -340,23 +331,16 @@ der Roboterkamera werden in den folgenden Kapiteln behandelt
 #### 2.2.1 Bezugssystem `world`, Roboterbasis und Flansch `ur_tool0`
 
 Alle Positionsangaben des Regelpfads beziehen sich auf das globale
-Bezugssystem `world`. Sein Ursprung liegt in der physischen Roboterbasis. Das
-System ist fest mit dem Roboter verbunden und bewegt sich nicht mit dem
-Förderband. Die Förderbewegung erfolgt im Aufbau näherungsweise in negative
-Y-Richtung von `world`. Das Förderband liegt gemäß Abbildung
-`fig-systemaufbau-draufsicht` seitlich der Roboterbasis im Bereich negativer
-X-Koordinaten, ungefähr zwischen `x = -1,275 m` und `x = -0,480 m`. Die
-Z-Achse zeigt nach oben. Die Bandoberfläche liegt bei `z = 0,054 m`
+Bezugssystem `world` (Abschnitt 2.1.1). Das System ist fest mit dem Roboter
+verbunden und bewegt sich nicht mit dem Förderband. Die Förderbewegung erfolgt
+im Aufbau näherungsweise in negative Y-Richtung von `world`. Das Förderband
+liegt gemäß Abbildung `fig-systemaufbau-draufsicht` seitlich der Roboterbasis
+im Bereich negativer X-Koordinaten. Die Z-Achse zeigt nach oben. Die Bandoberfläche liegt bei `z = 0,054 m`
 ([src-projekt-bezugssysteme](../referenzen/quellen/src-projekt-bezugssysteme.md)).
 
-Für die anfängliche Kamerakalibrierung wurde zusätzlich das Bezugssystem
-`conveyor_frame` verwendet. Sein Ursprung liegt mittig am Bandanfang. Seine
-Y-Achse zeigt in Bandlaufrichtung. Die X-Achse zeigt, in Bandlaufrichtung
-betrachtet, nach rechts. Die Z-Achse zeigt von der Bandebene nach oben. Im
-finalen Betrieb wird dieses Bezugssystem nicht verwendet. Kameramessung,
-Zielauswahl und Roboterbewegung werden einheitlich in `world` verarbeitet.
-Dadurch entfällt im Regelpfad eine
-zusätzliche Umrechnung zwischen Band und Roboter.
+Das Bezugssystem `conveyor_frame` aus Abschnitt 2.1.1 wird im finalen Betrieb
+nicht verwendet. Dadurch entfällt im Regelpfad eine zusätzliche Umrechnung
+zwischen Band und Roboter.
 
 Die Robotersteuerung liefert als geregelte Pose die Lage des Flansches
 `ur_tool0`. Sie ist von einem in der UR-Steuerung konfigurierten TCP zu
@@ -391,23 +375,13 @@ der Griffpunkt auf der Flanschachse liegt, ist keine weitere räumliche
 Transformation erforderlich. Die sich beim Öffnen und Schließen verändernde
 Greifergeometrie wird im folgenden Abschnitt beim Arbeitsraum betrachtet.
 
-#### 2.2.3 Bandhöhe, Arbeitsraum und Greifzone
+#### 2.2.3 Arbeitsraum und Greifzone
 
-Die Bandoberfläche liegt bei `z = 0,054 m` im Bezugssystem `world`
-([src-projekt-bezugssysteme](../referenzen/quellen/src-projekt-bezugssysteme.md)).
-Die im Projekt hinterlegten Arbeitsraumgrenzen bilden den zulässigen Raum für
-Flanschzielposen im Bezugssystem `world`. Sie begrenzen damit auch den Raum, in
-dem die Greifzone liegen darf. Der Flansch wurde hierfür am Aufbau per
+Die in Abschnitt 2.1.1 genannten Arbeitsraumgrenzen bilden den zulässigen Raum
+für Flanschzielposen im Bezugssystem `world`. Sie begrenzen damit auch den
+Raum, in dem die Greifzone liegen darf. Der Flansch wurde hierfür am Aufbau per
 Handführung über den Bandbereich bewegt. Die Grenzen wurden so gewählt, dass
-keine Kollision und keine auffällige Singularität auftrat. Sie betragen
-`x = -1,000 m` bis `-0,300 m`, `y = -0,320 m` bis `0,480 m` und
-`z = 0,299 m` bis `0,600 m`.
-
-Die Ablagepose des Flansches liegt bei `x = -0,316 m`,
-`y = 0,476 m` und `z = 0,420 m`. Sie liegt innerhalb des Arbeitsraums.
-Die Grenzen wurden in positive Y-Richtung und zu größeren X-Werten gezielt bis
-zu dieser Position erweitert. Die Ablagebox ist damit kein Bereich außerhalb
-des zulässigen Arbeitsraums.
+keine Kollision und keine auffällige Singularität auftrat.
 
 Die Warte- und Beobachtungsposition des Flansches liegt bei
 `x = -0,816 m`, `y = 0,350 m` und `z = 0,450 m`. Die Backen sind dort mit einer
@@ -415,19 +389,14 @@ Gier von `90°` quer zur Bandrichtung ausgerichtet. Die Position befindet sich
 am Beginn der Greifzone über der Bandmitte. Ohne ausgewähltes Ziel wartet der
 Roboter dort und beobachtet die einfahrenden Klötze.
 
-Die Greifzone ist eine engere Teilmenge des Arbeitsraums. Sie umfasst auf dem
-Förderband den Bereich von `x = -1,000 m` bis `-0,530 m` und von
-`y = -0,320 m` bis `0,445 m`. Die Erweiterung des Arbeitsraums in positive
+Die Greifzone entspricht dem in Abschnitt 2.1.1 genannten, für das Greifen
+nutzbaren Bereich und ist eine engere Teilmenge des Arbeitsraums. Die
+Erweiterung des Arbeitsraums in positive
 Y-Richtung und zu größeren X-Werten dient ausschließlich der Ablagebox. Sie
 wird bei der Zielauswahl auf dem Förderband nicht verwendet. Die räumliche
 Anordnung von Förderband, Roboter und Ablagebox zeigt Abbildung
 `fig-systemaufbau-draufsicht`
 ([src-projekt-arbeitsraum-greifzone](../referenzen/quellen/src-projekt-arbeitsraum-greifzone.md)).
-
-Nach einem erfolgreichen Griff fährt der Flansch auf die Transferhöhe
-`z = 0,490 m`. Der Roboter bewegt sich zunächst noch mit der letzten
-Bandgeschwindigkeit, bis der Klotz die Bandoberfläche verlassen hat. Anschließend
-hebt er senkrecht auf die Transferhöhe und fährt erst danach zur Ablagebox.
 
 Die gekrümmte Bewegung der Greiferphalangen verändert beim Öffnen und Schließen
 den räumlichen Bauraum des Greifers. Die Arbeitsraumgrenzen müssen daher für
@@ -487,11 +456,11 @@ einzelnen Signale werden im folgenden Kapitel erläutert.
 
 ### 3.1 Funktionskette des Pick-on-the-Fly
 
-Der Prozess beginnt bei der Basiskamera. Diese erfasst nur den Anfang des
-Förderbands. Die Greifzone liegt in Bandlaufrichtung dahinter und außerhalb des
-Kamerabilds. Der Roboter greift einen Klotz deshalb an einer Stelle, an der er
-nicht mehr gemessen wird. Das Konzept beruht darauf, Lage und Geschwindigkeit im Kamerabild so genau zu
-bestimmen, dass die weitere Bewegung des Klotzes vorhergesagt werden kann.
+Der Prozess beginnt bei der Basiskamera. Da die Greifzone hinter ihrem
+Bildbereich liegt (Abschnitt 2.1.5), greift der Roboter einen Klotz an einer
+Stelle, an der er nicht mehr gemessen wird. Das Konzept beruht darauf, Lage und
+Geschwindigkeit im Kamerabild so genau zu bestimmen, dass die weitere Bewegung
+des Klotzes vorhergesagt werden kann.
 
 Daraus ergibt sich eine Kette von fünf Schritten. `base_cam` erkennt und
 vermisst die Klötze im Kamerabild. `vectoring` schätzt ihre Geschwindigkeit und
@@ -502,14 +471,44 @@ Die Komponente `robotiq_gripper` steuert den Greifer. Das Ergebnis jedes
 Greifversuchs geht an den `priority_handler` zurück, der daraufhin das nächste
 Ziel wählt.
 
+Die Komponenten tauschen ihre Daten über die in Tabelle
+`tab-regelpfad-signale` zusammengefassten Signale aus. Positionen und
+Geschwindigkeiten stehen in SI-Einheiten und im Bezugssystem `world`. Die
+Objektdaten von `base_cam` bis `priority_handler` tragen den Zeitstempel des
+zugrunde liegenden Kamerabilds.
+
+*Tabelle `tab-regelpfad-signale`: Signale des Regelpfads.*
+
+| Signal | Sender → Empfänger | Inhalt |
+|---|---|---|
+| `objects` | `base_cam` → `vectoring` | je Klotz Kennung, Farbe, Position, Abmessungen und Drehwinkel aus dem aktuellen Bild |
+| `tracks` | `vectoring` → `priority_handler` | Bandgeschwindigkeit nach Betrag und Richtung; je Klotz Status (einschwingend, eingeschwungen, vorhergesagt) sowie geglättete Lage und Abmessungen |
+| `target` | `priority_handler` → `object_follower` | gewählter Klotz mit Lage und Abmessungen, Bandgeschwindigkeit, Beginn der Greifzone und Greifebene |
+| `target_pose` | `object_follower` → Signal Point Attractor | Zielpose des Flansches |
+| `twist` | Signal Point Attractor → IK Velocity Controller | kartesische Sollgeschwindigkeit des Flansches |
+| `cartesian_state` | Roboter → Attractor, `object_follower`, `priority_handler` | aktuelle Pose des Flansches `ur_tool0` |
+| `gripper_close` | `object_follower` → `robotiq_gripper` | Befehl Greifer schließen oder öffnen |
+| `motion_done`, `has_object` | `robotiq_gripper` → `object_follower` | Bewegung beendet, Klotz gehalten |
+| `picked_id` | `object_follower` → `priority_handler` | Kennung des Klotzes und Ergebnis des Greifversuchs |
+
+Weitere Signale versorgen ausschließlich die Anzeige des Systemzustands. Sie
+wirken nicht auf den Regelpfad zurück.
+
 Für Bahnführung und Regelung des Roboters werden vorhandene AICA-Bausteine genutzt.
 
 Die Komponenten arbeiten mit unterschiedlichen Raten. Bildverarbeitung und
 Schätzung laufen mit 15 Hz, der Bildrate der Kamera. Die Zielauswahl arbeitet
 mit 20 Hz, die Bahnführung mit 50 Hz. Die Regelung des Roboters läuft mit
-500 Hz. Die Roboterkamera am Flansch wird für den Greifablauf nicht benötigt.
-Gegriffen wird ausschließlich auf Grundlage der Basiskamera. Die Raten sind
-entsprechend der genutzten Hardware gewählt
+500 Hz. Die Raten sind entsprechend der genutzten Hardware gewählt
+([src-projekt-greifablauf](../referenzen/quellen/src-projekt-greifablauf.md)).
+
+Dass die Roboterkamera für den Greifablauf nicht eingebunden ist (Abschnitt
+2.1.6), hat drei Gründe. Die Basiskamera allein erreicht eine Längsabweichung von rund 1 mm und reicht damit für den
+Greifablauf aus. Die Erkennung der Roboterkamera war dagegen nicht ausreichend
+zuverlässig. Reflexionen auf Band und Klotzseiten sowie flache Klötze, die sich
+im Tiefenbild kaum vom Band abheben, führten zu Abweichungen von mehreren
+Zentimetern. Zusätzlich hätte ihre Auswertung die Rechenlast des gemeinsamen
+Prozesses der Komponenten erhöht
 ([src-projekt-greifablauf](../referenzen/quellen/src-projekt-greifablauf.md)).
 
 ### 3.2 Erkennung, Vermessung und Vorhersage
@@ -528,8 +527,8 @@ dadurch nicht. Die Farbe wird im Farbbild über den Farbton bestimmt.
 Mit der Kalibrierung (Kapitel 4) rechnet `base_cam` alle Werte in das
 Bezugssystem `world` um. Die Messungen aufeinanderfolgender Bilder werden
 einander zugeordnet, und jeder Klotz erhält eine feste Kennung. Farbe und
-Abmessungen werden je Klotz erfasst. Die Zielauswahl nutzt lediglich die
-Abmessungen und die Position.
+Abmessungen werden je Klotz erfasst, die Zielauswahl nutzt davon nur die
+Abmessungen (Abschnitt 1.3).
 
 Die Position eines Klotzes streut von Bild zu Bild nur um Bruchteile eines
 Millimeters. Die gemessene Grundfläche schwankt dagegen deutlich. Geometrische
@@ -572,8 +571,8 @@ Position dort aktuell zu messen
 
 Der `priority_handler` ermittelt, welcher Klotz als nächster gegriffen wird.
 Grundlage sind die Greifzone und die Greifebene. Die Greifzone ist der Bereich
-des Bandes, in dem der Roboter greifen darf. Sie entspricht dem Arbeitsraum
-aus Abschnitt 2.2.3. Die Greifebene ist die letzte Position entlang des
+des Bandes, in dem der Roboter greifen darf. Sie ist in Abschnitt 2.2.3
+festgelegt. Die Greifebene ist die letzte Position entlang des
 Bandes, an der das Absenken beginnen darf. Von dort aus muss der Greifprozess
 vor dem Ende der Greifzone abgeschlossen sein. Ihre Lage ergibt sich aus der
 Dauer dieses Prozesses, der Bandgeschwindigkeit und einem Zuschlag von 20 %. Bei höherer Bandgeschwindigkeit rückt die Greifebene
@@ -618,16 +617,16 @@ kann, bevor der Greifer den Klotz hält. -->
 `object_follower`. Die gestrichelte Umrandung fasst die Zustände zusammen, aus
 denen ein Versuch abgebrochen werden kann, bevor der Greifer den Klotz hält.*
 
-Der `object_follower` startet im Zustand `ABBRUCH` und fährt senkrecht auf eine
+Der `object_follower` startet im Zustand `ABBRUCH` und fährt senkrecht auf die
 Freihöhe. Dadurch ist der Start aus jeder Roboterstellung sicher. Anschließend
-wartet er in einer Beobachtungspose über dem Band (`WARTEN`). Ein vollständiger
+wartet er in der Beobachtungspose aus Abschnitt 2.2.3 (`WARTEN`). Ein vollständiger
 Greifversuch durchläuft die Zustände von `ANFAHREN` bis `LOESEN` und endet
 wieder in `WARTEN`.
 
 #### 3.4.2 Anfahren und Folgen
 
-Mit einem gewählten Ziel fährt der Flansch auf einer Höhe von 0,45 m über den
-Klotz (`ANFAHREN`). Die Zielpose ist die vorhergesagte Position des Klotzes,
+Mit einem gewählten Ziel fährt der Flansch auf der Folgehöhe über den Klotz
+(`ANFAHREN`). Die Zielpose ist die vorhergesagte Position des Klotzes,
 ergänzt um einen Vorhalt in Bandrichtung (Abschnitt 3.5.1). Liegt der Klotz
 noch vor der Greifzone, wartet der Flansch am Zonenrand auf der Spur des
 Klotzes in Bandrichtung. Sobald der Klotz die Greifzone erreicht, folgt der
@@ -649,9 +648,11 @@ Greifhöhe fasst den Klotz auf halber Höhe, mindestens aber 11 mm
 gegriffen, ohne dass das Risiko einer Kollision von Greifer und Band besteht.
 
 Im Zustand `GREIFEN` schließt der Greifer, während der Flansch weiter
-mitfährt. Meldet der Greifer einen gehaltenen Klotz, hebt der Flansch ihn
-zunächst mitfahrend um 0,1 m an und fährt dann auf die Freihöhe von 0,49 m
-(`HEBEN`). Über der Ablagekiste öffnet der Greifer (`ABLEGEN`, `LOESEN`).
+mitfährt. Meldet der Greifer einen gehaltenen Klotz, hebt der Flansch ihn an
+und fährt dabei mit der Bandgeschwindigkeit weiter, bis der Klotz die
+Bandoberfläche verlassen hat (`HEBEN`). Anschließend steigt er senkrecht auf
+die Freihöhe und fährt erst danach zur Ablagekiste, über der der Greifer
+öffnet (`ABLEGEN`, `LOESEN`).
 Danach kehrt der `object_follower` in die Beobachtungspose zurück und meldet
 das Ergebnis an den `priority_handler`.
 
@@ -700,9 +701,8 @@ inverse Kinematik in Gelenkgeschwindigkeiten um. Die Hardwareschnittstelle des
 UR10e setzt sie mit 500 Hz um. Der Controller begrenzt die lineare
 Geschwindigkeit ebenfalls auf 0,85 m/s und zusätzlich die Änderungsrate der
 Befehle. Geregelt wird der Flansch, da der Greifer nicht im Robotermodell
-enthalten ist. Der `object_follower` rechnet jede Greifpose deshalb um den
-Abstand von 0,235 m zwischen Flansch und Griffpunkt nach oben um. So wird der
-Greifer rechnerisch berücksichtigt
+enthalten ist. Den Versatz zum Griffpunkt berücksichtigt der
+`object_follower` (Abschnitt 2.2.2)
 ([src-projekt-greifablauf](../referenzen/quellen/src-projekt-greifablauf.md)).
 
 ### 3.6 Greiferansteuerung und Rückmeldungen
@@ -739,7 +739,7 @@ ihre Herkunft.*
 |---|---|---|
 | Intrinsische Parameter der Basiskamera | Werkskalibrierung, vom Kameratreiber bereitgestellt | 4.1 |
 | Lage der Basiskamera in `world` | Kalibrierung | 4.2 |
-| Abstand zwischen Flansch und Griffpunkt | Messung am Aufbau, 0,235 m | 2.2 |
+| Abstand zwischen Flansch und Griffpunkt | Messung am Aufbau, 0,235 m | 2.2.2 |
 | Bandrichtung und Bandgeschwindigkeit | Schätzung zur Laufzeit aus den Bilddaten | 3.2.2 |
 
 Die intrinsischen Parameter werden durch den Hersteller kalibriert und stehen
@@ -751,11 +751,9 @@ zurücksetzt.
 
 Zu bestimmen bleibt die Lage der Basiskamera. Sie legt unmittelbar fest, wo
 der Roboter einen Klotz erwartet. Ein Fehler in der Kameralage erscheint als
-Versatz zwischen gemessener und tatsächlicher Klotzposition. Die Kamera ist
-an einem nicht vollständig starren Gestell montiert und muss nach einer
-Berührung des Gestells neu kalibriert werden. Das Projekt fordert dafür ein
-schnelles Verfahren. Umgesetzt wurde deshalb ein automatisches und einfach
-wiederholbares Kalibrierverfahren.
+Versatz zwischen gemessener und tatsächlicher Klotzposition. Da die Kamera
+nach Änderungen am Aufbau neu kalibriert werden muss (Abschnitt 2.1.5), wurde
+ein automatisches und einfach wiederholbares Kalibrierverfahren umgesetzt.
 
 <!-- Hier vlt Unterschied Hand-to-eye in Kap. 4.2 und eye-in-hand in Kap. 4.3 klarstellen -->
 Je nachdem, ob die Kamera ortsfest oder
@@ -853,7 +851,7 @@ Unbekannt sind zwei Transformationen: die Lage der Kamera relativ zum Flansch
 (`T_ee_cam`) und die Lage des Boards im Bezugssystem `world`. Beide werden
 gemeinsam bestimmt. Als Nebenprodukt entsteht die Transformation zwischen
 Roboterbasis und Förderband-Koordinatensystem `conveyor_frame` aus Abschnitt
-2.2.1 (`T_robot_conveyor`). Dafür wird
+2.1.1 (`T_robot_conveyor`). Dafür wird
 der Ursprung des Boards als bekannter Punkt im Förderband-Koordinatensystem
 festgelegt. Die Berechnung nutzt dieselben Verfahren wie in Abschnitt 4.2.
 

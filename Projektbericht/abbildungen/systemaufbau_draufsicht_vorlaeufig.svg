@@ -16,7 +16,7 @@
   <rect x="442" y="102" width="86" height="28" rx="3" fill="#d6dce1" stroke="#4b5563" stroke-width="2"/>
   <line x1="485" y1="130" x2="485" y2="145" stroke="#4b5563" stroke-width="2"/>
   <line x1="528" y1="116" x2="770" y2="116" stroke="#4b5563" stroke-width="2"/>
-  <text x="785" y="122" class="small">Base-Kamera, ca. 0,85 m über Band</text>
+  <text x="785" y="122" class="small">Basiskamera, ca. 0,85 m über Band</text>
   <line x1="485" y1="235" x2="485" y2="650" stroke="#e87520" stroke-width="7"/>
   <polygon points="485,682 468,647 502,647" fill="#e87520"/>
   <text x="515" y="448" class="label" fill="#c85410">Bandlaufrichtung</text>
@@ -26,7 +26,7 @@
   <text x="790" y="706" class="small">linke Bandseite</text>
   <rect x="880" y="290" width="220" height="94" rx="4" fill="#f5dfbd" stroke="#9b6622" stroke-width="3"/>
   <text x="905" y="328" class="heading">Ablagekiste</text>
-  <text x="905" y="354" class="small">Mittelpunkt: (-0,310; 0,477; 0,483)</text>
+  <text x="905" y="354" class="small">Mittelpunkt: (-0,316; 0,476; 0,420)</text>
   <line x1="710" y1="145" x2="785" y2="145" stroke="#4b5563" stroke-width="2"/>
   <text x="800" y="151" class="small">Bandanfang, mittig: y = 1,140</text>
   <line x1="710" y1="745" x2="785" y2="745" stroke="#4b5563" stroke-width="2"/>
@@ -54,6 +54,6 @@
   <polygon points="895,420 882,450 908,450" fill="#1d70b8"/>
   <text x="1025" y="540" class="small">X+</text>
   <text x="910" y="448" class="small">Y+</text>
-  <text x="1035" y="583" class="note">robot_base</text>
+  <text x="1035" y="583" class="note">world</text>
   <text x="70" y="895" class="note">Die Z-Achse beider Bezugssysteme zeigt von der Bandebene nach oben und ist in der Draufsicht nicht dargestellt.</text>
 </svg>

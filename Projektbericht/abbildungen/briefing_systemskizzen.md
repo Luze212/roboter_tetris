@@ -93,14 +93,14 @@ Alle folgenden Werte sind in Meter angegeben und auf drei Nachkommastellen gerun
 | Bandende, Mitte der Umlenkrolle | `y = -0,367 m` | Orientierung im `world`-System |
 | Rechte Bandseite im `world`-System | `x = -1,275 m` | Draufsicht |
 | Linke Bandseite im `world`-System | `x = -0,480 m` | Draufsicht |
-| Greifbarer Bereich, untere X-Grenze | `x = -1,200 m` | Draufsicht, gestricheltes Rechteck |
+| Greifbarer Bereich, untere X-Grenze | `x = -1,000 m` | Draufsicht, gestricheltes Rechteck |
 | Greifbarer Bereich, obere X-Grenze | `x = -0,530 m` | Draufsicht, gestricheltes Rechteck |
 | Greifbarer Bereich, untere Y-Grenze | `y = -0,320 m` | Draufsicht, gestricheltes Rechteck |
-| Greifbarer Bereich, obere Y-Grenze | `y = 0,430 m` | Draufsicht, gestricheltes Rechteck |
+| Greifbarer Bereich, obere Y-Grenze | `y = 0,445 m` | Draufsicht, gestricheltes Rechteck |
 | Ablageposition, X | `x = -0,316 m` | Draufsicht, Kistenmittelpunkt |
 | Ablageposition, Y | `y = 0,476 m` | Draufsicht, Kistenmittelpunkt |
 | Ablageposition, Z | `z = 0,420 m` | Draufsicht als Teil der Ablagepositionsangabe |
-| Untere Arbeitsraumgrenze | `z = 0,309 m` | Seitenansicht |
+| Untere Arbeitsraumgrenze | `z = 0,299 m` | Seitenansicht |
 | Folge- und Beobachtungshöhe | `z = 0,450 m` | Seitenansicht |
 | Transferhöhe | `z = 0,490 m` | Seitenansicht |
 | Obere Arbeitsraumgrenze | `z = 0,600 m` | Seitenansicht |
@@ -145,8 +145,8 @@ Folgende Texte müssen lesbar vorhanden sein. Die genaue Platzierung darf angepa
 
 Es ist zulässig, die X- und Y-Grenzen des Arbeitsbereichs in einer kleinen Legende zu bündeln, zum Beispiel:
 
-`x = -1,200 bis -0,530 m`  
-`y = -0,320 bis 0,430 m`
+`x = -1,000 bis -0,530 m`  
+`y = -0,320 bis 0,445 m`
 
 Die gestrichelte Fläche darf sehr hell blau hinterlegt sein. Sie darf jedoch nicht als `ROI` bezeichnet werden.
 
@@ -180,7 +180,7 @@ Alle folgenden Angaben müssen deutlich lesbar erscheinen:
 - `obere Arbeitsraumgrenze: z = 0,600 m`
 - `Transferhöhe: z = 0,490 m`
 - `Folge- und Beobachtungshöhe: z = 0,450 m`
-- `untere Arbeitsraumgrenze: z = 0,309 m`
+- `untere Arbeitsraumgrenze: z = 0,299 m`
 
 Die Höhen `z = 0,490 m` und `z = 0,450 m` liegen nah beieinander. Sie dürfen daher in einer rechtsseitigen, vertikal gestaffelten Legende stehen. Jede Bezugslinie muss dennoch eindeutig dem jeweiligen Niveau zuzuordnen sein. Vorzugsweise enden die Bezugslinien vor der Beschriftungsspalte.
 
@@ -188,14 +188,14 @@ Unterhalb oder seitlich der Zeichnung muss als kleine Fußnote stehen:
 
 `Die Höhen beziehen sich auf den Flansch ur_tool0. Der Greifer ist nicht dargestellt.`
 
-Die untere Arbeitsraumgrenze beschreibt einen Abstand von etwa 10 mm zwischen den geschlossenen Greiferfingern und der Förderbandebene. Die obere Grenze `z = 0,600 m` ist wegen einer möglichen kinematischen Singularität des Roboters festgelegt. Sie darf nicht mit einer Kamerakollision begründet oder beschriftet werden.
+An der unteren Arbeitsraumgrenze erreicht die geschlossene Backenspitze die Förderbandebene. Die obere Grenze `z = 0,600 m` ist wegen einer möglichen kinematischen Singularität des Roboters festgelegt. Sie darf nicht mit einer Kamerakollision begründet oder beschriftet werden.
 
 ## Nicht verwenden und nicht behaupten
 
 Folgende Angaben stammen aus früheren, überholten Notizen und dürfen weder in den Abbildungen noch in einer Bildlegende auftauchen:
 
 - Ablageposition `(-0,310 m; 0,477 m; 0,483 m)`
-- Höhenwerte `z = 0,305 m`, `z = 0,480 m` oder `z = 0,665 m`
+- Höhenwerte `z = 0,305 m`, `z = 0,309 m`, `z = 0,480 m` oder `z = 0,665 m`
 - Die Aussage, `z = 0,665 m` sei eine obere Grenze wegen einer Basiskamerakollision
 - Die Bezeichnung `ROI` für den eingezeichneten Arbeitsbereich
 - Die sichtbare Bezeichnung `robot_base` anstelle von `world`
@@ -226,7 +226,7 @@ Vor der Übergabe muss jede Aussage dieser Liste mit `ja` beantwortet werden:
 - Sind `conveyor_frame` und `world` klar voneinander unterscheidbar?
 - Ist der Arbeitsbereich ausschließlich als `Greifbarer Arbeitsbereich` bezeichnet?
 - Stammen alle dargestellten Koordinaten aus der Tabelle dieser Datei?
-- Enthält die Seitenansicht nur die vier gültigen Höhen `0,309 m`, `0,450 m`, `0,490 m` und `0,600 m`?
+- Enthält die Seitenansicht nur die vier gültigen Höhen `0,299 m`, `0,450 m`, `0,490 m` und `0,600 m`?
 - Steht bei der Seitenansicht der Hinweis auf `ur_tool0` und den nicht dargestellten Greifer?
 - Schneidet keine Linie, Achse, Pfeilspitze oder Kontur eine Beschriftung?
 - Liegen keine Beschriftungen übereinander?
