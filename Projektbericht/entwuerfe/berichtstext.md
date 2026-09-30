@@ -20,7 +20,7 @@ bearbeiten. Es muss selbst entscheiden, welcher Klotz innerhalb des
 verbleibenden Arbeitsbereichs noch sicher erreichbar ist. Nicht mehr
 erreichbare Klötze bleiben auf dem Förderband. Die Positions- und
 Geschwindigkeitsschätzung erfolgt dabei ausschließlich auf Basis der Bilddaten
-([src-projekt-inversetetris-aufgabenstellung](../referenzen/quellen/src-projekt-inversetetris-aufgabenstellung.md)).
+[1].
 
 Die Aufgabenstellung sieht außerdem den grundsätzlichen Funktionsnachweis bei
 unterschiedlichen Bandgeschwindigkeiten vor. Daraus ergeben sich hohe
@@ -35,7 +35,7 @@ quaderförmigen Klötzen auf einem bewegten Förderband. Die Positions- und
 Geschwindigkeitsschätzung soll ausschließlich aus Bilddaten entstehen. Ein
 Encoder oder ein vergleichbares Signal des Förderbands ist dafür nicht
 vorausgesetzt. Der Roboter soll die Klötze während ihrer Bewegung greifen
-([src-projekt-inversetetris-aufgabenstellung](../referenzen/quellen/src-projekt-inversetetris-aufgabenstellung.md)).
+[1].
 
 Neben dem Greifvorgang soll das System die Klötze nach Form und Farbe
 kategorisieren. Die Kategorisierung dient der flexiblen Objektbeschreibung,
@@ -80,7 +80,7 @@ Auswahl eines Ziels erfolgt anhand von Position und Abmessungen. Eine
 vollständige Sortier- oder Ablageanlage gehört nicht zum
 Projektumfang. Ebenso wird kein fehlerfreies Greifen aller Klötze gefordert.
 Das System darf Klötze verwerfen, wenn diese im verbleibenden Arbeitsbereich
-nicht sicher erreichbar sind ([src-projekt-inversetetris-aufgabenstellung](../referenzen/quellen/src-projekt-inversetetris-aufgabenstellung.md)).
+nicht sicher erreichbar sind [1].
 
 Die Versuche erfolgen bei ausgewählten Geschwindigkeiten des vorhandenen
 Förderbands (Abschnitt 1.2). Die Ergebnisse gelten für den bestehenden Arbeitsraum sowie die vorhandenen
@@ -123,8 +123,8 @@ Als Basiskamera wird eine Intel RealSense L515 eingesetzt. Sie kombiniert eine
 RGB-Kamera mit einem LiDAR-Tiefensensor. Die Tiefenmessung basiert auf einem
 abtastenden Infrarotlaser. Damit stehen Farbinformationen zur Kategorisierung
 und Tiefeninformationen zur räumlichen Einordnung der Klötze zur Verfügung
-[src-intel-realsense-l515-spezifikation](../referenzen/quellen/src-intel-realsense-l515-spezifikation.md),
-[src-realsense-l515-datenblatt](../referenzen/quellen/src-realsense-l515-datenblatt.md).
+[2],
+[3].
 Die Kamera ist mittig über dem Bandanfang montiert. Ihr Abstand zur
 Bandebene beträgt etwa `0,85 m`. Sie erfasst die Klötze vor dem Greifbereich.
 
@@ -135,8 +135,8 @@ Kamera besitzt neben einem RGB-Sensor ein aktives Infrarot-Stereosystem zur
 Tiefenmessung sowie eine integrierte inertiale Messeinheit. Sie kann die
 Basiskamera bei der Feinortung ergänzen, ist für den nachgewiesenen Greifablauf
 jedoch nicht erforderlich
-[src-intel-realsense-d435i-spezifikation](../referenzen/quellen/src-intel-realsense-d435i-spezifikation.md),
-[src-realsense-d400-datenblatt](../referenzen/quellen/src-realsense-d400-datenblatt.md).
+[4],
+[5].
 
 Für die anfängliche Kalibrierung wurde das Bezugssystem `conveyor_frame`
 definiert. Sein Ursprung liegt mittig am Bandanfang. Die X-Achse zeigt, in
@@ -160,10 +160,9 @@ dargestellt. Der festgelegte Arbeitsraum des Flansches erweitert diesen
 Bereich für die Ablage der Objekte auf `x = -1,000 m` bis `-0,300 m` und
 `y = -0,320 m` bis `0,480 m`.
 
-Die räumliche Anordnung des realen Aufbaus zeigen die Abbildungen
-`fig-aufbau-gesamtansicht-1` und `fig-aufbau-gesamtansicht-2`.
+Die räumliche Anordnung des realen Aufbaus zeigen die Abbildungen 1 und 2.
 Die Lage von Förderband, Kamera, Roboter, Ablagekiste und Arbeitsbereich wird
-in Abbildung `fig-systemaufbau-draufsicht` schematisch verdeutlicht.
+in Abbildung 3 schematisch verdeutlicht.
 
 Die festgelegten zulässigen Höhen im Arbeitsbereich des Flansches betragen
 `z = 0,299 m` und `z = 0,600 m`. An der unteren Grenze erreicht die
@@ -175,23 +174,25 @@ des Arbeitsraums eine mögliche Singularität beobachtet. Zudem wird die Höhe
 durch die über dem Förderband befindliche Basiskamera begrenzt.
 
 Die zugehörigen Höhen und die Position der Basiskamera über dem Förderband sind
-in Abbildung `fig-systemaufbau-seitenansicht` dargestellt.
+in Abbildung 4 dargestellt.
 
-<!-- Word-Übernahme Skizzen: `fig-systemaufbau-draufsicht` und
-`fig-systemaufbau-seitenansicht` nach den jeweiligen Textverweisen einfügen.
+<!-- Word-Übernahme Skizzen: Abbildung 3 (`fig-systemaufbau-draufsicht`) und
+Abbildung 4 (`fig-systemaufbau-seitenansicht`) nach den jeweiligen
+Textverweisen einfügen.
 Die Beschriftungen beruhen auf der Konfiguration vom 24.09.2026.
-Bildunterschrift `fig-systemaufbau-draufsicht`: Draufsicht mit Förderband,
+Bildunterschrift Abbildung 3: Draufsicht mit Förderband,
 Basiskamera, Ablagekiste, Arbeitsbereich sowie den Bezugssystemen
 `conveyor_frame` und `world`.
-Bildunterschrift `fig-systemaufbau-seitenansicht`: Seitenansicht mit
+Bildunterschrift Abbildung 4: Seitenansicht mit
 Basiskamera sowie Arbeitsraum-, Folge- und Transferhöhen im Bezugssystem
 `world`. -->
 
-<!-- Word-Übernahme Gesamtaufnahmen: `fig-aufbau-gesamtansicht-1` und
-`fig-aufbau-gesamtansicht-2` unmittelbar nach dem Textverweis einfügen.
-Bildunterschrift `fig-aufbau-gesamtansicht-1`: Versuchsaufbau mit Förderband,
+<!-- Word-Übernahme Gesamtaufnahmen: Abbildung 1 (`fig-aufbau-gesamtansicht-1`)
+und Abbildung 2 (`fig-aufbau-gesamtansicht-2`) unmittelbar nach dem
+Textverweis einfügen.
+Bildunterschrift Abbildung 1: Versuchsaufbau mit Förderband,
 UR10e und Ablagekiste.
-Bildunterschrift `fig-aufbau-gesamtansicht-2`: Arbeitsbereich des Roboters
+Bildunterschrift Abbildung 2: Arbeitsbereich des Roboters
 über dem Förderband. -->
 
 #### 2.1.2 UR10e
@@ -199,7 +200,7 @@ Bildunterschrift `fig-aufbau-gesamtansicht-2`: Arbeitsbereich des Roboters
 Die zentrale Handhabungseinheit des Aufbaus ist ein UR10e von Universal Robots.
 Der Roboter besitzt sechs rotierende Gelenke. Seine Reichweite beträgt
 `1.300 mm`, die maximale Nutzlast `12,5 kg`
-([src-universalrobots-ur10e-technische-daten](../referenzen/quellen/src-universalrobots-ur10e-technische-daten.md)).
+[6].
 Die Wiederholgenauigkeit ist mit `±0,05 mm` angegeben. Sie beschreibt die
 Wiederholbarkeit des Roboterarms und nicht die absolute Genauigkeit des
 gesamten kamerabasierten Greifprozesses. Der UR10e trägt den Greifer und
@@ -210,31 +211,31 @@ Sicherheitsfunktionen können unter anderem Grenzen für Geschwindigkeit, Kraft,
 Impuls und Leistung überwachen. Wird eine konfigurierte Grenze überschritten
 oder ein Sicherheitsfehler erkannt, wird die Roboterbewegung sicher
 unterbrochen
-([src-universalrobots-ur10e-sicherheitsfunktionen](../referenzen/quellen/src-universalrobots-ur10e-sicherheitsfunktionen.md)).
+[7].
 Ob der Aufbau ohne trennende
 Schutzeinrichtung betrieben werden darf, ergibt sich jedoch erst aus der
 Risikobeurteilung des gesamten Systems. Dabei müssen insbesondere Greifer,
 Klötze, Bewegungen und Quetschstellen berücksichtigt werden. Der Endeffektor
 ist nicht automatisch durch die Sicherheitsfunktionen des Roboterarms
 abgedeckt
-([src-universalrobots-ur10e-risikobeurteilung](../referenzen/quellen/src-universalrobots-ur10e-risikobeurteilung.md)).
+[8].
 
 #### 2.1.3 Robotiq-2F-140-Greifer
 
 Am Flansch des UR10e ist ein adaptiver Zweifingergreifer vom Typ
 Robotiq 2F-140 montiert. Die Herstellerabmessungen des geöffneten Greifers
-zeigt Abbildung `fig-greifer-robotiq-2f140-abmessungen`
-([src-robotiq-2f140-spezifikation](../referenzen/quellen/src-robotiq-2f140-spezifikation.md)).
+zeigt Abbildung 5
+[9].
 
 <!-- Word-Übernahme: `fig-greifer-robotiq-2f140-abmessungen` an dieser Stelle
 einfügen.
 Bildunterschrift: Herstellerabmessungen des geöffneten
-Robotiq-2F-140-Greifers (Quelle: `src-robotiq-2f140-spezifikation`). -->
+Robotiq-2F-140-Greifers (Quelle: [9]). -->
 ![Abmessungen des geöffneten Robotiq-2F-140-Greifers](../abbildungen/robotiq_2f140_abmessungen_geoeffnet.png)
 
-*Abbildung `fig-greifer-robotiq-2f140-abmessungen`: Herstellerabmessungen des
+*Abbildung 5: Herstellerabmessungen des
 geöffneten Robotiq-2F-140-Greifers (Quelle:
-`src-robotiq-2f140-spezifikation`).*
+[9]).*
 
 Jeder Finger besteht aus zwei starren Abschnitten. Diese Abschnitte werden
 Phalangen genannt und sind über ein Gelenk verbunden. Ein einziger Antrieb
@@ -243,7 +244,7 @@ Beim Schließen drehen sich die Phalangen um ihre Gelenke. Die Greifflächen
 folgen deshalb einer gekrümmten Bahn und nicht einer geraden parallelen
 Bewegung. Abhängig von Geometrie und Lage des Klotzes entsteht ein paralleler
 oder umschließender Griff
-([src-robotiq-2f140-handbuch](../referenzen/quellen/src-robotiq-2f140-handbuch.md)).
+[10].
 
 Ein Klotz kann deshalb an seinen Seiten nicht beliebig tief gegriffen werden.
 Bei einem zu tiefen seitlichen Eingriff würden die Phalangen beim Schließen mit
@@ -259,7 +260,7 @@ erreicht, hält der Greifer an. Sein Gerätestatus meldet den Kontakt als
 erkannte Objektaufnahme. Bei geeigneter Kraftkonfiguration kann die integrierte
 Nachgreiffunktion einen späteren Objektverlust erkennen und die Finger weiter
 schließen
-([src-robotiq-2f140-handbuch](../referenzen/quellen/src-robotiq-2f140-handbuch.md)).
+[10].
 
 Die tatsächlich nutzbare Öffnungsweite wurde am aufgebauten System mit
 `127 mm` gemessen. An den Fingerendgliedern sind 3D-gedruckte Aufsätze mit
@@ -278,7 +279,7 @@ den Erfassungsbereich der Basiskamera zur Greifzone. Die Geschwindigkeit bleibt
 während eines Versuchs konstant. Vor Versuchsbeginn können verschiedene
 Geschwindigkeitsstufen eingestellt werden. Eine Stoppuhrmessung der niedrigsten
 Einstellung, Stufe 1, ergab Werte zwischen `125 mm/s` und `133 mm/s`
-([src-projekt-foerderband-kloetze](../referenzen/quellen/src-projekt-foerderband-kloetze.md)).
+[11].
 Die gemessene Geschwindigkeit dient später als Gegenprobe für die aus den
 Bilddaten geschätzte Bandgeschwindigkeit.
 
@@ -288,7 +289,7 @@ verwendet. Der am häufigsten verwendete flache Klotz besitzt die Abmessungen
 `100 mm × 50 mm × 50 mm` sowie Würfel mit einer Kantenlänge von `50 mm` zum
 Einsatz. Die Klötze sind rot, blau, weiß oder schwarz. Ihre Oberseiten sind
 überwiegend matt, während einzelne Seitenflächen stärker reflektieren
-([src-projekt-foerderband-kloetze](../referenzen/quellen/src-projekt-foerderband-kloetze.md)).
+[11].
 
 Die Klötze können stehend, liegend, flach oder gedreht auf dem Band liegen.
 Runde Klötze wurden bewusst ausgeschlossen. Ihre Orientierung lässt sich mit
@@ -302,7 +303,7 @@ Die Basiskamera ist die zentrale Sensorik des finalen Greifablaufs. Die
 L515 liefert ein RGB-Bild mit `1.280 × 720 Pixel` bei `15 Hz` und
 ein Tiefenbild mit `640 × 480 Pixel` bei `30 Hz`. Die unterschiedliche Rate
 ergibt sich aus dem verwendeten Tiefenprofil der L515
-([src-projekt-basiskamera-konfiguration](../referenzen/quellen/src-projekt-basiskamera-konfiguration.md)).
+[12].
 
 Der sichtbare Bandbereich reicht im Bezugssystem `world` ungefähr von
 `y = +1,03 m` bis `y = +0,46 m`. Die Greifzone beginnt unmittelbar hinter
@@ -315,7 +316,7 @@ als unveränderlich anzunehmen. Bereits kleine Lageänderungen beeinflussen die
 Umrechnung der Kameramessung in das Bezugssystem `world`. Deshalb ist ein
 einfach ausführbares und wiederholbares Kalibrierverfahren für den Aufbau
 erforderlich. Das Kalibrierverfahren selbst wird in Kapitel 4 erläutert
-([src-projekt-basiskamera-konfiguration](../referenzen/quellen/src-projekt-basiskamera-konfiguration.md)).
+[12].
 
 #### 2.1.6 Roboterkamera
 
@@ -324,7 +325,7 @@ dem Flansch. Im finalen Greifablauf ist sie nicht in den aktiven Regelpfad
 eingebunden. Die Gründe für diese Entscheidung erläutert Abschnitt 3.1. Die
 für einen späteren Einsatz vorbereitete Kalibrierung der Roboterkamera
 beschreibt Abschnitt 4.3
-([src-projekt-roboterkamera-einbindung](../referenzen/quellen/src-projekt-roboterkamera-einbindung.md)).
+[13].
 
 ### 2.2 Koordinatensysteme und Greifgeometrie
 
@@ -334,9 +335,9 @@ Alle Positionsangaben des Regelpfads beziehen sich auf das globale
 Bezugssystem `world` (Abschnitt 2.1.1). Das System ist fest mit dem Roboter
 verbunden und bewegt sich nicht mit dem Förderband. Die Förderbewegung erfolgt
 im Aufbau näherungsweise in negative Y-Richtung von `world`. Das Förderband
-liegt gemäß Abbildung `fig-systemaufbau-draufsicht` seitlich der Roboterbasis
+liegt gemäß Abbildung 3 seitlich der Roboterbasis
 im Bereich negativer X-Koordinaten. Die Z-Achse zeigt nach oben. Die Bandoberfläche liegt bei `z = 0,054 m`
-([src-projekt-bezugssysteme](../referenzen/quellen/src-projekt-bezugssysteme.md)).
+[14].
 
 Das Bezugssystem `conveyor_frame` aus Abschnitt 2.1.1 wird im finalen Betrieb
 nicht verwendet. Dadurch entfällt im Regelpfad eine zusätzliche Umrechnung
@@ -346,7 +347,7 @@ Die Robotersteuerung liefert als geregelte Pose die Lage des Flansches
 `ur_tool0`. Sie ist von einem in der UR-Steuerung konfigurierten TCP zu
 unterscheiden. Die daraus folgende Lage des tatsächlichen Griffpunkts wird im
 nächsten Abschnitt bestimmt. Die räumliche Zuordnung von Roboterbasis, Flansch
-`ur_tool0` und Griffpunkt zeigt Abbildung `fig-koord-systeme`.
+`ur_tool0` und Griffpunkt zeigt Abbildung 6.
 
 <!-- Word-Übernahme: `fig-koord-systeme` nach dem vorstehenden Textverweis
 einfügen. Die Abbildung muss Roboterbasis, `world-Y−`, `world-Z+`, Flansch
@@ -354,6 +355,8 @@ einfügen. Die Abbildung muss Roboterbasis, `world-Y−`, `world-Z+`, Flansch
 Bildunterschrift: Seitenansicht des Roboters mit Bezugssystem `world`, Flansch
 `ur_tool0` und Griffpunkt. -->
 ![Seitenansicht des Roboters mit Bezugssystem `world`, Flansch `ur_tool0` und Griffpunkt](../abbildungen/fig-koord-systeme.png)
+
+*Abbildung 6: Seitenansicht des Roboters mit Bezugssystem `world`, Flansch `ur_tool0` und Griffpunkt.*
 
 #### 2.2.2 TCP, Flansch und Griffpunkt
 
@@ -366,7 +369,7 @@ Vom Flansch bis zur geschlossenen Backenspitze wurden `0,245 m` gemessen. Dieser
 Abstand dient zur Bestimmung der Bandhöhe und zur Beurteilung des Abstandes zum
 Förderband. Die Auflageflächen der Backen sind `20 mm` hoch. Der für die
 Greifbewegung verwendete Griffpunkt liegt in ihrer Mitte. Sein Abstand zum
-Flansch beträgt damit `0,235 m` ([src-projekt-greifgeometrie](../referenzen/quellen/src-projekt-greifgeometrie.md)).
+Flansch beträgt damit `0,235 m` [15].
 
 Die erkannte Klotzposition beschreibt den Griffpunkt, nicht die Flanschpose.
 Der `object_follower` addiert daher den festen Versatz von `0,235 m` in
@@ -394,9 +397,8 @@ nutzbaren Bereich und ist eine engere Teilmenge des Arbeitsraums. Die
 Erweiterung des Arbeitsraums in positive
 Y-Richtung und zu größeren X-Werten dient ausschließlich der Ablagebox. Sie
 wird bei der Zielauswahl auf dem Förderband nicht verwendet. Die räumliche
-Anordnung von Förderband, Roboter und Ablagebox zeigt Abbildung
-`fig-systemaufbau-draufsicht`
-([src-projekt-arbeitsraum-greifzone](../referenzen/quellen/src-projekt-arbeitsraum-greifzone.md)).
+Anordnung von Förderband, Roboter und Ablagebox zeigt Abbildung 3
+[16].
 
 Die gekrümmte Bewegung der Greiferphalangen verändert beim Öffnen und Schließen
 den räumlichen Bauraum des Greifers. Die Arbeitsraumgrenzen müssen daher für
@@ -413,14 +415,13 @@ Hardware-Interfaces bereit. AICA Studio dient als grafische Umgebung, um diese
 Bausteine zu einer Anwendung zu verbinden, zu konfigurieren und zu überwachen.
 Das System baut auf ROS 2 auf. ROS 2 übernimmt dabei die Kommunikation zwischen
 den Prozessen sowie die Anbindung von Kameras und Roboterhardware
-([src-aica-system-uebersicht](../referenzen/quellen/src-aica-system-uebersicht.md)).
+[17].
 
 Die verwendete Anwendung basiert auf dem AICA-Systemabbild `v2.0.5-jazzy` mit
 AICA Core `v5.0.0`. AICA-Komponenten werden periodisch ausgeführt. Ihre
 Arbeitsrate, Parameter, Eingangssignale und Ausgänge sind innerhalb der
 Anwendung festgelegt
-([src-aica-komponenten](../referenzen/quellen/src-aica-komponenten.md),
-[src-projekt-softwareumgebung](../referenzen/quellen/src-projekt-softwareumgebung.md)).
+[18], [19].
 
 #### 2.3.2 Komponentenstruktur
 
@@ -430,7 +431,7 @@ Fachlogik ist von den ROS-Schnittstellen getrennt. Dadurch können die
 Berechnungen unabhängig von der Laufzeitumgebung geprüft werden. Alle eigenen
 Python-Komponenten laufen gemeinsam in einem Prozess. Ihre Callbacks dürfen
 deshalb die periodische Verarbeitung nicht blockieren
-([src-projekt-softwareumgebung](../referenzen/quellen/src-projekt-softwareumgebung.md)).
+[19].
 
 AICA ergänzt diese Komponenten um die Hardwareanbindung und die
 Bewegungsumsetzung. Dazu gehören die Schnittstelle zum UR10e, der
@@ -445,8 +446,7 @@ verbunden werden. Im Projekt sind Aufbau und Bedeutung der Datenfelder zentral
 in Datenverträgen festgelegt. Dazu gehören Einheiten, Feldreihenfolge und
 Zeitstempel. Dadurch verwenden Sender und Empfänger dieselbe Bedeutung eines
 Signals
-([src-aica-signale](../referenzen/quellen/src-aica-signale.md),
-[src-projekt-softwareumgebung](../referenzen/quellen/src-projekt-softwareumgebung.md)).
+[20], [19].
 
 Der Datenfluss verbindet die Bildverarbeitung, die Berechnung der Objektbahn,
 die Zielauswahl und die Bewegungsregelung. Die vollständige Kette sowie die
@@ -471,13 +471,12 @@ Die Komponente `robotiq_gripper` steuert den Greifer. Das Ergebnis jedes
 Greifversuchs geht an den `priority_handler` zurück, der daraufhin das nächste
 Ziel wählt.
 
-Die Komponenten tauschen ihre Daten über die in Tabelle
-`tab-regelpfad-signale` zusammengefassten Signale aus. Positionen und
+Die Komponenten tauschen ihre Daten über die in Tabelle 1 zusammengefassten Signale aus. Positionen und
 Geschwindigkeiten stehen in SI-Einheiten und im Bezugssystem `world`. Die
 Objektdaten von `base_cam` bis `priority_handler` tragen den Zeitstempel des
 zugrunde liegenden Kamerabilds.
 
-*Tabelle `tab-regelpfad-signale`: Signale des Regelpfads.*
+*Tabelle 1: Signale des Regelpfads.*
 
 | Signal | Sender → Empfänger | Inhalt |
 |---|---|---|
@@ -500,7 +499,7 @@ Die Komponenten arbeiten mit unterschiedlichen Raten. Bildverarbeitung und
 Schätzung laufen mit 15 Hz, der Bildrate der Kamera. Die Zielauswahl arbeitet
 mit 20 Hz, die Bahnführung mit 50 Hz. Die Regelung des Roboters läuft mit
 500 Hz. Die Raten sind entsprechend der genutzten Hardware gewählt
-([src-projekt-greifablauf](../referenzen/quellen/src-projekt-greifablauf.md)).
+[21].
 
 Dass die Roboterkamera für den Greifablauf nicht eingebunden ist (Abschnitt
 2.1.6), hat drei Gründe. Die Basiskamera allein erreicht eine Längsabweichung von rund 1 mm und reicht damit für den
@@ -509,7 +508,7 @@ zuverlässig. Reflexionen auf Band und Klotzseiten sowie flache Klötze, die sic
 im Tiefenbild kaum vom Band abheben, führten zu Abweichungen von mehreren
 Zentimetern. Zusätzlich hätte ihre Auswertung die Rechenlast des gemeinsamen
 Prozesses der Komponenten erhöht
-([src-projekt-greifablauf](../referenzen/quellen/src-projekt-greifablauf.md)).
+[21].
 
 ### 3.2 Erkennung, Vermessung und Vorhersage
 
@@ -563,7 +562,7 @@ Kamerabild, wird er mit der geschätzten Bandgeschwindigkeit weitergeführt.
 Seine Position wird dann vorhergesagt statt gemessen. Auf dieser Grundlage
 greift der Roboter Klötze in der Greifzone hinter dem Kamerabild, ohne ihre
 Position dort aktuell zu messen
-([src-projekt-greifablauf](../referenzen/quellen/src-projekt-greifablauf.md)).
+[21].
 
 ### 3.3 Zielauswahl und Erreichbarkeitsprüfung
 
@@ -595,7 +594,7 @@ greifbaren Klotz. Das ist der Klotz mit der kürzesten verbleibenden Zeit bis zu
 bleibt bestehen, bis der `object_follower` ein Ergebnis meldet. Ein
 Zielwechsel während der Bewegung ist damit ausgeschlossen. Nicht greifbare
 oder nicht erreichbare Klötze bleiben auf dem Band
-([src-projekt-greifablauf](../referenzen/quellen/src-projekt-greifablauf.md)).
+[21].
 
 ### 3.4 Bahnführung und Greifablauf
 
@@ -603,7 +602,7 @@ oder nicht erreichbare Klötze bleiben auf dem Band
 
 Der `object_follower` setzt den Greifablauf als Zustandsautomaten um. In jedem
 Zustand gibt er eine Zielpose des Flansches aus, der Greifer zeigt dabei stets
-senkrecht nach unten. Abbildung `fig-follower-zustandsdiagramm` zeigt die
+senkrecht nach unten. Abbildung 7 zeigt die
 Zustände und ihre Übergänge.
 
 <!-- Word-Übernahme: `fig-follower-zustandsdiagramm` an dieser Stelle
@@ -613,7 +612,7 @@ Umrandung fasst die Zustände zusammen, aus denen ein Versuch abgebrochen werden
 kann, bevor der Greifer den Klotz hält. -->
 ![Zustandsautomat des object_follower](../abbildungen/fig-follower-zustandsdiagramm.png)
 
-*Abbildung `fig-follower-zustandsdiagramm`: Zustandsautomat des
+*Abbildung 7: Zustandsautomat des
 `object_follower`. Die gestrichelte Umrandung fasst die Zustände zusammen, aus
 denen ein Versuch abgebrochen werden kann, bevor der Greifer den Klotz hält.*
 
@@ -671,7 +670,7 @@ Sicherheitsprüfung. Ungültige Werte und Sprünge zwischen zwei Takten werden
 verworfen. Jede Pose wird auf den Arbeitsraum begrenzt. Ist die
 zuletzt gemeldete Roboterpose älter als 0,2 s, gibt der `object_follower`
 keine neue Zielpose aus
-([src-projekt-greifablauf](../referenzen/quellen/src-projekt-greifablauf.md)).
+[21].
 
 ### 3.5 Bewegungsumsetzung in AICA
 
@@ -692,7 +691,7 @@ geschätzten Bandgeschwindigkeit multipliziert. Er beträgt 0,24 s, also etwa
 1/K, und gilt damit für jede Bandgeschwindigkeit. Am Aufbau folgt der Flansch
 dem Klotz so mit einer Längsabweichung von rund 1 mm und damit ausreichend
 genau für einen sicheren Greifprozess
-([src-projekt-greifablauf](../referenzen/quellen/src-projekt-greifablauf.md)).
+[21].
 
 #### 3.5.2 IK Velocity Controller und Geschwindigkeitsgrenzen
 
@@ -703,7 +702,7 @@ Geschwindigkeit ebenfalls auf 0,85 m/s und zusätzlich die Änderungsrate der
 Befehle. Geregelt wird der Flansch, da der Greifer nicht im Robotermodell
 enthalten ist. Den Versatz zum Griffpunkt berücksichtigt der
 `object_follower` (Abschnitt 2.2.2)
-([src-projekt-greifablauf](../referenzen/quellen/src-projekt-greifablauf.md)).
+[21].
 
 ### 3.6 Greiferansteuerung und Rückmeldungen
 
@@ -718,7 +717,40 @@ Aus beiden Meldungen entscheidet der `object_follower`, ob ein Griff gelungen
 ist. Schließt der Greifer vollständig ohne Widerstand, liegt ein Fehlgriff vor.
 Entfällt die Meldung „Klotz gehalten“ auf dem Weg zur Kiste, gilt der Klotz
 als verloren
-([src-projekt-greifablauf](../referenzen/quellen/src-projekt-greifablauf.md)).
+[21].
+
+### 3.7 Interface Streamer und Laufzeitdiagnose
+
+Der `interface_streamer` stellt den aktuellen Zustand der Anwendung für die
+Inbetriebnahme und Fehlersuche dar. Er empfängt das Debug-Bild von `base_cam`,
+den Weltzustand aus `data_tracker` und den Status des `object_follower`. Die
+Anzeige wird mit 10 Hz aktualisiert und hat keine Rückwirkung auf den
+Regelpfad
+[22].
+
+Abbildung 8 zeigt die Anzeige während eines
+Greifvorgangs. Neben dem Kamerabild sind Follower-Zustand, gewählte Ziel-ID,
+Regelabweichungen, geschätzte Bandgeschwindigkeit sowie die bekannten Objekte
+und ihre Bearbeitungszustände sichtbar. Dadurch lässt sich prüfen, ob ein Klotz
+gewählt, gegriffen oder noch eingeschwungen ist.
+
+<!-- Word-Übernahme: `fig-interface-streamer-betrieb` an dieser Stelle einfügen. -->
+![Interface Streamer im Betrieb](../abbildungen/fig-interface-streamer-betrieb.png)
+
+*Abbildung 8: Interface Streamer im Betrieb mit
+Debug-Bild der Basiskamera, Follower-Zustand, Ziel, Regelabweichungen und
+Trackübersicht.*
+
+Das Debug-Bild der Basiskamera verdeutlicht Abbildung 9. Es markiert den für die Detektion verwendeten
+Bildbereich (ROI) sowie die erkannten Klötze mit den IDs 10 und 11 und ihren
+Farben.
+
+<!-- Word-Übernahme: `fig-basecam-erkennung-roi` an dieser Stelle einfügen. -->
+![Erkennung der Basiskamera innerhalb des ROI](../abbildungen/fig-basecam-erkennung-roi.png)
+
+*Abbildung 9: Debug-Bild der Basiskamera mit den
+erkannten Objekten ID 10 und ID 11, deren Farben und dem für die Detektion
+verwendeten Bildausschnitt (ROI).*
 
 ## 4 Kalibrierung
 
@@ -729,10 +761,9 @@ als verloren
 Alle Komponenten des Regelpfads rechnen im Bezugssystem `world`, dessen
 Ursprung in der Roboterbasis liegt. Die Messungen der Basiskamera werden
 entsprechend in dieses System überführt. Dafür werden die Eigenschaften der
-Kamera und ihre Lage relativ zum Roboter benötigt. Tabelle
-`tab-kalibrierung-groessen` ordnet diese Größen ihrer Herkunft zu.
+Kamera und ihre Lage relativ zum Roboter benötigt. Tabelle 2 ordnet diese Größen ihrer Herkunft zu.
 
-*Tabelle `tab-kalibrierung-groessen`: Geometrische Größen des Regelpfads und
+*Tabelle 2: Geometrische Größen des Regelpfads und
 ihre Herkunft.*
 
 | Größe | Herkunft | Abschnitt |
@@ -758,13 +789,13 @@ ein automatisches und einfach wiederholbares Kalibrierverfahren umgesetzt.
 <!-- Hier vlt Unterschied Hand-to-eye in Kap. 4.2 und eye-in-hand in Kap. 4.3 klarstellen -->
 Je nachdem, ob die Kamera ortsfest oder
 am Roboter montiert ist, unterscheidet sich das Kalibrierverfahren grundlegend
-([src-mathworks-handeye-kalibrierung](../referenzen/quellen/src-mathworks-handeye-kalibrierung.md)).
+[23].
 
 ### 4.2 Extrinsische Kalibrierung der Basiskamera
 
 Für die automatische Kalibrierung wird der Roboter als Messmittel eingesetzt.
 Der Greifer hält ein Kalibrierboard unter die fest montierte Basiskamera.
-Abbildung `fig-kalibrierung-board-greifer` zeigt diese Anordnung aus Sicht der
+Abbildung 10 zeigt diese Anordnung aus Sicht der
 Kamera.
 
 <!-- Word-Übernahme: `fig-kalibrierung-board-greifer` an dieser Stelle
@@ -773,15 +804,15 @@ Bildunterschrift: AprilGrid-Kalibrierboard im Greifer in der Startpose,
 aufgenommen von der Basiskamera (Graubild der Farbkamera, `0,53 m` Abstand). -->
 ![Kalibrierboard im Greifer aus Sicht der Basiskamera](../abbildungen/fig-kalibrierung-board-greifer.png)
 
-*Abbildung `fig-kalibrierung-board-greifer`: AprilGrid-Kalibrierboard im
+*Abbildung 10: AprilGrid-Kalibrierboard im
 Greifer in der Startpose, aufgenommen von der Basiskamera (Graubild der
 Farbkamera, 0,53 m Abstand).*
 
 Das Board ist ein AprilGrid aus 7 × 11 AprilTags
-([src-kalibr-aprilgrid](../referenzen/quellen/src-kalibr-aprilgrid.md)).
+[24].
 Jeder Tag trägt eine eindeutige Kennung. Seine Ecken lassen sich deshalb auch
 bei teilweiser Verdeckung sicher zuordnen
-([src-wang-apriltag2-2016](../referenzen/quellen/src-wang-apriltag2-2016.md)).
+[25].
 Aus den erkannten Ecken wird für jede Pose die Lage des Boards relativ zur
 Kamera berechnet. Gleichzeitig liefert der Roboter die Lage seines Flansches in
 `world`.
@@ -790,10 +821,9 @@ Die Anordnung entspricht einer Hand-Auge-Kalibrierung mit ortsfester Kamera.
 Unbekannt sind zwei Transformationen: die Lage der Kamera in `world` und die
 Lage des Boards am Flansch. Beide werden gemeinsam bestimmt. Einen Startwert
 liefern die Verfahren nach Tsai und Lenz sowie nach Park und Martin
-([src-tsai-handauge-1989](../referenzen/quellen/src-tsai-handauge-1989.md),
-[src-park-handauge-1994](../referenzen/quellen/src-park-handauge-1994.md))
+[26], [27]
 in der Implementierung von OpenCV
-([src-opencv-handeye](../referenzen/quellen/src-opencv-handeye.md)).
+[28].
 Anschließend werden beide Transformationen so angepasst, dass der Abstand
 zwischen erkannten und vorhergesagten Tag-Ecken über alle Posen minimal wird.
 
@@ -804,7 +834,7 @@ Daten. Die wiederholte Pose deckt ein Verrutschen des Boards im Greifer auf.
 Ein Durchlauf dauert rund vier Minuten. Das Ergebnis wird nur gespeichert,
 wenn der mittlere Bildfehler höchstens 1 px, die Abweichung der Prüfposen
 höchstens 2 mm und das Verrutschen höchstens 0,5 mm beträgt
-([src-projekt-kalibrierung](../referenzen/quellen/src-projekt-kalibrierung.md)).
+[29].
 
 Der Greifer konnte im Rahmen des Projekts nicht verändert werden. Das Board
 wird deshalb mit einem Gummigreifsatz zwischen die Backen geklemmt und muss
@@ -828,7 +858,7 @@ Arbeitshöhe übertragen, vom Band bis 100 mm darüber. Für diese Punkte ist
 bekannt, wo die Farbkamera sie sieht und wo `base_cam` sie mit dem gemessenen
 Tiefenfehler abbildet. Die Objekterkennung in `base_cam` bleibt dadurch
 unverändert
-([src-projekt-kalibrierung](../referenzen/quellen/src-projekt-kalibrierung.md)).
+[29].
 
 ### 4.3 Hand-Auge-Kalibrierung der Roboterkamera
 
@@ -845,7 +875,7 @@ bekannt ist. Dieses Problem ist von dem in Abschnitt 4.2 zu unterscheiden. Dort
 ist die Kamera ortsfest und das Board wird bewegt. Hier ist das Board fest und
 die Kamera wird bewegt. Das Verfahren wird als Eye-in-Hand-Kalibrierung
 bezeichnet
-([src-mathworks-handeye-kalibrierung](../referenzen/quellen/src-mathworks-handeye-kalibrierung.md)).
+[23].
 
 Unbekannt sind zwei Transformationen: die Lage der Kamera relativ zum Flansch
 (`T_ee_cam`) und die Lage des Boards im Bezugssystem `world`. Beide werden
@@ -862,8 +892,7 @@ verwendet. Es kombiniert ein Schachbrettmuster mit ArUco-Markierungen. Jede
 Ecke des Schachbrettmusters ist über die umliegenden Marker eindeutig
 identifizierbar. Das Board ist physisch größer und kann von beiden Kameras aus
 unterschiedlichen Abständen sicher erkannt werden
-([src-opencv-charuco-aufbau](../referenzen/quellen/src-opencv-charuco-aufbau.md),
-[src-opencv-charuco-erkennung](../referenzen/quellen/src-opencv-charuco-erkennung.md)).
+[30], [31].
 
 Das Board liegt für die Kalibrierung fest am Rand des Förderbands. Der Roboter
 wird zunächst manuell so positioniert, dass das Board im Kamerabild sichtbar
@@ -874,7 +903,7 @@ Mittelpunkt und einer konfigurierbaren Anzahl gleichmäßig verteilter Punkte au
 einem Kreisring. An jedem Wegpunkt schwenkt die Kamera auf das Board-Zentrum.
 Der Roboter wartet, bis er ausgeschwungen ist, und mittelt dann mehrere
 Detektionen. Nach dem letzten Wegpunkt kehrt er zur Startposition zurück.
-Abbildung `fig-orbit-trajektorie` zeigt die Trajektorie mit den Standardwerten
+Abbildung 11 zeigt die Trajektorie mit den Standardwerten
 von 9 Wegpunkten und einem Kreisradius von 50 mm in Drauf- und Seitenansicht.
 
 <!-- Word-Übernahme: `fig-orbit-trajektorie` an dieser Stelle einfügen.
@@ -884,7 +913,7 @@ r = 50 mm, 45°-Abstände). Seitenansicht: Die Kamera zeigt an jedem Wegpunkt
 auf das Board-Zentrum. (KI generiert.) -->
 ![Orbit-Trajektorie der Eye-in-Hand-Kalibrierung](../abbildungen/fig-orbit-trajektorie.jpg)
 
-*Abbildung `fig-orbit-trajektorie`: Orbit-Trajektorie der Eye-in-Hand-Kalibrierung.
+*Abbildung 11: Orbit-Trajektorie der Eye-in-Hand-Kalibrierung.
 Draufsicht: 9 Wegpunkte (Startpose 0 im Zentrum, Wegpunkte 1–8 auf dem Kreisring
 mit r = 50 mm, 45°-Abstände). Seitenansicht: Die Kamera zeigt an jedem Wegpunkt
 auf das Board-Zentrum. (KI generiert.)*
@@ -921,11 +950,11 @@ Ausrichtung des Förderband-Koordinatensystems.
 Die Validierung prüft das automatische Verfahren der Basiskamera aus
 Abschnitt 4.2 in drei Schritten: die Güte
 eines einzelnen Laufs, die Wiederholbarkeit über mehrere Tage und die
-Positionsgenauigkeit im Greifbetrieb. Tabelle `tab-kalibrierung-vergleich`
+Positionsgenauigkeit im Greifbetrieb. Tabelle 3
 fasst die Ergebnisse zusammen
-([src-projekt-kalibrierung](../referenzen/quellen/src-projekt-kalibrierung.md)).
+[29].
 
-*Tabelle `tab-kalibrierung-vergleich`: Prüfungen des automatischen
+*Tabelle 3: Prüfungen des automatischen
 Kalibrierverfahrens.*
 
 | Prüfung | Bedingung | Ergebnis |
@@ -967,21 +996,19 @@ Der Regelpfad wurde in der Reihenfolge `base_cam`, `vectoring`,
 `priority_handler`, `object_follower`, Signal Point Attractor und IK Velocity
 Controller in Betrieb genommen. Die Basiskamera liefert erkannte Objekte. Das
 vollständige Zusammenspiel der Komponenten und ihrer in AICA verdrahteten
-Signale enthält Anhangabbildung `fig-regelpfad-aica`. Das
+Signale enthält Abbildung 13 im Anhang. Das
 Modul `vectoring` schätzt daraus die Geschwindigkeit. Anschließend wählt der
 `priority_handler` ein greifbares Objekt aus. Der Follower berechnet dessen
 vorhergesagte Zielpose, bevor der Attractor und der IK-Controller die
 Flanschbewegung umsetzen. Der Greifer und die Zustandsrückmeldungen sind in
 dieselbe Ablaufsteuerung eingebunden. Diagnosekomponenten bleiben davon
 getrennt und beeinflussen die Zielauswahl nicht
-([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
+[22].
 
-Die Teilansichten im Anhang zeigen die Bildverarbeitung in
-`fig-aica-bildverarbeitung`, die Zielauswahl mit Diagnosepfad in
-`fig-aica-zielauswahl-diagnose`, den Greifablauf in `fig-aica-greifablauf`
-und die Bewegungsregelung bis zum Hardware Interface in
-`fig-aica-bewegungsregelung`. Die Reihenfolge entspricht dem Aufbau der
-Abbildungen im Anhang.
+Die Teilansichten im Anhang zeigen die Bildverarbeitung in Abbildung 14, die
+Zielauswahl mit Diagnosepfad in Abbildung 15, den Greifablauf in Abbildung 16
+und die Bewegungsregelung bis zum Hardware Interface in Abbildung 17. Die
+Reihenfolge entspricht dem Aufbau der Abbildungen im Anhang.
 
 Die Python-Komponenten laufen in einem gemeinsamen Prozess. Ihre
 Taktfrequenzen beanspruchen daher dieselben Rechenkerne. Zusätzliche
@@ -992,11 +1019,10 @@ Roboterkamera-Komponenten werden im finalen Betrieb nicht geladen. Die
 Basiskamera und `vectoring` arbeiten jeweils mit 15 Hz, der
 `priority_handler` mit 20 Hz und der `object_follower` mit 50 Hz. Die
 Roboterregelung selbst läuft mit 500 Hz
-([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
+[22].
 
 Diese Taktfrequenzen können bei einzelnen Komponenten direkt im
-AICA-Interface eingestellt werden. Abbildung
-`fig-aica-vectoring-parameter` zeigt dies beispielhaft für den Parameter
+AICA-Interface eingestellt werden. Abbildung 12 zeigt dies beispielhaft für den Parameter
 `Rate` von `vectoring`.
 
 <!-- Word-Übernahme: `fig-aica-vectoring-parameter` an dieser Stelle
@@ -1004,7 +1030,7 @@ einfügen. Bildunterschrift: Einstellbare Taktrate und weitere Parameter der
 Komponente Vectoring im AICA-Interface. -->
 ![Einstellbare Taktrate und weitere Parameter der Komponente Vectoring im AICA-Interface](../abbildungen/fig-aica-vectoring-parameter.png)
 
-*Abbildung `fig-aica-vectoring-parameter`: Einstellbare Taktrate und weitere
+*Abbildung 12: Einstellbare Taktrate und weitere
 Parameter der Komponente Vectoring im AICA-Interface.*
 
 Die Notwendigkeit dieser Begrenzung zeigte sich bereits während der
@@ -1017,7 +1043,7 @@ die mittlere Zeit bis zur nächsten Messung lag bei 266 ms. Die L515 selbst
 lieferte Bilddaten mit einem Alter von 46 bis 51 ms. Der verbleibende Anteil
 entsteht somit vor allem in Verarbeitung und Übertragung. Im finalen Betrieb
 liefert `base_cam` rund 8,6 neue Messungen pro Sekunde
-([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
+[22].
 
 Auch die 500-Hz-Regelung reagierte empfindlich auf parallele Last. Bei
 geöffneter Visualisierung, Browser-Ansichten und weiteren Leseprozessen fiel
@@ -1027,18 +1053,17 @@ Analyseprozesse geschlossen. Reicht die Rechenleistung trotzdem nicht aus,
 kann die Rate von `base_cam` auf 12 Hz reduziert werden. Diese Maßnahme
 verringert die Last, verlängert jedoch den Abstand zwischen zwei
 Objektmessungen
-([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
+[22].
 
 ### 5.2 Abstimmung der dynamischen Greifbewegung
 
 Die Bewegungsparameter wurden gemeinsam abgestimmt. Eine schnellere
 Flanschbewegung verkürzt zwar die Zeit bis zum Greifen, erhöht aber die
 Anforderungen an Vorhersage, Geschwindigkeitsregelung und Arbeitsraumgrenzen.
-Die endgültig verwendeten Größen der Bewegungsregelung sind in Tabelle
-`tab-regel-sicherheitsparameter` zusammengefasst
-([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
+Die endgültig verwendeten Größen der Bewegungsregelung sind in Tabelle 4 zusammengefasst
+[22].
 
-*Tabelle `tab-regel-sicherheitsparameter`: Zusammen abgestimmte Parameter für
+*Tabelle 4: Zusammen abgestimmte Parameter für
 Laufzeit, Bewegung und Sicherheit im finalen Regelpfad.*
 
 | Parameter | Wert | Einheit | Funktion |
@@ -1063,7 +1088,7 @@ erhöht. Gleichzeitig verringerte sich die angesetzte Sinkzeit von 0,900 auf
 bis 0,150 m einschließlich einer kurzen Reserve ab. Die Beruhigungszeit von
 0,400 s berücksichtigt in der Erreichbarkeitsprüfung das Einschwingen des
 Followers bis zur Freigabe des Absenkens
-([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
+[22].
 
 Die Zielvorhersage verwendet eine Vorhaltezeit von 0,240 s. Der Follower
 rechnet die Zielposition ab ihrem Zeitstempel höchstens 1,000 s voraus. Kommt
@@ -1078,7 +1103,7 @@ auch flache Klötze berücksichtigt werden. Die Greifhöhe setzt dabei auf der
 Hälfte der gemessenen Höhe des Klotzes an. Die untere Arbeitsraumgrenze wurde parallel von 0,304 auf 0,299 m angepasst. Greifhöhe,
 Arbeitsraumgrenze und Greifergeometrie müssen zusammen geändert werden, damit
 die Greifbacken nicht das Band berühren
-([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
+[22].
 
 ### 5.3 Optimierung der Basiskamera-Erkennung
 
@@ -1088,7 +1113,7 @@ eine Breite von 618 px. Er reicht quer zum Band vom Bandrand am Roboter bis
 `x = -1,000 m`, der Grenze des Arbeitsraums. Klötze jenseits dieser Grenze sind
 nicht erreichbar und würden keine greifbaren Ziele liefern. Ihre Ausblendung senkt deshalb die zu
 verarbeitende Bildmenge und reduziert Fehlkandidaten an Bandrand und Gestell
-([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
+[22].
 
 Zusätzlich wurden die Filter für kleine und flache Objekte angepasst. Die
 Mindestkonturfläche beträgt 1.000 px statt zuvor 1.500 px. Die untere Grenze
@@ -1108,7 +1133,7 @@ ergibt sich in `vectoring` aus der Streuung der gemessenen Winkel. Unterhalb
 der Grenze greift der Follower in Grundstellung. Mit 0,700 wurden kleine,
 hochkant stehende Klötze nicht gedreht, obwohl ihr gemittelter Winkel
 stimmte
-([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
+[22].
 
 ## 6 Entwicklungsabnahme und Versuchsergebnisse
 
@@ -1128,11 +1153,11 @@ der Ablagebox abgelegt wird. Die Dokumentation enthält Zustandsprotokolle,
 Beobachtungen am Aufbau und Messwerte der Regelabweichung. Die einzelnen
 Läufe unterscheiden sich in Geschwindigkeitsgrenzen, Zeitparametern und
 Bildverarbeitung. Ihre Ergebnisse dürfen daher nicht zu einer gemeinsamen
-Erfolgsquote addiert werden. Tabelle `tab-versuche-greifergebnisse` fasst die
+Erfolgsquote addiert werden. Tabelle 5 fasst die
 dokumentierten Entwicklungsläufe getrennt zusammen
-([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
+[32].
 
-*Tabelle `tab-versuche-greifergebnisse`: Dokumentierte Entwicklungsläufe der
+*Tabelle 5: Dokumentierte Entwicklungsläufe der
 realen Entwicklungsabnahme. Die Läufe besitzen unterschiedliche
 Konfigurationen und sind keine gemeinsame Versuchsreihe.*
 
@@ -1164,7 +1189,7 @@ Greifebene gewählt. Beim Absenken und Greifen lagen die Längsabweichungen
 zwischen `+0,300` und `+1,100 mm`. Die Querabweichungen betrugen höchstens
 `±0,200 mm`. Beide Klötze wurden angehoben und an der Ablageposition abgelegt.
 Von der Auswahl bis zur Ablage vergingen jeweils rund neun Sekunden
-([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
+[32].
 
 Nach der Korrektur der Roboter-Nutzlast wurden weitere Klötze auch am
 Bandrand gegriffen, unter anderem bei `x = -0,940 m`. Nach dem Entfernen der
@@ -1174,7 +1199,7 @@ abgeschlossen. Die Längsabweichung lag dabei zwischen `-1,800` und
 `+0,600 mm`, die Querabweichung bei `±0,100 mm`. Damit wurde auch der
 erweiterte Bereich in Bandquerrichtung praktisch geprüft. Die Ergebnisse
 belegen somit das Greifen mit der Basiskamera als alleiniger Messquelle
-([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
+[32].
 
 Der umfangreichste Dauerlauf wurde mit einer horizontalen
 Geschwindigkeitsgrenze von `0,500 m/s` und einer Absenkgeschwindigkeit von
@@ -1185,7 +1210,7 @@ war dadurch noch mit Heben, Ablage, Öffnen oder Rückfahrt beschäftigt. Das
 System wählte diese Klötze nicht fehlerhaft aus, sondern konnte sie innerhalb
 der verbleibenden Zeit nicht mehr sicher erreichen. Der knappste erfolgreiche
 Griff begann `0,340 s` vor der Greifebene
-([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
+[32].
 
 Auch die Ausrichtung rechteckiger Klötze wurde geprüft. Fünf Klötze wurden im
 Stand vermessen. Die Streuung der gemessenen Winkel lag bei höchstens
@@ -1194,7 +1219,7 @@ unerwünschter Wechsel der Greiferausrichtung um 90° auf. Die Drehung des
 Greifers blieb auf höchstens `±45°` aus der Grundstellung begrenzt. Eine
 systematische Auswertung der Farberkennung oder eine getrennte Versuchsreihe
 für mehrere definierte Bandgeschwindigkeiten liegt dagegen nicht vor
-([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
+[32].
 
 ### 6.3 Abbrüche und Optimierungserfolg
 
@@ -1207,14 +1232,14 @@ lief der Ziel-Timeout während des Greifens ab. Nach der Anhebung von
 `max_extrapolation_s` auf `1,000 s` und des Ziel-Timeouts auf `1,500 s` wurden
 mit denselben Klötzen 9 von 9 Ablagen dokumentiert. Das größte beobachtete
 Alter des Zielsatzes im Follower betrug dabei `0,890 s`
-([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
+[32].
 
 Der Verlauf der Zustandsübergänge wurde zusätzlich in Softwaretests geprüft.
 Nach dem Entfernen der Roboterkamera aus dem Regelpfad wurden 27.200
 aufgezeichnete Takte ohne Abweichung von Zielpose, Zustand, Greiferbefehl und
 Abschlussmeldung verglichen. Diese Prüfung bestätigt die interne Konsistenz
 der Implementierung. Sie ersetzt keine erneute reale Abnahme des Roboters
-([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
+[32].
 
 ### 6.4 Aussagekraft und Grenzen der Abnahme
 
@@ -1225,7 +1250,7 @@ Bewegung ohne Encoder am Förderband allein aus den Bilddaten, und der
 die vorhergesagte Pose an, greift den Klotz während der Bandbewegung und legt
 ihn in der Ablagebox ab. Dieser Ablauf wurde für unterschiedliche
 Klotzgrößen, Randpositionen und gedrehte quaderförmige Klötze nachgewiesen
-([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
+[32].
 
 Die dokumentierten Läufe zeigen außerdem, dass das System nicht jeden sichtbaren
 Klotz zwingend erreichen muss. Liegt ein Klotz zu dicht hinter einem bereits
@@ -1243,7 +1268,7 @@ Greifbewegung reagieren auf die aktuelle Lage der Klötze. Nach Beobachtung der
 Projektgruppe wurden Klötze auch bei höheren Bandgeschwindigkeiten bis Stufe 3
 sicher erkannt und gegriffen. Messwerte der Geschwindigkeit liegen für diese
 Stufen nicht vor
-([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
+[32].
 
 ## 7 Diskussion und Ausblick
 
@@ -1254,7 +1279,7 @@ einem laufenden Förderband, ohne dessen Geschwindigkeit über einen Encoder zu
 erfassen. Die Basiskamera liefert die Grundlage für Erkennung,
 Geschwindigkeitsschätzung und Zielauswahl. Auch bei dicht aufeinander folgenden
 Klötzen entscheidet das System, welche Ziele noch sicher erreichbar sind
-([src-projekt-entwicklungsabnahme](../referenzen/quellen/src-projekt-entwicklungsabnahme.md)).
+[32].
 
 ### 7.2 Grenzen des aktuellen Aufbaus
 
@@ -1262,7 +1287,7 @@ Der Durchsatz wird vor allem durch Heben, Ablage, Öffnen und Rückfahrt
 begrenzt. Bei dichter Folge ist etwa ein Klotz je sieben Sekunden möglich. Die
 Bildverarbeitung arbeitet zudem an der Leistungsgrenze des Rechners. Im Betrieb müssen deshalb nicht benötigte Ansichten und
 parallele Leseprozesse nach Möglichkeit geschlossen bleiben
-([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md)).
+[22].
 
 Flache Klötze liegen nahe an der unteren Erkennungs- und Greifgrenze. Die
 Basiskamera steht außerdem auf einem beweglichen Gestell. Ihre Kalibrierung
@@ -1271,7 +1296,7 @@ das automatische Kalibrierverfahren aus Kapitel 4 zur Verfügung. Mit ihm
 wurden im Greifbetrieb alle Griffe ohne Einschränkung ausgeführt, und es
 wiederholte seine Kameralage über drei Tage mit einer Abweichung von weniger
 als einem Millimeter
-([src-projekt-kalibrierung](../referenzen/quellen/src-projekt-kalibrierung.md)).
+[29].
 
 ### 7.3 Weiterentwicklung
 
@@ -1289,5 +1314,39 @@ die Erkennung flacher Klötze verbessern und die Nachkalibrierung vereinfachen.
 Die Roboterkamera sollte erst dann wieder eingebunden werden, wenn sie nahe dem
 Greifer einen nachweisbaren Zusatznutzen liefert und die Rechenlast nicht
 erhöht
-([src-projekt-inbetriebnahme-optimierung](../referenzen/quellen/src-projekt-inbetriebnahme-optimierung.md),
-[src-projekt-kalibrierung](../referenzen/quellen/src-projekt-kalibrierung.md)).
+[22], [29].
+
+## Quellenverzeichnis
+
+[1] Hochschule Karlsruhe, *Aufgabenstellung Projektarbeit, Inverses „Tetris“ für Roboter. „On the Fly“-Picking bei verschiedenen Geschwindigkeiten des Förderbands*, SS 2026. [Online]. Verfügbar: `C:\Users\tobiu\OneDrive\Dokumente\04M_RKIM_Semester4\FuE_Robotertetris_SoSe26\26ss_BH_Roboter_InverseTetris_Projektarbeit.pdf`.
+[2] Intel, *Intel RealSense LiDAR Camera L515, Specifications*. [Online]. Verfügbar: <https://www.intel.com/content/www/us/en/products/sku/201775/intel-realsense-lidar-camera-l515/specifications.html>.
+[3] RealSense, *Intel RealSense LiDAR Camera L515 Datasheet*, Rev. 003. [Online]. Verfügbar: <https://realsenseai.com/wp-content/uploads/2025/06/Intel_RealSense_LiDAR_L515_Datasheet_Rev003.pdf>.
+[4] Intel, *Intel RealSense Depth Camera D435i, Specifications*. [Online]. Verfügbar: <https://www.intel.com/content/www/us/en/products/sku/190004/intel-realsense-depth-camera-d435i/specifications.html>.
+[5] RealSense, *Intel RealSense D400 Series Datasheet*, Sep. 2023. [Online]. Verfügbar: <https://www.realsenseai.com/wp-content/uploads/2023/10/Intel-RealSense-D400-Series-Datasheet-September-2023.pdf>.
+[6] Universal Robots, *UR10e Technical Specification*. [Online]. Verfügbar: <https://www.universal-robots.com/manuals/EN/TechSheets/UR10e_techsheet_pdf_online/UR10e_techsheet_en.pdf>.
+[7] Universal Robots, *Safety Functions Table, UR10e*. [Online]. Verfügbar: <https://www.universal-robots.com/manuals/EN/HTML/SW5_26/Content/prod-usr-man/complianceUR10e/safetyFunctionsAndinterfaces/safety_functions_table1.htm>.
+[8] Universal Robots, *Safety-related Functions and Interfaces, UR10e*. [Online]. Verfügbar: <https://www.universal-robots.com/manuals/EN/HTML/SW10_6/Content/prod-usr-man/hardware/arm_e-Series/UR10e/H_g5_sections/safetyFunctionsAndinterfaces/safety_related_functions_en_g5.htm>.
+[9] Robotiq, *Specifications, 2F-85 and 2F-140 Instruction Manual*. [Online]. Verfügbar: <https://assets.robotiq.com/website-assets/support_documents/document/online/2F-85_2F-140_TM_InstructionManual_HTML5_20190206.zip/2F-85_2F-140_TM_InstructionManual_HTML5/Content/6.%20Specifications.htm>.
+[10] Robotiq, *2F-85 & 2F-140 Instruction Manual*. [Online]. Verfügbar: <https://assets.robotiq.com/website-assets/support_documents/document/2F-85_2F-140_Instruction_Manual_CB-Series_PDF_20190206.pdf>.
+[11] Projektgruppe Robotertetris, „Versuchsaufbau, Förderband und Klötze“, interne Projektunterlagen und Arbeitsgespräch, 30.09.2026.
+[12] Projektgruppe Robotertetris, „Konfiguration der Basiskamera“, interne Projektdokumentation und Komponentenplan, Stand 28.09.2026.
+[13] Projektgruppe Robotertetris, „Einbindung der Roboterkamera“, Komponentenplan und Arbeitsgespräch, 30.09.2026.
+[14] Projektgruppe Robotertetris, „Bezugssysteme“, *Systemgraph*, *Architekturentscheidungen* und Projektdokumentation, Stand 28.09.2026.
+[15] Projektgruppe Robotertetris, „Greifgeometrie“, Messwerte am Versuchsaufbau, 15.09.2026.
+[16] Projektgruppe Robotertetris, „Arbeitsraum und Greifzone“, Arbeitsraummessung und Parameterkonfiguration, Stand 28.09.2026.
+[17] AICA, *Getting Started* und *Built on ROS 2*. [Online]. Verfügbar: <https://docs.aica.tech/>.
+[18] AICA, *Components*. [Online]. Verfügbar: <https://docs.aica.tech/docs/concepts/building-blocks/components/>.
+[19] Projektgruppe Robotertetris, „Softwareumgebung und Datenverträge“, Projektdokumentation und Systemgraph, Stand 28.09.2026.
+[20] AICA, *Signals*. [Online]. Verfügbar: <https://docs.aica.tech/docs/concepts/building-blocks/signals/>.
+[21] Projektgruppe Robotertetris, „Greifablauf“, Systemgraph, Architekturentscheidungen, Datenverträge und Implementierung des finalen Builds, Stand 28.09.2026.
+[22] Projektgruppe Robotertetris, „Inbetriebnahme und Optimierung“, Architekturentscheidungen, Systemgraph und Konfiguration des finalen Builds, Stand 28.09.2026.
+[23] MathWorks, *What Is Robot Hand-Eye Calibration?* [Online]. Verfügbar: <https://de.mathworks.com/help/vision/ug/what-is-robot-hand-eye-calibration.html>.
+[24] Autonomous Systems Lab, ETH Zürich, *Kalibr Calibration Targets*. [Online]. Verfügbar: <https://github.com/ethz-asl/kalibr/wiki/calibration-targets>.
+[25] J. Wang and E. Olson, “AprilTag 2: Efficient and robust fiducial detection,” in *IEEE/RSJ Int. Conf. Intelligent Robots and Systems*, 2016, pp. 4193–4198, doi: 10.1109/IROS.2016.7759617.
+[26] R. Y. Tsai and R. K. Lenz, “A new technique for fully autonomous and efficient 3D robotics hand/eye calibration,” *IEEE Trans. Robot. Autom.*, vol. 5, no. 3, pp. 345–358, 1989, doi: 10.1109/70.34770.
+[27] F. C. Park and B. J. Martin, “Robot sensor calibration: Solving AX = XB on the Euclidean group,” *IEEE Trans. Robot. Autom.*, vol. 10, no. 5, pp. 717–721, 1994, doi: 10.1109/70.326576.
+[28] OpenCV, *Camera Calibration and 3D Reconstruction*. [Online]. Verfügbar: <https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html>.
+[29] Projektgruppe Robotertetris, „Kalibrierung der Basiskamera“, Architekturentscheidungen und Messdaten, 25. und 28.09.2026.
+[30] OpenCV, *Create Calibration Pattern*. [Online]. Verfügbar: <https://docs.opencv.org/5.0/tutorials/calib3d/camera_calibration_pattern/camera_calibration_pattern.html>.
+[31] OpenCV, *Detection of ChArUco Boards*. [Online]. Verfügbar: <https://docs.opencv.org/4.12.0/df/d4a/tutorial_charuco_detection.html>.
+[32] Projektgruppe Robotertetris, „Entwicklungsabnahme“, Architekturentscheidungen, Greiflauf-Log der Basiskamera-Kalibrierung und Beobachtungen am Aufbau, 24.–28.09.2026.

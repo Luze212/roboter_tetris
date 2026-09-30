@@ -8,8 +8,10 @@ und [`../stilprofil_bachelorarbeit.md`](../stilprofil_bachelorarbeit.md) lesen.
 Bei paralleler Arbeit nur die vereinbarten Überschriften bearbeiten. Keine
 fremden Kapitel umformatieren, verschieben oder umschreiben.
 
-Im Text gelten ausschließlich stabile Kennungen wie `src-...`, `fig-...` und
-`tab-...`. Jede neue Kennung benötigt zuvor eine eigene Referenzdatei unter
-`../referenzen/`. Abbildungen und Tabellen müssen im Text vor ihrem Auftreten
-referenziert werden.
-
+Im Text gelten IEEE-Quellennummern wie `[12]`, fortlaufende
+Abbildungsnummern wie „Abbildung 3“ und Tabellennummern wie „Tabelle 2“.
+Die verbindliche Zuordnung zu den stabilen Kennungen steht in
+[`../nummerierungszuordnung.md`](../nummerierungszuordnung.md). Jede neue
+Quelle, Abbildung oder Tabelle benötigt weiterhin zuvor eine eigene
+Referenzdatei unter `../referenzen/`. Abbildungen und Tabellen müssen im Text
+vor ihrem Auftreten referenziert werden.

@@ -22,6 +22,8 @@ Dokument übernommen. Die Zuordnung wird während der Textabstimmung ergänzt.
 | `fig-aica-greifablauf` | `fig-aica-greifablauf.png` | Anhang, Verweis in 5.1 | AICA-Ausschnitt des Greifablaufs mit Robotiq Gripper, Object Follower und Signal Point Attractor. | Siehe Sammelverweis in 5.1. |
 | `fig-aica-bewegungsregelung` | `fig-aica-bewegungsregelung.png` | Anhang, Verweis in 5.1 | AICA-Ausschnitt der Bewegungsregelung mit Priority Handler, Object Follower, Signal Point Attractor und Hardware Interface mit IK Velocity Controller. | Siehe Sammelverweis in 5.1. |
 | `fig-aica-vectoring-parameter` | `fig-aica-vectoring-parameter.png` | Direkt in 5.1 | Einstellbare Taktrate und weitere Parameter der Komponente Vectoring im AICA-Interface. | „Abbildung `fig-aica-vectoring-parameter` zeigt dies beispielhaft für den Parameter `Rate` von Vectoring." |
+| `fig-interface-streamer-betrieb` | `fig-interface-streamer-betrieb.png` | Direkt in 3.7 | Interface Streamer im Betrieb mit Debug-Bild der Basiskamera, Follower-Zustand, Ziel, Regelabweichungen und Trackübersicht. | „Abbildung `fig-interface-streamer-betrieb` zeigt die Anzeige während eines Greifvorgangs.“ |
+| `fig-basecam-erkennung-roi` | `fig-basecam-erkennung-roi.png` | Direkt in 3.7 | Debug-Bild der Basiskamera mit den erkannten Objekten ID 10 und ID 11, deren Farben und dem für die Detektion verwendeten Bildausschnitt (ROI). | „Das Debug-Bild der Basiskamera verdeutlicht Abbildung `fig-basecam-erkennung-roi`.“ |
 
 ## Arbeitsstände, nicht zur Übernahme in Word vorgesehen
 

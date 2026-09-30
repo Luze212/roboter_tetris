@@ -45,16 +45,24 @@ Details stehen in [`arbeitsorganisation.md`](arbeitsorganisation.md).
 
 ## Referenzen
 
-Im Markdown-Entwurf werden ausschließlich stabile Kennungen verwendet:
+Der abgestimmte Markdown-Bericht verwendet die Endfassung der Referenzierung:
+
+- Quellen als IEEE-Nachweise in eckigen Klammern, zum Beispiel `[12]`
+- Abbildungen als fortlaufende „Abbildung 3“
+- Tabellen als fortlaufende „Tabelle 2“
+
+Die Zuordnung zu den weiterhin erforderlichen stabilen Kennungen steht in
+[`nummerierungszuordnung.md`](nummerierungszuordnung.md). Diese Kennungen
+bleiben für Dateien und Metadaten erforderlich:
 
 - Quellen: `src-<herausgeber>-<kurzthema>`
 - Abbildungen: `fig-<bereich>-<inhalt>`
 - Tabellen: `tab-<bereich>-<inhalt>`
 
 Für jedes neue Element wird eine Einzeldatei unter `referenzen/` angelegt. Die
-Vorlagen liegen in den jeweiligen Unterordnern. Es werden keine Q-, A- oder
-T-Nummern vergeben. Die endgültigen Word-Nummern entstehen erst bei der
-zentralen Integration.
+Vorlagen liegen in den jeweiligen Unterordnern. Bei einer Ergänzung wird die
+nächste freie fortlaufende Nummer in `nummerierungszuordnung.md`, im
+Quellenverzeichnis und an allen Verweisen des Berichtstexts zugleich ergänzt.
 
 ## Ablage
 
@@ -64,3 +72,4 @@ zentralen Integration.
 - Quellen-, Abbildungs- und Tabellenmetadaten: `referenzen/`
 - Zentrale historische Zuordnung: `quellenregister.md` und
   `abbildungen/abbildungsplan.md`
+- Nummerierungszuordnung für die Endfassung: `nummerierungszuordnung.md`

@@ -66,11 +66,12 @@ passenden Stellen ergänzt. Für den Einstieg bei paralleler Arbeit zuerst
   fortlaufenden Quellennummern entstehen.
 - Bei der zentralen Integration wird die Quelle in
   [`quellenregister.md`](quellenregister.md) aufgenommen. Der Eintrag enthält
-  Abschnitt, Aussage, vollständige Quelle und Link. Erst dann wird die
-  endgültige Kennung für den Word-Export vergeben.
-- Die fachliche Kennung steht im Markdown-Entwurf direkt an der belegten
-  Aussage. Beim späteren Word-Export wird sie in den endgültigen Zitierstil
-  überführt.
+  Abschnitt, Aussage, vollständige Quelle und Link. Die nächste IEEE-Nummer
+  wird gleichzeitig in [`nummerierungszuordnung.md`](nummerierungszuordnung.md)
+  und im Quellenverzeichnis des Berichtstexts ergänzt.
+- Der Markdown-Entwurf verwendet IEEE-Nachweise in eckigen Klammern, zum
+  Beispiel `[12]`. Die fachliche Kennung bleibt nur in Metadaten und der
+  Nummerierungszuordnung erhalten.
 
 ### Stilreferenz Bachelorarbeit Wertstromoptimierung
 
@@ -92,9 +93,9 @@ jeder neuen Berichtsfassung zu beachten.
 - Abbildungen, Tabellen und Gleichungen werden im Text angekündigt und danach
   inhaltlich ausgewertet. Sie stehen nicht ohne Einordnung im Bericht.
 - Vor jeder Abbildung, Tabelle oder Gleichung steht im Fließtext mindestens ein
-  kurzer Verweis, zum Beispiel „Abbildung `fig-systemaufbau-draufsicht` zeigt
-  …“ oder „Die Ergebnisse sind in Tabelle `tab-versuche-greifergebnisse`
-  zusammengefasst“. Der Verweis nennt, welche Aussage das Element unterstützt.
+  kurzer Verweis, zum Beispiel „Abbildung 3 zeigt …“ oder „Die Ergebnisse sind
+  in Tabelle 5 zusammengefasst“. Der Verweis nennt, welche Aussage das Element
+  unterstützt.
   Ein Element darf nicht ohne vorherigen Textverweis erscheinen.
 - Für jede Abbildung wird am vorgesehenen Einfügepunkt im Berichtstext die
   endgültig geplante Bildunterschrift gespeichert. Sie steht im
@@ -102,8 +103,8 @@ jeder neuen Berichtsfassung zu beachten.
   Word-Export unverändert verwendet. Der Wortlaut muss mit dem
   Abbildungsregister übereinstimmen.
 - Besteht eine Abbildung aus Teilbildern, werden die Teilbilder eindeutig über
-  eigene stabile Kennungen referenziert. Die endgültige Nummerierung wird erst
-  beim Word-Export vergeben.
+  eigene stabile Kennungen in den Metadaten referenziert. Die im Berichtstext
+  verwendete Nummer wird sofort in `nummerierungszuordnung.md` ergänzt.
 - Ursache und Wirkung werden direkt benannt, zum Beispiel mit Formulierungen
   wie „Daraus ergibt sich“, „Dies führt zu“ oder „Auf dieser Grundlage“.
 - Belegte Aussagen erhalten die Quelle unmittelbar im Satz oder Absatz.
@@ -264,6 +265,13 @@ Seine Erkenntnisse und die Regeln für ihre Verwendung stehen in
 #### 3.5.2 IK Velocity Controller und Geschwindigkeitsgrenzen
 
 ### 3.6 Greiferansteuerung und Rückmeldungen
+
+### 3.7 Interface Streamer und Laufzeitdiagnose
+
+Darstellung des Systemzustands für Inbetriebnahme und Fehlersuche. Die
+Anzeige visualisiert das Debug-Bild der Basiskamera, den Follower-Status,
+Zielinformationen und bekannte Objekte. Sie ist eine Diagnosekomponente ohne
+Rückwirkung auf den Regelpfad.
 
 ## 4. Kalibrierung
 
