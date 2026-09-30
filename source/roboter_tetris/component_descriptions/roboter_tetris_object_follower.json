@@ -2,7 +2,7 @@
   "name": "Object Follower",
   "description": {
     "brief": "Führt den Flansch über den fahrenden Klotz, greift ihn mitfahrend und legt ihn in der Kiste ab.",
-    "details": "Gibt eine Zielpose des Flansches (cartesian_pose, world) an den attractor-Eingang des Signal Point Attractors. Start im Zustand ABBRUCH: senkrecht hoch auf die Freihöhe, dann WARTEN in der Beobachtungspose. Mit einem Ziel aus dem priority_handler ANFAHREN - auf Beobachtungshöhe zu Vorhersage + v * lead_time_s, stromaufwärts auf zone_upstream begrenzt -, sobald der Klotz in der Zone ist FOLGEN. Hält die Abweichung stable_cycles lang die vier Toleranzen und liegt der Klotz vor der Greifebene: ABSENKEN (Gierwinkel und Kamerakorrektur eingefroren), GREIFEN (mitfahren, Greifer schließt), HEBEN (mit der letzten Bandgeschwindigkeit, dann auf die Freihöhe), ABLEGEN, LOESEN. Die Roboterkamera wirkt als gefilterte Korrektur auf die Vorhersage der Basiskamera, je Bandachse gewichtet und über w_ramp_s ein- und ausgeblendet; Gewichte 0 heißt Basiskamera allein. Bis der Klotz gehalten wird, brechen ein zurückgezogenes oder gewechseltes Ziel, ein stillstehender Zielsatz, Zeitgrenzen, Sprünge und der Arbeitsraum den Versuch ab; die Greifebene vor dem Absenken mit outcome 3. Mit Klotz im Greifer wird nichts fallen gelassen: auch ein Abbruch endet an der Ablagepose. Jeder Versuch endet mit picked_id."
+    "details": "Gibt eine Zielpose des Flansches (cartesian_pose, world) an den attractor-Eingang des Signal Point Attractors. Start im Zustand ABBRUCH: senkrecht hoch auf die Freihöhe, dann WARTEN in der Beobachtungspose. Mit einem Ziel aus dem priority_handler ANFAHREN - auf Beobachtungshöhe zu Vorhersage + v * lead_time_s, stromaufwärts auf zone_upstream begrenzt -, sobald der Klotz in der Zone ist FOLGEN. Hält die Abweichung stable_cycles lang die vier Toleranzen und liegt der Klotz vor der Greifebene: ABSENKEN (Gierwinkel eingefroren), GREIFEN (mitfahren, Greifer schließt), HEBEN (mit der letzten Bandgeschwindigkeit, dann auf die Freihöhe), ABLEGEN, LOESEN. Die Position kommt allein aus der Basiskamera; die Roboterkamera ist seit 24.09.2026 nicht mehr eingebunden (Nachtrag 13 / L22). Bis der Klotz gehalten wird, brechen ein zurückgezogenes oder gewechseltes Ziel, ein stillstehender Zielsatz, Zeitgrenzen, Sprünge und der Arbeitsraum den Versuch ab; die Greifebene vor dem Absenken mit outcome 3. Mit Klotz im Greifer wird nichts fallen gelassen: auch ein Abbruch endet an der Ablagepose. Jeder Versuch endet mit picked_id."
   },
   "registration": "roboter_tetris::ObjectFollower",
   "inherits": "modulo_components::LifecycleComponent",
@@ -17,12 +17,6 @@
       "display_name": "Ziel",
       "description": "S4 aus dem priority_handler: feste Länge 17, u. a. Position, Höhe (10), gepoolte Bandgeschwindigkeit (13/14), zone_upstream (12), Greifebene (15), Orientierungsgüte (16).",
       "signal_name": "target",
-      "signal_type": "double_array"
-    },
-    {
-      "display_name": "Roboterkamera",
-      "description": "S2 aus robot_cam: [t, valid, x, y, z_band, orientation] im Kameraframe. Wird höhenkorrigiert und über Ringpuffer und Hand-Auge-Kalibrierung nach world gerechnet.",
-      "signal_name": "object_position",
       "signal_type": "double_array"
     },
     {
@@ -59,7 +53,7 @@
     },
     {
       "display_name": "Follower-Status",
-      "description": "S8: [t, state, target_id, err_laengs, err_quer, err_z, w_wirksam]. state 0 WARTEN ... 8 ABBRUCH. err_laengs positiv = Flansch voraus - im eingeschwungenen FOLGEN das Maß für lead_time_s. w_wirksam: Anteil der eingestellten Kameragewichte, der gerade wirkt (0 = nur Basiskamera).",
+      "description": "S8: [t, state, target_id, err_laengs, err_quer, err_z]. state 0 WARTEN ... 8 ABBRUCH. err_laengs positiv = Flansch voraus - im eingeschwungenen FOLGEN das Maß für lead_time_s. (Bis 24.09.2026 folgte w_wirksam als 7. Feld, L22.)",
       "signal_name": "follower_status",
       "signal_type": "double_array"
     }
@@ -119,7 +113,7 @@
       "description": "Arbeitsraum des Flansches in world (m), B10 - nicht die Greifzone. Default = Safety/workspace_bounds.json, am Aufbau festgelegt (Nachtrag 13 / L14). Pflicht: leer -> configure scheitert.",
       "parameter_name": "ws_z_min",
       "parameter_type": "double",
-      "default_value": "0.3086",
+      "default_value": "0.2986",
       "dynamic": false
     },
     {
@@ -180,18 +174,18 @@
     },
     {
       "display_name": "3 Folgen: Deckel Vorhersage (s) [max_extrapolation_s]",
-      "description": "Deckel der Vorhersage (s), Gate-Prüfung 3 (D14). Muss über dem Alter von S4 vor der nächsten Messung liegen - gemessen bis ~0,5 s (Nachtrag 13 / L2). Vorher 0,2: die Vorhersage stand still, der Flansch lief unbemerkt hinter dem Klotz her.",
+      "description": "Deckel der Vorhersage (s), Gate-Prüfung 3 (D14). Muss über dem Alter von S4 vor der nächsten Messung liegen - gemessen bis 0,93 s (Nachtrag 13 / L23). Darunter bleibt die Vorhersage stehen, der Längsfehler wird zum Sägezahn und das Absenken bricht ab. Vorher 0,2 (L1), dann 0,6 (L10).",
       "parameter_name": "max_extrapolation_s",
       "parameter_type": "double",
-      "default_value": "0.6",
+      "default_value": "1.0",
       "dynamic": true
     },
     {
       "display_name": "3 Folgen: Ziel-Timeout (s) [target_timeout_s]",
-      "description": "S4-Zeitstempel steht so lange (s) still -> Abbruch, Gate-Prüfung 2. Über dem Abstand zweier Messungen der Basiskamera (bis ~0,5 s, Nachtrag 13 / L2).",
+      "description": "S4-Zeitstempel steht so lange (s) still -> Abbruch, Gate-Prüfung 2. Muss über max_extrapolation_s liegen; mit 1,0 brach einmal ein schon schließender Griff ab (Nachtrag 13 / L23).",
       "parameter_name": "target_timeout_s",
       "parameter_type": "double",
-      "default_value": "1.0",
+      "default_value": "1.5",
       "dynamic": true
     },
     {
@@ -228,10 +222,10 @@
     },
     {
       "display_name": "4 Absenken und Greifen: Sinkgeschwindigkeit (m/s) [descend_speed_mps]",
-      "description": "Sinkgeschwindigkeit (m/s). Gekoppelt an t_descend_s des priority_handler (Nachtrag 10 / J2).",
+      "description": "Sinkgeschwindigkeit (m/s). Gekoppelt an t_descend_s des priority_handler, 0,7 s (Nachtrag 10 / J2; 0,35 seit L29, vorher 0,25).",
       "parameter_name": "descend_speed_mps",
       "parameter_type": "double",
-      "default_value": "0.15",
+      "default_value": "0.35",
       "dynamic": true
     },
     {
@@ -276,10 +270,10 @@
     },
     {
       "display_name": "4 Absenken und Greifen: Greifhöhe min über Band (m) [min_grip_height_m]",
-      "description": "Untere Grenze der Greifhöhe über dem Band (m), Mitte der Auflage. 0,021: Flansch 0,3096 m liegt über der Arbeitsraum-Untergrenze 0,3086 (geschlossene Backenspitze 10 mm über dem Band, Nachtrag 13 / L14). Die Auflage reicht von 11 bis 31 mm, ein 30-mm-Klotz wird noch gefasst.",
+      "description": "Untere Grenze der Greifhöhe über dem Band (m), Mitte der Auflage. 0,011: geschlossene Backenspitze 1 mm über dem Band, Flansch 0,2996 m liegt 1 mm über der Arbeitsraum-Untergrenze 0,2986 (Nachtrag 13 / L28). Klötze bis 22 mm an der Untergrenze, darüber auf halber Höhe. Nur zusammen mit ws_z_min senken, sonst bricht das Gate jeden flachen Griff ab.",
       "parameter_name": "min_grip_height_m",
       "parameter_type": "double",
-      "default_value": "0.021",
+      "default_value": "0.011",
       "dynamic": true
     },
     {
@@ -356,18 +350,26 @@
     },
     {
       "display_name": "6 Orientierung: Klotzwinkel nutzen [use_block_orientation]",
-      "description": "Modus 2: entlang des Klotzwinkels greifen statt entlang der geschätzten Bandrichtung (Modus 1).",
+      "description": "Modus 2: im Winkel des Klotzes greifen statt entlang der geschätzten Bandrichtung (Modus 1) — höchstens max_yaw_deviation_deg aus der Grundstellung. An seit dem finalen Build (Nachtrag 13 / L26); aus = Modus 1.",
       "parameter_name": "use_block_orientation",
       "parameter_type": "bool",
-      "default_value": "false",
+      "default_value": "true",
       "dynamic": true
     },
     {
       "display_name": "6 Orientierung: Mindestgüte Winkel [orientation_quality_min]",
-      "description": "Mindestgüte (S4 Feld 16, 0...1) für den Klotzwinkel (D11).",
+      "description": "Mindestgüte (S4 Feld 16, 0...1) für den Klotzwinkel (D11). 0,4: kleine hochkant stehende Klötze blieben unter 0,7 (Nachtrag 13 / L29).",
       "parameter_name": "orientation_quality_min",
       "parameter_type": "double",
-      "default_value": "0.7",
+      "default_value": "0.4",
+      "dynamic": true
+    },
+    {
+      "display_name": "6 Orientierung: Drehung max. aus Grundstellung (Grad) [max_yaw_deviation_deg]",
+      "description": "Modus 2: größte Drehung aus der Grundstellung (Bandrichtung, wie Modus 1) in Grad, 45 bis unter 90. Ein Rechteck wird über die nähere Seite gegriffen, also höchstens 45°; bis zu diesem Wert bleibt die zuletzt gewählte Seite, damit ein Klotz bei 45° den Greifer nicht hin und her kippen lässt (Nachtrag 13 / L25).",
+      "parameter_name": "max_yaw_deviation_deg",
+      "parameter_type": "double",
+      "default_value": "50.0",
       "dynamic": true
     },
     {
@@ -379,111 +381,7 @@
       "dynamic": true
     },
     {
-      "display_name": "7 Roboterkamera: Gewicht längs [weight_along]",
-      "description": "Gewicht der Roboterkamera entlang des Bandes, 0...1. 0 = nur Basiskamera (Nachtrag 6 / Z10).",
-      "parameter_name": "weight_along",
-      "parameter_type": "double",
-      "default_value": "0.0",
-      "dynamic": true
-    },
-    {
-      "display_name": "7 Roboterkamera: Gewicht quer [weight_across]",
-      "description": "Gewicht der Roboterkamera quer zum Band, 0...1.",
-      "parameter_name": "weight_across",
-      "parameter_type": "double",
-      "default_value": "0.0",
-      "dynamic": true
-    },
-    {
-      "display_name": "7 Roboterkamera: Einblendzeit (s) [w_ramp_s]",
-      "description": "Ein- und Ausblenden der Gewichte (s) (D8).",
-      "parameter_name": "w_ramp_s",
-      "parameter_type": "double",
-      "default_value": "0.2",
-      "dynamic": true
-    },
-    {
-      "display_name": "7 Roboterkamera: Filterfenster (Messungen) [correction_filter_window]",
-      "description": "Gleitender Mittelwert über so viele angenommene Korrekturen.",
-      "parameter_name": "correction_filter_window",
-      "parameter_type": "int",
-      "default_value": "10",
-      "dynamic": true
-    },
-    {
-      "display_name": "7 Roboterkamera: Korrektur max (m) [max_correction_m]",
-      "description": "Größere Korrektur (m) gilt als anderer Klotz im Bild - verwerfen, w -> 0 (R4, D16).",
-      "parameter_name": "max_correction_m",
-      "parameter_type": "double",
-      "default_value": "0.05",
-      "dynamic": true
-    },
-    {
-      "display_name": "7 Roboterkamera: Messung max Alter (s) [robot_cam_max_age_s]",
-      "description": "Ältere Messung (s) -> Rückfall auf w = 0 (D6).",
-      "parameter_name": "robot_cam_max_age_s",
-      "parameter_type": "double",
-      "default_value": "0.3",
-      "dynamic": true
-    },
-    {
-      "display_name": "7 Roboterkamera: Absenken nur mit Kamera [require_robot_cam_for_grasp]",
-      "description": "Absenken nur mit voll eingeblendeter Roboterkamera (D9/D10). Vorerst aus (Nachtrag 6 / Z10).",
-      "parameter_name": "require_robot_cam_for_grasp",
-      "parameter_type": "bool",
-      "default_value": "false",
-      "dynamic": true
-    },
-    {
-      "display_name": "8 Hand-Auge: x (m) [handeye_x]",
-      "description": "Hand-Auge Flansch -> Kamera, x (m). Neu eingemessen 23.09.2026 aus fünf Ansichten eines angetasteten Klotzes, Rest ≤ 4,4 mm (Nachtrag 13 / L11). Die Werte der Vorgängergruppe (C1: 0,1087 / -0,03436 / -0,05987) lagen in z 13 cm daneben.",
-      "parameter_name": "handeye_x",
-      "parameter_type": "double",
-      "default_value": "0.0783",
-      "dynamic": true
-    },
-    {
-      "display_name": "8 Hand-Auge: y (m) [handeye_y]",
-      "description": "Hand-Auge Flansch -> Kamera, y (m). Eingemessen 23.09.2026 (Nachtrag 13 / L11).",
-      "parameter_name": "handeye_y",
-      "parameter_type": "double",
-      "default_value": "-0.0326",
-      "dynamic": true
-    },
-    {
-      "display_name": "8 Hand-Auge: z (m) [handeye_z]",
-      "description": "Hand-Auge Flansch -> Kamera, z (m). Eingemessen 23.09.2026 (Nachtrag 13 / L11).",
-      "parameter_name": "handeye_z",
-      "parameter_type": "double",
-      "default_value": "0.0720",
-      "dynamic": true
-    },
-    {
-      "display_name": "8 Hand-Auge: Roll (Grad) [handeye_roll_deg]",
-      "description": "Hand-Auge, Rollwinkel (Grad), R = Rz * Ry * Rx. Eingemessen 23.09.2026 (Nachtrag 13 / L11).",
-      "parameter_name": "handeye_roll_deg",
-      "parameter_type": "double",
-      "default_value": "4.26",
-      "dynamic": true
-    },
-    {
-      "display_name": "8 Hand-Auge: Nick (Grad) [handeye_pitch_deg]",
-      "description": "Hand-Auge, Nickwinkel (Grad). Eingemessen 23.09.2026 (Nachtrag 13 / L11).",
-      "parameter_name": "handeye_pitch_deg",
-      "parameter_type": "double",
-      "default_value": "0.08",
-      "dynamic": true
-    },
-    {
-      "display_name": "8 Hand-Auge: Gier (Grad) [handeye_yaw_deg]",
-      "description": "Hand-Auge, Gierwinkel (Grad). Eingemessen 23.09.2026 (Nachtrag 13 / L11).",
-      "parameter_name": "handeye_yaw_deg",
-      "parameter_type": "double",
-      "default_value": "90.95",
-      "dynamic": true
-    },
-    {
-      "display_name": "9 Aufbau: Bandhöhe (m) [belt_surface_z_m]",
+      "display_name": "7 Aufbau: Bandhöhe (m) [belt_surface_z_m]",
       "description": "Höhe der Bandoberfläche in world (m), gemessen (B17).",
       "parameter_name": "belt_surface_z_m",
       "parameter_type": "double",
@@ -491,7 +389,7 @@
       "dynamic": true
     },
     {
-      "display_name": "9 Aufbau: Flansch zu Griffpunkt (m) [flange_to_grip_point_m]",
+      "display_name": "7 Aufbau: Flansch zu Griffpunkt (m) [flange_to_grip_point_m]",
       "description": "Flansch -> Griffpunkt (m), gemessen 0,235 - nicht der TCP der UR-Steuerung (215 mm) (Nachtrag 6 / Z7).",
       "parameter_name": "flange_to_grip_point_m",
       "parameter_type": "double",
@@ -499,7 +397,7 @@
       "dynamic": true
     },
     {
-      "display_name": "9 Aufbau: Flanschpose max Alter (s) [robot_state_max_age_s]",
+      "display_name": "7 Aufbau: Flanschpose max Alter (s) [robot_state_max_age_s]",
       "description": "Ist der letzte robot_state älter (s), gilt die Flanschpose als unbekannt; keine neue Zielpose.",
       "parameter_name": "robot_state_max_age_s",
       "parameter_type": "double",

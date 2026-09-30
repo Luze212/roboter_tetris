@@ -31,9 +31,12 @@ FLANGE = (0.80, -0.60)          # waiting above the zone
 # A fixed test zone, independent of the placeholder defaults:
 # y -1.0 ... -0.5  ->  s = -y from 0.5 to 1.0.
 # Grasp plane: 1.0 - 0.1 * (1.0 + 1.0 + 0.5) * 1.2 = 0.70, i.e. y = -0.70.
-# attractor_v_max_mps pinned: the reachability numbers below are worked out for 0.25.
+# attractor_v_max_mps, t_settle_s, t_grasp_s, the factor and the height limit
+# pinned: the numbers below are worked out for 0.25 m/s, without the follower's
+# settling (see the L23 test), factor 1.5 and 30 mm (the defaults before L24).
 P = SelectorParams(zone_x_min=0.6, zone_x_max=1.0, zone_y_min=-1.0, zone_y_max=-0.5,
-                   t_descend_s=1.0, attractor_v_max_mps=0.25)
+                   t_descend_s=1.0, t_grasp_s=1.0, attractor_v_max_mps=0.25,
+                   t_settle_s=0.0, reach_safety_factor=1.5, min_graspable_height_m=0.030)
 
 
 def _track(tid, y, x=0.80, status=TRACK_FINAL, length=0.05, width=0.05,
@@ -113,6 +116,23 @@ def test_reachability_at_the_boundary():
         assert (selector.locked_id == 1.0) == expected
 
 
+def test_settling_makes_the_reachability_pessimistic():
+    """24.09.2026 (Nachtrag 13 / L23): without the follower's settling a block
+    with little time left looked reachable and was lost at the grasp plane.
+    t_settle_s adds to the approach time; the factor applies to the sum."""
+    frame = belt_frame(P, _msg([]))
+    track = _track(1, y=-0.55)
+    flange = (0.80, -0.60)
+    bare = t_needed(P, frame, track, flange)
+    settled = replace(P, t_settle_s=1.2)
+    assert abs(t_needed(settled, frame, track, flange) - (bare + 1.2)) < 1e-12
+    # A block the optimistic check accepted is rejected with the settling.
+    available = t_available(frame, track)
+    assert available > P.reach_safety_factor * bare
+    assert available < settled.reach_safety_factor * (bare + 1.2)
+    assert SelectorParams().t_settle_s == 0.4          # measured 0.23-0.33 s (L24)
+
+
 def test_distance_is_measured_to_where_anfahren_waits():
     """Upstream of the zone the robot waits at zone_upstream (Nachtrag 7 / H1)."""
     params = P
@@ -150,6 +170,17 @@ def test_too_flat_block_is_never_chosen():
     selector.step(_msg([_track(1, y=0.0, height=0.029)]), FLANGE)
     assert selector.locked_id is None
     selector.step(_msg([_track(2, y=0.0, height=0.030)]), FLANGE)
+    assert selector.locked_id == 2.0
+
+
+def test_flat_25mm_block_is_graspable_with_the_defaults():
+    """Nachtrag 13 / L24: a flat 25-mm block reads about 24 mm; the follower
+    grips it at its lower limit, closed jaws 11 mm above the belt."""
+    assert SelectorParams().min_graspable_height_m == 0.020
+    selector = TargetSelector(replace(P, min_graspable_height_m=0.020))
+    selector.step(_msg([_track(1, y=0.0, height=0.019)]), FLANGE)
+    assert selector.locked_id is None
+    selector.step(_msg([_track(2, y=0.0, height=0.024)]), FLANGE)
     assert selector.locked_id == 2.0
 
 
@@ -317,7 +348,7 @@ def test_zone_empty_is_about_space_not_status():
 # -- End to end: synthetic belt -> vectoring -> selection -----------------------------
 
 def test_synthetic_run_picks_1_and_2_and_never_the_small_cube():
-    """Blocks 1 (50x50x100) and 2 (76x50x50) are graspable, 3 (25 mm cube) is
+    """Blocks 1 (50x50x100) and 2 (76x50x50) are graspable, 3 (25x25x15 mm) is
     not. A stand-in follower 'grasps' each target 2 s after it was chosen."""
     belt = fake_objects.FakeBelt(fake_objects.default_blocks(),
                                  noise_sigma_m=0.0005, seed=3)

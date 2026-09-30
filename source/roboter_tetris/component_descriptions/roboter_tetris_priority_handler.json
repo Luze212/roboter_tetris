@@ -92,10 +92,10 @@
     },
     {
       "display_name": "Anfahrgeschwindigkeit max (m/s) [attractor_v_max_mps]",
-      "description": "Der kleinere Wert aus max_linear_velocity von Attractor und IK-Controller. Bindend ist meist der IK-Controller; für das laufende Band 0,30 (Einrichtung §2, Nachtrag 13 / L18). Bei gedrosseltem IK-Controller hier denselben kleineren Wert eintragen.",
+      "description": "Der kleinere Wert aus max_linear_velocity von Attractor und IK-Controller. Bindend ist meist der IK-Controller; für das laufende Band 0,85 (Einrichtung §2, Nachtrag 13 / L29). Bei gedrosseltem IK-Controller hier denselben kleineren Wert eintragen.",
       "parameter_name": "attractor_v_max_mps",
       "parameter_type": "double",
-      "default_value": "0.30",
+      "default_value": "0.85",
       "dynamic": true
     },
     {
@@ -107,19 +107,27 @@
       "dynamic": true
     },
     {
+      "display_name": "Einschwingzeit Follower (s) [t_settle_s]",
+      "description": "Einschwingen des Followers vom Ankommen bis zur Greif-Freigabe (Toleranzen stable_cycles lang gehalten), zusätzlich zu 3/K. Ohne sie wurden Klötze mit 1,7 s Restzeit gewählt und an der Greifebene verloren (L23). Gemessen 0,23-0,33 s; mit 0,4 trifft die Rechnung den Rückweg von der Ablagepose (2,6-2,7 s, Nachtrag 13 / L24).",
+      "parameter_name": "t_settle_s",
+      "parameter_type": "double",
+      "default_value": "0.4",
+      "dynamic": true
+    },
+    {
       "display_name": "Absenkzeit (s) [t_descend_s]",
-      "description": "Dauer des Absenkens von der Folgehöhe auf die Greifhöhe: (observe_z - Greifhöhe) / descend_speed_mps des object_follower plus Einschwingen - mit 0,45 m, 0,31...0,34 m und 0,15 m/s rund 1,2 s (am Roboter ~1,0 s gemessen, Nachtrag 13 / L18). Geht in die Lage der Greifebene ein. Gedrosselt mit langsamerem Absenken entsprechend höher.",
+      "description": "Dauer des Absenkens von der Folgehöhe auf die Greifhöhe: (observe_z - Greifhöhe) / descend_speed_mps des object_follower plus Einschwingen - mit 0,45 m, 0,30...0,34 m und 0,35 m/s rund 0,7 s (Nachtrag 13 / L29; bei 0,25 m/s 0,9 s, gemessen 0,78-0,93 s, L24). Geht in die Lage der Greifebene ein. Gedrosselt mit langsamerem Absenken entsprechend höher.",
       "parameter_name": "t_descend_s",
       "parameter_type": "double",
-      "default_value": "1.2",
+      "default_value": "0.7",
       "dynamic": true
     },
     {
       "display_name": "Greifzeit (s) [t_grasp_s]",
-      "description": "Dauer des Schließens bis motion_done. (D22)",
+      "description": "Dauer des Schließens bis motion_done - gemessen 0,63-0,83 s (D22, Nachtrag 13 / L24).",
       "parameter_name": "t_grasp_s",
       "parameter_type": "double",
-      "default_value": "1.0",
+      "default_value": "0.8",
       "dynamic": true
     },
     {
@@ -140,18 +148,18 @@
     },
     {
       "display_name": "Sicherheitsfaktor Erreichbarkeit [reach_safety_factor]",
-      "description": "Erreichbar heißt: Zeit bis zur Greifebene > Faktor × Anfahrzeit. Wirkt nur auf das Anfahren.",
+      "description": "Erreichbar heißt: Zeit bis zur Greifebene > Faktor × (Anfahrzeit + Einschwingen 3/K + t_settle_s). Wirkt nur auf das Anfahren. Unter 1,0 werden Klötze gewählt, die an der Greifebene verloren gehen (Faktor 0,6: 3 von 11 zu spät, Nachtrag 13 / L24).",
       "parameter_name": "reach_safety_factor",
       "parameter_type": "double",
-      "default_value": "1.5",
+      "default_value": "1.0",
       "dynamic": true
     },
     {
       "display_name": "Mindesthöhe (m) [min_graspable_height_m]",
-      "description": "Flachere Klötze werden nicht gewählt - doppelte min_grip_height_m des Followers. (B15, vorläufig mit 5 mm Luft)",
+      "description": "Flachere Klötze werden nicht gewählt. 0,02: flache 25-mm-Klötze (gemessen ~24 mm) greift der Follower auf halber Höhe, knapp über seiner Untergrenze min_grip_height_m (B15, Nachtrag 13 / L24, L28).",
       "parameter_name": "min_graspable_height_m",
       "parameter_type": "double",
-      "default_value": "0.03",
+      "default_value": "0.02",
       "dynamic": true
     },
     {

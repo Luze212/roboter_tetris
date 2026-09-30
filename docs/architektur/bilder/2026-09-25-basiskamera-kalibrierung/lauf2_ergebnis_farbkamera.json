@@ -1,0 +1,110 @@
+{
+  "schema": "roboter_tetris.base_cam_extrinsics",
+  "version": 1,
+  "created": "2026-09-25T09:16:19.791186+00:00",
+  "method": "stufe1",
+  "frame": {
+    "parent": "world",
+    "child": "base camera, color optical frame"
+  },
+  "convention": "R = Rz(yaw) @ Ry(pitch) @ Rx(roll); m, deg",
+  "cal": {
+    "cal_x": -0.769227,
+    "cal_y": 0.809084,
+    "cal_z": 0.9173,
+    "cal_roll": -179.464256,
+    "cal_pitch": -0.026594,
+    "cal_yaw": 179.830777
+  },
+  "matrix": [
+    [
+      -0.999995531,
+      0.002949016,
+      -0.000491742,
+      -0.769226789
+    ],
+    [
+      0.002953485,
+      0.999951936,
+      -0.009348952,
+      0.809084167
+    ],
+    [
+      0.000464148,
+      -0.009350362,
+      -0.999956177,
+      0.917300169
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "quality": {
+    "posen": 40,
+    "posen_ausgelassen": 0,
+    "punkte": 6485,
+    "punkte_verworfen": 3,
+    "bildfehler_px": 0.38,
+    "pruefposen_px": 0.363,
+    "pruefposen_mm_mittel": 0.55,
+    "pruefposen_mm_max": 1.15,
+    "rutschen_mm": 0.17,
+    "rutschen_grad": 0.133,
+    "streuung_position_mm": 30.633,
+    "streuung_drehung_grad": 0.0033,
+    "gegen_vorher_band_mm": 9.28,
+    "gegen_vorher_grad": 1.178,
+    "referenzmarken": 0,
+    "kamerahoehe_aus_tiefe": true,
+    "ebene_neigung_grad": 1.129,
+    "ebene_hoehe_mm": -0.02,
+    "ebene_rest_mm": 1.52,
+    "startverfahren": "bisherige Kalibrierung",
+    "intrinsik": {
+      "K": [
+        [
+          897.8309,
+          0.0,
+          647.0538
+        ],
+        [
+          0.0,
+          897.5387,
+          362.3055
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "D": [
+        0.129869,
+        -0.440544,
+        -0.000885,
+        -0.00064,
+        0.402135
+      ],
+      "bild": [
+        1280,
+        720
+      ]
+    }
+  },
+  "references": {
+    "size_m": 0.0,
+    "corners_world": {}
+  },
+  "grid": {
+    "rows": 7,
+    "cols": 11,
+    "tag_size_m": 0.02,
+    "tag_spacing_m": 0.006,
+    "first_id": 0,
+    "origin": "bottom_left",
+    "tag_rotation_deg": 180
+  }
+}

@@ -1,0 +1,424 @@
+schema: 2-0-6
+dependencies:
+  core: v5.0.0
+frames:
+  # Flanschpose der Startpose: Board-Mitte unter der Basiskamera auf z = 0,40 m
+  # (Mindestens 0,37 m, sonst verweigert Stufe 1 den Plan), Werkzeugachse waagerecht
+  # vom Roboter weg. Liegt das Board zwischen den Backen nicht flach, den Frame um
+  # die Werkzeugachse um 90 Grad drehen.
+  Kalibrierstart:
+    reference_frame: world
+    position:
+      x: -0.52
+      y: 0.527
+      z: 0.4
+    orientation:
+      w: 0.65414
+      x: -0.65414
+      y: -0.268516
+      z: 0.268516
+on_start:
+  load:
+    - hardware: hardware
+    - component: realsense_camera
+    - component: signal_point_attractor
+    - component: robotiq_gripper
+    - component: greifer_auf
+    - component: kalibrierung_anzeige
+    - component: kamera_frame
+components:
+  signal_point_attractor:
+    component: aica_core_components::motion::SignalPointAttractor
+    display_name: Signal Point Attractor (langsam)
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: signal_point_attractor
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: signal_point_attractor
+            transition: activate
+    parameters:
+      rate:
+        value: 50
+        type: double
+      linear_gains:
+        value:
+          - 2
+        type: vector
+      angular_gains:
+        value:
+          - 2
+        type: vector
+      max_linear_velocity:
+        value: 0.1
+        type: double
+      max_angular_velocity:
+        value: 0.3
+        type: double
+    inputs:
+      state: /hardware/robot_state_broadcaster/cartesian_state
+      attractor: /kalibrierung/zielpose
+    outputs:
+      twist: /signal_point_attractor/twist
+  realsense_camera:
+    component: realsense2_camera::RealSenseNodeFactory
+    display_name: Base Kamera
+    parameters:
+      camera_name:
+        value: base_L515
+        type: string
+      serial_no:
+        value: f1370107
+        type: string
+      rgb_camera.profile:
+        value: 1280x720x15
+        type: string
+      depth_module.profile:
+        value: 640x480x30
+        type: string
+      align_depth.enable:
+        value: true
+        type: bool
+    outputs:
+      color_image_raw: /realsense_camera/color_image_raw
+      color_camera_info: /realsense_camera/color_camera_info
+      aligned_depth_to_color_image_raw: /realsense_camera/aligned_depth_to_color_image_raw
+  robotiq_gripper:
+    component: roboter_tetris::RobotiqGripperComponent
+    display_name: Robotiq Gripper
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: robotiq_gripper
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: robotiq_gripper
+            transition: activate
+    parameters:
+      rate:
+        value: 20
+        type: double
+      force:
+        # volle Kraft in Prozent (0-100): das Board darf im Griff nicht kippen
+        value: 100
+        type: double
+    inputs:
+      gripper_close: /kalibrierung/greifer_zu
+  greifer_zu:
+    component: roboter_tetris::TrueSignal
+    display_name: Greifer zu
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: greifer_zu
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: greifer_zu
+            transition: activate
+    outputs:
+      value: /kalibrierung/greifer_zu
+  greifer_auf:
+    # Toggle Signal beginnt mit False; die lange Periode hält es dort.
+    component: roboter_tetris::ToggleSignal
+    display_name: Greifer auf
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: greifer_auf
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: greifer_auf
+            transition: activate
+    parameters:
+      period:
+        value: 1000000000.0
+        type: double
+    outputs:
+      value: /kalibrierung/greifer_zu
+  frame_to_signal:
+    component: aica_core_components::ros::TfToSignal
+    display_name: Startpose (Frame Kalibrierstart)
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: frame_to_signal
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: frame_to_signal
+            transition: activate
+    parameters:
+      frame:
+        value: Kalibrierstart
+        type: string
+    outputs:
+      pose: /kalibrierung/zielpose
+  kalibrierung_stufe1:
+    component: roboter_tetris::BaseCamCalibration
+    display_name: Kalibrierung Stufe 1 (Roboter bewegt sich)
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: kalibrierung_stufe1
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: kalibrierung_stufe1
+            transition: activate
+    parameters:
+      rate:
+        value: 20
+        type: double
+      mode:
+        value: stufe1
+        type: string
+      min_flange_z_m:
+        # Handgelenk: von der Startpose aus höchstens ~6 cm tiefer (25.09.2026)
+        value: 0.34
+        type: double
+    inputs:
+      color_image: /realsense_camera/color_image_raw
+      color_camera_info: /realsense_camera/color_camera_info
+      depth_image: /realsense_camera/aligned_depth_to_color_image_raw
+      robot_state: /hardware/robot_state_broadcaster/cartesian_state
+    outputs:
+      target_pose: /kalibrierung/zielpose
+      debug_image: /kalibrierung/debug_image
+  kalibrierung_pruefen:
+    component: roboter_tetris::BaseCamCalibration
+    display_name: Kalibrierung prüfen (ohne Bewegung)
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: kalibrierung_pruefen
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: kalibrierung_pruefen
+            transition: activate
+    parameters:
+      rate:
+        value: 20
+        type: double
+      mode:
+        value: pruefen
+        type: string
+    inputs:
+      color_image: /realsense_camera/color_image_raw
+      color_camera_info: /realsense_camera/color_camera_info
+      depth_image: /realsense_camera/aligned_depth_to_color_image_raw
+      robot_state: /hardware/robot_state_broadcaster/cartesian_state
+    outputs:
+      debug_image: /kalibrierung/debug_image
+  kalibrierung_anzeige:
+    # Zeigt die Kamera aus der Kalibrierdatei, die ein Lauf beschreibt, und folgt ihr.
+    component: roboter_tetris::BaseCamCalibration
+    display_name: Kalibrierung anzeigen (Kamera-Frame)
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: kalibrierung_anzeige
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: kalibrierung_anzeige
+            transition: activate
+    parameters:
+      rate:
+        value: 2
+        type: double
+      mode:
+        value: anzeigen
+        type: string
+    outputs:
+      camera_pose: /kalibrierung/kamera_pose
+  kamera_frame:
+    component: aica_core_components::ros::SignalToTf
+    display_name: Frame Basiskamera
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: kamera_frame
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: kamera_frame
+            transition: activate
+    inputs:
+      pose: /kalibrierung/kamera_pose
+hardware:
+  hardware:
+    display_name: Hardware Interface
+    urdf: Universal Robots 10e
+    rate: 500
+    events:
+      transitions:
+        on_load:
+          load:
+            - controller: robot_state_broadcaster
+              hardware: hardware
+            - controller: ik_velocity_controller
+              hardware: hardware
+    parameters:
+      robot_ip: 192.168.96.221
+    controllers:
+      robot_state_broadcaster:
+        plugin: aica_core_controllers/RobotStateBroadcaster
+        display_name: Robot State Broadcaster
+        outputs:
+          cartesian_state: /hardware/robot_state_broadcaster/cartesian_state
+        events:
+          transitions:
+            on_load:
+              switch_controllers:
+                hardware: hardware
+                activate: robot_state_broadcaster
+      ik_velocity_controller:
+        plugin: aica_core_controllers/velocity/IKVelocityController
+        parameters:
+          command_rate_limit:
+            value: 2
+            type: double
+          max_linear_velocity:
+            value: 0.5
+            type: double
+          max_angular_velocity:
+            value: 1
+            type: double
+        inputs:
+          command: /signal_point_attractor/twist
+        events:
+          transitions:
+            on_load:
+              switch_controllers:
+                hardware: hardware
+                activate: ik_velocity_controller
+graph:
+  positions:
+    on_start:
+      x: -780
+      y: 0
+    stop:
+      x: -780
+      y: 100
+    buttons:
+      button_start:
+        x: -780
+        y: 260
+      button_halten:
+        x: -780
+        y: 360
+      button_zu:
+        x: -780
+        y: 480
+      button_auf:
+        x: -780
+        y: 580
+      button_stufe1:
+        x: -780
+        y: 700
+      button_stufe1_ende:
+        x: -780
+        y: 800
+      button_pruefen:
+        x: -780
+        y: 920
+      button_pruefen_ende:
+        x: -780
+        y: 1020
+    components:
+      realsense_camera:
+        x: -360
+        y: -400
+      kalibrierung_stufe1:
+        x: 280
+        y: -400
+      kalibrierung_pruefen:
+        x: 280
+        y: 300
+      frame_to_signal:
+        x: 820
+        y: -400
+      signal_point_attractor:
+        x: 1440
+        y: -400
+      greifer_zu:
+        x: 820
+        y: 300
+      greifer_auf:
+        x: 820
+        y: 620
+      robotiq_gripper:
+        x: 1440
+        y: 300
+      kalibrierung_anzeige:
+        x: 280
+        y: 1000
+      kamera_frame:
+        x: 820
+        y: 1000
+    hardware:
+      hardware:
+        x: 2100
+        y: -400
+  buttons:
+    button_start:
+      display_name: 1 Zur Startpose fahren (Roboter bewegt sich!)
+      on_click:
+        load:
+          component: frame_to_signal
+    button_halten:
+      display_name: 2 Startpose halten
+      on_click:
+        unload:
+          component: frame_to_signal
+    button_zu:
+      display_name: 3 Greifer zu (Board einlegen!)
+      on_click:
+        unload:
+          component: greifer_auf
+        load:
+          component: greifer_zu
+    button_auf:
+      display_name: 4 Greifer auf (Board festhalten!)
+      on_click:
+        unload:
+          component: greifer_zu
+        load:
+          component: greifer_auf
+    button_stufe1:
+      display_name: 5 Stufe 1 starten (Roboter bewegt sich!)
+      on_click:
+        unload:
+          component: frame_to_signal
+        load:
+          component: kalibrierung_stufe1
+    button_stufe1_ende:
+      display_name: 6 Stufe 1 beenden / abbrechen
+      on_click:
+        unload:
+          component: kalibrierung_stufe1
+    button_pruefen:
+      display_name: 7 Prüfen (ohne Bewegung)
+      on_click:
+        load:
+          component: kalibrierung_pruefen
+    button_pruefen_ende:
+      display_name: 8 Prüfen beenden
+      on_click:
+        unload:
+          component: kalibrierung_pruefen

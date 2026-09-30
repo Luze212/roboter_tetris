@@ -226,7 +226,7 @@ def unpack_objects(arr: Optional[Sequence[float]]) -> Optional[ObjectsMsg]:
     return ObjectsMsg(values[OBJECTS_T], values[OBJECTS_V_BELT], entries)
 
 
-# -- S2 `object_position` : robot_cam -> object_follower --------------------
+# -- S2 `object_position` : robot_cam -> (no consumer since 24.09.2026, L22) -
 
 OBJECT_POSITION_LENGTH = 6
 
@@ -521,16 +521,16 @@ class AttemptWatcher:
 
 # -- S8 `follower_status` : object_follower -> interface_streamer -----------
 
-FOLLOWER_STATUS_LENGTH = 7
+#: 6 since 24.09.2026: the 7th field ``w_effective`` (weight of the robot
+#: camera) went with stage 4c (Nachtrag 13 / L22).
+FOLLOWER_STATUS_LENGTH = 6
 
 (FS_T, FS_STATE, FS_TARGET_ID, FS_ERR_LONG,
- FS_ERR_LAT, FS_ERR_Z, FS_W_EFFECTIVE) = range(FOLLOWER_STATUS_LENGTH)
+ FS_ERR_LAT, FS_ERR_Z) = range(FOLLOWER_STATUS_LENGTH)
 
 
 class FollowerStatus(NamedTuple):
-    """Diagnostics only. ``w_effective`` shows which source the target
-    position currently comes from -- the key value for the base_cam vs
-    robot_cam comparison."""
+    """Diagnostics only."""
 
     t: float
     state: float
@@ -538,14 +538,12 @@ class FollowerStatus(NamedTuple):
     err_long: float
     err_lat: float
     err_z: float
-    w_effective: float
 
 
 def pack_follower_status(t: float, state: float, target_id: float,
-                         err_long: float, err_lat: float, err_z: float,
-                         w_effective: float) -> List[float]:
+                         err_long: float, err_lat: float, err_z: float) -> List[float]:
     return [float(t), float(state), float(target_id), float(err_long),
-            float(err_lat), float(err_z), float(w_effective)]
+            float(err_lat), float(err_z)]
 
 
 def unpack_follower_status(

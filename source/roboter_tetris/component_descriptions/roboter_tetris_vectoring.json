@@ -74,10 +74,10 @@
     },
     {
       "display_name": "Glättungsfenster",
-      "description": "Anzahl Messungen, über die Position, Orientierung und Abmessungen gemittelt werden - erst ab dem Einschwingen.",
+      "description": "Anzahl Messungen, über die Position, Orientierung und Abmessungen gemittelt werden - erst ab dem Einschwingen. 20: bei Rate 15 rund 1,3 s, auch bei schnellerem Band (Nachtrag 13 / L29).",
       "parameter_name": "smoothing_window",
       "parameter_type": "int",
-      "default_value": "30",
+      "default_value": "20",
       "dynamic": true
     },
     {

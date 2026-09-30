@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Read-only probe for the running AICA system -- the measuring tool of the
-setup roadmap (`docs/uebersicht/fahrplan-aufbau.md`).
+setup roadmap (`docs/archiv/fahrplan-aufbau.md`).
 
 It only subscribes and reads parameters. It never publishes, never sets a
 parameter and never triggers a lifecycle transition.
@@ -352,7 +352,7 @@ def cmd_contract(node, args):
         elif args.command == "follower_status":
             _throttled(args, f"{STATE_NAMES.get(int(m.state), m.state):15s} id {int(m.target_id)}  "
                              f"err laengs {m.err_long*1000:7.1f} quer {m.err_lat*1000:7.1f} "
-                             f"z {m.err_z*1000:7.1f} mm  w {m.w_effective:.2f}")
+                             f"z {m.err_z*1000:7.1f} mm")
         elif args.command == "target":
             if m.has_target:
                 _throttled(args, f"ZIEL id {int(m.id)} x {m.x*1000:.1f} y {m.y*1000:.1f} "

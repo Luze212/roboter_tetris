@@ -1,304 +1,188 @@
 # Projektkontext Robotetris
 
-**Stand 24.09.2026.** Rahmenbedingungen, Abgrenzungen und Arbeitsweise.
-Gedacht als Einstieg für jede Sitzung, die ohne Vorkontext startet — vor den
-technischen Dokumenten zu lesen.
+**Stand 28.09.2026: finaler Build (24.09.) und Kalibrierung der Basiskamera (L27).**
+Rahmenbedingungen, Aufbau, Abgrenzungen und
+Arbeitsweise — der Einstieg vor den technischen Dokumenten.
 
 > Dies ist **nicht** die `CLAUDE.md`. Die existiert separat, ist in `.gitignore`
 > eingetragen und damit **pro Rechner eigen** — sie wandert nicht mit dem Push.
 
 ---
 
-## 1. Was das Projekt leisten soll
+## 1. Was das Projekt leistet
 
 Ein **UR10e** greift farbige Klötze von einem laufenden Förderband — **im Lauf,
-ohne dass das Band angehalten wird**. Die Klötze werden vorn von Hand aufgelegt
-und durchlaufen den Arbeitsbereich.
+ohne dass das Band angehalten wird** — und legt sie in einer Kiste neben dem Band
+ab. Die Klötze werden am Bandanfang von Hand aufgelegt, stehend, liegend, flach
+oder schräg.
 
 ### Die Projektziele (offizielle Vorgabe)
 
-| Nr. | Ziel | Umsetzung | Stand |
+| Nr. | Ziel | Umsetzung | Ergebnis am Aufbau |
 |---|---|---|---|
-| 1 | Ansteuerung des UR10e mit AICA | AICA-Kette Attractor → IK-Velocity-Controller | **erledigt** |
-| 2 | Entwicklung eines schnellen Kalibrierungsverfahrens | Kommilitone, **getrenntes Projekt** (`Calibration/*`). Wir sind Abnehmer; offen ist nur die Übergabeform (C6). | läuft |
-| 3 | Verfahren zur **Geschwindigkeitsschätzung** und Positionsberechnung der Gegenstände | `base_cam` (Position), `vectoring` (Geschwindigkeit je Klotz und gepoolt) | **am laufenden Band bestätigt:** Pool −127,9 mm/s bei 125–133 mm/s Gegenprobe; Tracks werden hinter dem Bild vorhergesagt weitergeführt (L9/L10). B21 bleibt als gezielte Randprüfung offen. |
-| 4 | Algorithmus zur **Priorisierung** des zuerst zu greifenden Gegenstandes und zur **Bahnplanung** für das kontrollierte Greifen | `priority_handler` (Auswahl, Erreichbarkeit, Greifebene); `object_follower` mit den AICA-Bausteinen (Bahn) | **am Aufbau bestätigt:** sieben von sieben greifbaren Klötzen bei laufendem Band gegriffen und abgelegt; Mehrfachbelegung, Farben, Dauerlauf und Roboterkamera-Korrektur bleiben offen (L19–L21). |
+| 1 | Ansteuerung des UR10e mit AICA | AICA-Kette Signal Point Attractor → IK Velocity Controller | erfüllt |
+| 2 | Entwicklung eines schnellen Kalibrierungsverfahrens | eigenes Verfahren für die Basiskamera: Der Roboter hält ein AprilGrid ins Bild (`base_cam_calibration`, L27); das Projekt des Kommilitonen (`Calibration/*`) bleibt getrennt | erfüllt: am Aufbau abgenommen, etwa 4 min je Lauf, über drei Tage auf unter 1 mm wiederholbar; Greiflauf 7 von 7, so gut wie die Handkalibrierung L6. In Kraft bleibt L6 (höchstens 6 mm), Nachkalibrieren schreibt in dieselbe Datei |
+| 3 | Verfahren zur **Geschwindigkeitsschätzung** und Positionsberechnung | `base_cam` (Position), `vectoring` (Geschwindigkeit je Klotz und für das Band) | Position gegen den Roboter höchstens 6 mm; Band geschätzt −127,9 mm/s gegen 125–133 mm/s per Stoppuhr |
+| 4 | Algorithmus zur **Priorisierung** und **Bahnplanung** für das kontrollierte Greifen | `priority_handler` (Auswahl, Erreichbarkeit, Greifebene); `object_follower` mit den AICA-Bausteinen (Bahn) | greift im Lauf mit rund 1 mm Längsfehler; bei dichter Folge etwa ein Klotz je 7 s; flache und gedrehte Klötze; Dauerlauf zuverlässig |
 
-**Zusätzlich, als eigenes Ziel:** den Prozess nachvollziehbar darstellen —
-`data_tracker` (ein Blatt ohne Rückwirkung auf den Regelpfad) und
-`interface_streamer` (ein Übersichtsbild für RViz). **Beide gebaut.**
+**Zusätzlich:** den Prozess nachvollziehbar darstellen — `data_tracker` (eine
+Klotzliste ohne Rückwirkung auf den Regelpfad) und `interface_streamer` (ein
+Übersichtsbild für RViz).
 
-Den Aufbau des Systems als Graph, die Komponenten und die Kopplungen zwischen
-ihren Parametern zeigt **`uebersicht/systemgraph.md`**.
+Zwei Punkte der Aufgabenstellung, die leicht übersehen werden:
 
-> ⚠️ **Geschwindigkeit ist eine Vorgabe, keine Kalibrierung.** Ziel 3 verlangt ein
-> *entwickeltes Verfahren* zur Geschwindigkeitsschätzung aus den Bilddaten. Die Doku
-> hatte das bis zum 21.09.2026 anders angenommen — Bandgeschwindigkeit als
-> einmalig kalibrierte Konstante — und die Schätzung ausdrücklich gestrichen.
-> Korrigiert in `architektur/entscheidungen.md`, **Nachtrag 6**.
-
-> **Bahnplanung über AICA:** Die Nutzung der von AICA bereitgestellten Bausteine
-> (Attractor, IK-Velocity-Controller) gilt als Lösung der Vorgabe.
+- **Die Bandgeschwindigkeit wird geschätzt, nicht kalibriert.** Ziel 3 verlangt
+  ein Verfahren, das sie aus den Bilddaten bestimmt (`entscheidungen.md`,
+  Nachtrag 6).
+- **Die Bahnplanung über AICA** — die Nutzung der bereitgestellten Bausteine
+  Attractor und IK Velocity Controller — gilt als Lösung der Vorgabe.
 
 Der eigentliche Kern ist der **Pickvorgang im Lauf** — Ziele 3 und 4 zusammen.
-**Genau daran ist das Vorgängerprojekt gescheitert.** Der neue Regelpfad hat
-ihn am 24.09.2026 mit der Basiskamera und etwa 0,13 m/s Bandgeschwindigkeit
-nachweislich erfüllt (sieben von sieben greifbaren Klötzen abgelegt, L19/L20).
+Genau daran ist das Vorgängerprojekt gescheitert.
 
-## 2. Was das Vorgängerprojekt erreicht hat
+## 2. Das Vorgängerprojekt
 
 Die Vorgängergruppe arbeitete am **selben Aufbau, mit demselben Greifer und
-demselben Band**. Sie hat:
+demselben Band** (Archiv `UR10_Pick_ws`, C++ und ZeroMQ statt AICA). Sie hat:
 
-- die Klötze erkannt und verfolgt (die C++-Erkennung ist die Grundlage der
-  heutigen `base_cam`, nach Python übertragen)
-- **nicht** im Lauf gegriffen: Der Roboter wartete an einer **festen Pickposition
-  am Bandende** und griff zu, sobald der Klotz im Bild der Roboterkamera auftauchte
-- den RGB-Raum für die Roboterkamera nicht zuverlässig nutzen können. Stattdessen
-  ein Behelf: Die Kamera wurde so positioniert, dass die Tiefenkamera das Band
-  gerade noch erfassen konnte, alles etwa einen Zentimeter darüber aber aus dem
-  Messbereich fiel (Tiefenwert 0). Die Konturen wurden dann über diesen
-  Null-Bereich bestimmt.
+- die Klötze erkannt und verfolgt — ihre C++-Erkennung ist die Grundlage der
+  heutigen `base_cam`, nach Python übertragen;
+- **nicht** im Lauf gegriffen: Der Roboter wartete an einer festen Pickposition
+  am Bandende, rechnete eine Ankunftszeit aus und griff dann ohne Rückkopplung zu.
+  Eine Zielauswahl gab es nicht.
 
-**Dieser Behelf funktioniert bei uns nur bedingt** — deshalb die beiden
-Erkennungsvarianten `robot_cam` (farbbasiert) und `robot_cam_2` (kantenbasiert).
-Seit 23.09.2026 wird nur noch die Kantenvariante verfolgt (Nachtrag 13 / L5).
+Für `vectoring`, `priority_handler` und den Regelteil des `object_follower` gab
+es deshalb kein Vorbild. Übernommen wurden Messwerte des Aufbaus; der Abgleich
+steht im Archiv (`archiv/vorgaengerprojekt-abgleich.md`).
 
-> **Der Grund ist physikalisch und in `docs/architektur/robot-cam-befunde.md`
-> ausgeführt:** Die Tiefenkamera sitzt seitlich versetzt und sieht in Greifnähe
-> die **spiegelnden Seitenflächen** der Klötze, die ebenfalls Tiefe 0 liefern.
-> Der Verzug verschwindet mit größerer Kamerahöhe — daraus folgt die Kopplung
-> von B8 (Beobachtungshöhe) und D18. Die Vorgängergruppe ist mit ihrer eigenen
-> Lösung selbst unzufrieden (Rücksprache).
+Zwei Maße, die man nicht verwechseln darf:
 
-> **Präzisierung nach dem Archivabgleich (14.09.2026):** Die zuletzt gebaute
-> „Strategie 2" fuhr zwar eine Spurkorrektur in x an, der Griff selbst war aber
-> **Koppelnavigation** — der Roboter rechnete eine Ankunftszeit aus und
-> schlief bis dahin (`time.sleep`). Es gab keine Rückkopplung während des Griffs
-> und **keine Zielauswahl**; verarbeitet wurde immer das erste Objekt der Liste.
-> Für `vectoring`, `priority_handler` und den Regelteil des `object_follower`
-> gibt es dort also **kein Vorbild**. Einzelheiten:
-> `docs/architektur/vorgaengerprojekt-abgleich.md`.
+- Der **TCP der UR-Steuerung** ist 215 mm. Er dient nur zur Umrechnung fremder
+  TCP-Werte.
+- Unsere Kette regelt den **Flansch**. Der Follower braucht **Flansch → Griffpunkt
+  = 235 mm** (`flange_to_grip_point_m`, gemessen; Nachtrag 6 / Z7).
 
-Für uns relevant: Die Vorgängergruppe hat Werte, die wir brauchen. Die
-**Hand-Auge-Kalibrierung der Roboterkamera ist damit vollständig geklärt** (C1/C4:
-Bezug ist der Flansch). Der **TCP der UR-Steuerung stand dagegen nicht im
-Archiv** — er saß in der UR-Installation am Teach-Pendant und wurde am 15.09.2026
-direkt aus der Steuerung ausgelesen: **215 mm**, auf der Flanschachse, unverdreht
-(C8). ⚠️ **Das ist nicht der Abstand zum Griffpunkt.** Unsere Kette regelt den
-Flansch; der Follower braucht **Flansch → Griffpunkt = 235 mm**
-(`flange_to_grip_point_m`, gemessen). Die 215 mm dienen nur der Umrechnung fremder
-TCP-Werte (`architektur/entscheidungen.md` Nachtrag 6 / Z7). Dass **TCP-Posen kommandiert wurden**, ist bestätigt (C9) — A7
-beantwortet das aber nicht, denn im Archiv existiert kein URDF; die Frage ist
-inzwischen eigenständig geklärt (kein Greifer im URDF, geregelt wird der Flansch).
+## 3. Der Stand der Komponenten
 
-## 3. Was heute funktioniert
+Die ganze Kette greift am Aufbau: `base_cam` → `vectoring` → `priority_handler` →
+`object_follower` → Attractor → IK Velocity Controller. Gegriffen wird allein mit
+der Basiskamera; die Komponenten der Roboterkamera (`robot_cam`, `robot_cam_2`)
+liegen im Paket, sind aber nicht eingebunden (Nachtrag 13 / L22). Die Komponenten
+im Einzelnen: der Komponentenplan (Word, zum Einlesen) und `systemgraph.md` (Graph,
+Raten, Kopplungen).
 
-**Stand 24.09.2026: Alle Komponenten sind gebaut** und laufen in AICA. Der
-vollständige Regelpfad `base_cam` → `vectoring` → `priority_handler` →
-`object_follower` → Attractor → IK-Controller hat am Aufbau sieben greifbare
-Klötze während des Bandlaufs gegriffen und abgelegt. Die Roboterkamera ist dafür
-weiterhin nicht zugeschaltet; Stand und Restprogramm: `uebersicht/fahrplan-aufbau.md`.
-
-| Komponente | Stand |
-|---|---|
-| `robotiq_gripper` | **funktionsfähig** am Aufbau; seit 2.3 mit `motion_done`/`has_object` |
-| `base_cam` | **funktionsfähig im Pickpfad**: Übergangskalibrierung in `world`, korrigierte Parallaxe und ≤ 6 mm zu Antastpunkten (B23). Seit L21 deckt `roi_x = 342`, `roi_width = 618` den erreichbaren Bandbereich ab; kleine Optimierungen für flache und randnahe Klötze bleiben offen. |
-| `vectoring` | **am Band bestätigt** — Geschwindigkeitsschätzung je Klotz und gepoolt; finale Tracks laufen hinter dem Bild als Status 4 weiter (L9/L10). |
-| `priority_handler` | **im Pickpfad bestätigt** — Zielauswahl, Erreichbarkeit, Greifebene; Greifzone seit L21 gleich dem abgefahrenen Arbeitsraum und wählt auch vorhergesagte Klötze hinter dem Bild. |
-| `data_tracker` | gebaut — Klotzliste für die Anzeige |
-| `object_follower` | **im Lauf bestätigt** — Start, Folgen, Greifzyklus und Ablage mit Basiskamera; `lead_time_s = 0,24` bei Attractor K = 5. Roboterkamera-Korrektur bleibt aus. |
-| `interface_streamer` | gebaut — Übersichtsbild für RViz |
-| `robot_cam` / `robot_cam_2` | implementiert und unit-getestet, **am Aufbau am 15.09.2026 durchgefallen** (B6). `robot_cam` farbbasiert (Band ausmaskieren), `robot_cam_2` kantenbasiert mit Tiefenkanten-Fusion. Identische I/O, im Graphen austauschbar. ⚠️ Beide scheitern **nicht an der Erkennung, sondern an der Auswahl** — Einzelheiten: `architektur/robot-cam-befunde.md` §9. **Auswahlkorrektur seit 2.2 umgesetzt**; zweiter Anlauf 22.09. scheiterte an der Banddistanz (K3), seit 23.09. aus dem Bildmedian. **Weiter nur `robot_cam_2`** (Nachtrag 13 / L5). |
-| `move_to_pose_test`, `true_signal`, `toggle_signal` | Testhilfen; `toggle_signal` ersetzt am virtuellen Roboter die Greifer-Rückmeldung |
-| `test/tools/fake_objects.py` | synthetische Klötze statt `base_cam` — treibt die ganze Kette ohne Kamera, im Robotersystem |
-| AICA-Kette Attractor → IK-Velocity-Controller | **getestet**, Roboter folgt einem per Maus verschobenen Frame |
+Neben den Komponenten der Kette enthält das Paket Testhilfen:
+`move_to_pose_test`, `true_signal`, `toggle_signal` und
+`test/tools/fake_objects.py` — synthetische Klötze statt `base_cam`, die die ganze
+Kette ohne Kamera treiben.
 
 ## 4. Abgrenzungen — was nicht angefasst wird
 
-Dies sind harte Vorgaben, keine Empfehlungen.
-
 ### `roboter_tetris/Calibration/*` — fremdes Projekt
 
-Der Ordner gehört dem Kommilitonen, der die Kamerakalibrierung automatisiert.
-Das läuft als **getrenntes Projekt**. Die dortigen Komponenten
-(`board_detection`, `auto_calibration`) und Dateien **dürfen unter keinen
-Umständen verändert werden**.
-
-Wir sind lediglich **Abnehmer** der Ergebnisse: Intrinsik beider Kameras,
-Extrinsik der Basiskamera zur Roboterbasis. Die Werte werden als AICA-Parameter
-gespiegelt, wie in `Calibration/README.md` beschrieben.
+Der Ordner gehört dem Kommilitonen, der die Kamerakalibrierung automatisiert. Die
+dortigen Komponenten (`board_detection`, `auto_calibration`) und Dateien werden
+nicht verändert; `Calibration/calibration.json` ist überholt. Die Basiskamera
+kalibriert dieses Paket seit 25.09.2026 selbst (`basecam_extrinsics.py`,
+`calibration_run.py`, `base_cam_calibration.py`, L27). Die gültige Kalibrierung
+liegt in `Extrinsics/base_cam_extrinsics.json` und trägt die Handkalibrierung
+(Nachtrag 13 / L6); ein Kalibrierlauf schreibt in dieselbe Datei.
 
 ### `roboter_tetris/vision/*` — Bildverarbeitung
 
-**Geändert 21.09.2026:** Die Komponenten rund um Kameras und Greifer **dürfen**
-geändert werden; tabu ist nur die Kalibrierung. Für `vision/` heißt das:
-
 | Datei | Regel |
 |---|---|
-| `vision/board.py` | **nicht anfassen** — die Kalibrierung nutzt sie (`Calibration/board_detection.py`) |
-| `vision/tracker.py` | ein beschlossener Eingriff: gemessene statt gerechneter Längsposition (Umsetzungsplan 2.4) |
-| `vision/robot_detection*.py` | gemeinsame Blob-Auswahl (2.2) und seit 23.09. die Banddistanz aus dem Bildmedian (Nachtrag 13 / L5). Der A/B-Vergleich entfällt (nur noch `robot_cam_2`). Die Höhenkorrektur der Rückprojektion bleibt im Follower (N1) — nicht doppelt korrigieren |
-| `vision/detection.py` | seit 23.09. geändert: Ecken auf der Oberseite statt auf Bandhöhe, Höhe aus der Kalibrierung (Nachtrag 13 / L6) |
-| `color_estimation.py` | kein Anlass zur Änderung |
+| `vision/board.py` | nicht anfassen — die Kalibrierung nutzt sie |
+| `vision/robot_detection*.py` | Erkennung der Roboterkamera; nicht eingebunden |
+| `vision/detection.py`, `vision/tracker.py` | Erkennung und Verfolgung der Basiskamera (Nachtrag 6 / Z4, Nachtrag 13 / L6) |
 
-Geprüft: Die Kalibrierung importiert aus `vision/` ausschließlich `board.py`.
-
-**Grund für die Zurückhaltung, die trotzdem gilt:** Das System ist bei der Bildverarbeitung an der
-Leistungsgrenze. Die Kamerakomponenten sind bewusst so gehalten, dass neben der
-Bildverarbeitung möglichst wenig gerechnet wird, damit sie ohne spürbare
-Verzögerung in Echtzeit laufen. Zusatzrechnungen gehören in andere Komponenten —
-deshalb liegt etwa die Umrechnung der Roboterkamera-Messung in Weltkoordinaten
-im `object_follower` und nicht in `robot_cam`.
+Die Bildverarbeitung ist an der Leistungsgrenze. Zusatzrechnungen gehören deshalb
+in andere Komponenten, nicht in die Kamerakomponenten.
 
 ### `.init_wizard/` — Vorlagengenerator
 
 Nach der Wizard-Ausführung nicht mehr ändern (`ARCHITECTURE.md`).
 
-### Rebuild und Laden der Anwendung — Sache des Nutzers
+### Build und Laden der Anwendung
 
-Auf derselben AICA-Installation läuft das **Kalibrierprojekt des Kommilitonen**.
-Ein Neubauen des Pakets und Neuladen der Anwendung stört es, deshalb schaut der
-Nutzer **kurz vor dem Testen und Laden** nach, ob das gerade passt.
+Neubauen des Pakets und Laden der Anwendung macht der Nutzer. Ein Rebuild allein
+genügt nicht: Das neue Paket wird erst wirksam, wenn danach das
+**AICA-Systemabbild im Launcher neu erzeugt** wird — ein Neustart der Anwendung
+holt das ohne Fehlermeldung nicht nach (`einrichtung-projektanwendung.md` §1).
 
-**Das ist eine Handreichung vor Ort, keine Planungsschranke.** Es betrifft weder
-die Umsetzung der Komponenten noch das mobile Setup: Die Arbeit findet in der
-eigenen Branch statt, die davon unabhängig ist, und vor Ort wird ohnehin immer
-diese Branch geladen. Innerhalb der Branch bestehen keine Einschränkungen.
+### Git
 
-⚠️ **Eine technische Eigenheit ist trotzdem wichtig, wenn geladen wird:** Ein
-Rebuild allein genügt nicht — das neue Paket wird erst wirksam, wenn danach das
-**AICA-Systemabbild im Launcher neu erzeugt** wird. Ein Neustart der Anwendung
-holt es nicht nach, und zwar ohne Fehlermeldung. Gegenprobe und Zwischenlösung
-für den `global_time`-Fix in `base_cam`:
-`uebersicht/einrichtung-projektanwendung.md` §1.
-
-### GitHub
-
-**Kein Git durch den Assistenten** — kein `commit`, `push`, `fetch`, `pull`,
-`merge`, `checkout`, `rebase`, `stash`. Der Nutzer bedient git ausschließlich
-selbst. Lesende Befehle (`status`, `log`, `diff`) sind in Ordnung. Ist ein
-Git-Schritt nötig, wird er **vorgeschlagen, nicht ausgeführt** — auch dann, wenn
-eine Aufgabe dadurch unfertig bleibt.
-
-Dateien werden lokal angelegt und bleiben untracked, bis der Nutzer sie selbst
-übernimmt. GitHub ist zugleich der **einzige Austauschweg zwischen den beiden
-Setups** (§6) — was nicht gepusht ist, existiert auf dem anderen Rechner nicht.
+Git bedient der Nutzer selbst. Ein Assistent führt keine schreibenden Git-Befehle
+aus (`commit`, `push`, `fetch`, `pull`, `merge`, `checkout`, `rebase`, `stash`);
+lesende sind in Ordnung.
 
 ## 5. Der Aufbau
 
 | | |
 |---|---|
-| Roboter | UR10e, steht **direkt neben dem Band**, etwa auf einem Drittel vom Bandende aus gerechnet |
-| Greifer | Robotiq 2-Finger (2F-140), über USB/Modbus direkt angesteuert — **nicht** als ros2_control-Hardware-Interface. An den letzten Fingergliedern sitzen **verschraubte 3D-Druck-Aufsätze** (Gewindeeinsätze); darauf eine mit Isolierband befestigte Gummi-Grippmatte, Greiffläche **20 mm hoch × 15 mm breit**. Öffnungsweite **127 mm** |
-| Basiskamera | RealSense, am Bandanfang auf einem **beweglichen Gestell** — daher die automatisierte Extrinsik-Kalibrierung als Parallelprojekt (C3) |
-| Roboterkamera | RealSense, am Arm montiert — **festes Bauteil am Flansch, unverändert seit der Vorgängergruppe**. Deren Hand-Auge-Kalibrierung gilt damit unmittelbar (C1) |
-| Band | **grün-türkis** — gemessen **H ≈ 88–90**, nicht die ursprünglich angenommenen 60; der Farbton wandert zudem mit der Belichtungszeit (`architektur/robot-cam-befunde.md` §9.3). Konstante Geschwindigkeit, **nicht einstellbar**; sie wird im Betrieb **geschätzt** (Ziel 3), B1 prüft das nur gegen. Richtung ist praktisch die **y-Achse**; im Robotersystem angetastet bei x ≈ −0,70 … −0,93 m; von Rolle zu Rolle y ≈ +1,08 … −0,375 m, ≈ 0,13 m/s per Stoppuhr (Nachtrag 13 / L7). Spiegelungen treten **nur hier** auf, nicht auf den Klötzen |
-| Klötze | rechtwinklig, **unterschiedlich groß**, von Hand aufgelegt, realistisch 2–3 gleichzeitig. Farben **rot, blau, weiß**. 3D-gedruckt: Oberseite **matt**, Seitenflächen **spiegelnd** (siehe `architektur/robot-cam-befunde.md`) |
-| Ablage | seitlich neben dem Band auf der Roboterseite; Pose in der Luft über einer Auffangkiste, der Klotz fällt hinein |
-| Freiraum | senkrecht über dem Arbeitsbereich frei; nur die Basiskamera steht am Bandanfang, den der Roboter kaum erreicht |
+| Roboter | UR10e direkt neben dem Band, etwa auf einem Drittel vom Bandende aus |
+| Greifer | Robotiq 2F-140 über USB/Modbus (nicht als ros2_control-Hardware). Verschraubte 3D-Druck-Aufsätze mit Gummi-Grippmatte, Greiffläche 20 mm hoch × 15 mm breit, Öffnungsweite 127 mm. Nutzlast in der UR-Installation 1,3 kg, Schwerpunkt 12 / 24 / 45 mm |
+| Basiskamera | RealSense L515 senkrecht über dem Bandanfang, auf einem beweglichen Gestell — daher die automatische Kalibrierung (L27) |
+| Roboterkamera | RealSense D435i am Flansch; nicht eingebunden |
+| Band | grün-türkis, konstante Geschwindigkeit ≈ 0,13 m/s, nicht einstellbar, Lauf entlang der y-Achse; Lage und Maße in `einrichtung-projektanwendung.md` §8 |
+| Klötze | rechtwinklig, unterschiedlich groß (25 bis 100 mm Kante), rot, blau, weiß; 3D-gedruckt, Oberseite matt, Seitenflächen spiegelnd |
+| Ablage | Pose in der Luft über einer Auffangkiste neben dem Band auf der Roboterseite; der Klotz fällt hinein |
 
-**Klotzverhalten auf dem Band** (klargestellt 21.09.2026): Die Klötze werden frei
-und ungehindert aufgelegt und laufen mit Bandgeschwindigkeit. **Festhängen oder
-Anstoßen kommt nicht vor.** Ein Klotz kann aber **beim Aufsetzen umkippen** — bis
-er wieder gleichmäßig läuft, gilt er als einschwingend.
-
-**Herunterfallen gibt es nur am Bandende**, wenn ein Klotz nicht rechtzeitig
-gegriffen wurde — und das ist aus Position und geschätzter Geschwindigkeit
-berechenbar. Von Hand vom Band genommen wird keiner. (`architektur/entscheidungen.md`,
-Nachtrag 6 / Z3, Z5)
-
-Die Ablage ist **kein Aufgabenpunkt**. Sie muss nur funktionieren, ohne dass sich
-abgelegte Klötze gegenseitig behindern. Der Pickvorgang ist der Fokus.
+Die Klötze laufen frei mit Bandgeschwindigkeit. Ein Klotz kann beim Aufsetzen
+umkippen; bis er gleichmäßig läuft, gilt er als einschwingend. Herunterfallen gibt
+es nur am Bandende, wenn ein Klotz nicht gegriffen wurde.
 
 ## 6. Arbeitsweise
 
-### Zwei Setups
+### Das Vorgängerarchiv
 
-| Setup | Rolle |
-|---|---|
-| **Lokal** — der Rechner am Roboter | Messungen, Tests, Inbetriebnahme, Build. Alles, was Hardware braucht. Hier ist auch das Vorgängerarchiv verfügbar. |
-| **Mobil** — Arbeit abseits des Aufbaus | Konzept, Architektur, Code am Schreibtisch, Dokumentation. **Kein Roboter, kein Build.** |
+Das Archiv liegt unter `/home/tetripick/UR10_Pick_ws` (auf einem mobilen Rechner
+als `FuE_Greifen-main/` im Projektroot, in `.gitignore`); die Struktur darunter
+ist gleich. Es ist **read-only**: Dort wird nichts verändert, nur ausgelesen.
 
-Ein früher genutzter dritter Rechner (Stand-PC, ursprünglich für die
-Konzeptarbeit) **entfällt.** Sein Stand ist überholt — die tragenden
-Informationen stammen aus den Pushs des lokalen Setups.
-
-Austausch läuft ausschließlich über GitHub, und der Nutzer pusht und pullt selbst
-(§4). Daraus folgt die Arbeitsweise: **Alles, was am Schreibtisch entschieden
-werden kann, wird vorab entschieden.** Die Umsetzung am Aufbau soll nicht neu
-herleiten müssen — deshalb die ausführlichen Specs. Zeit am Aufbau ist die knappe
-Ressource, nicht Zeit am Schreibtisch.
-
-### Pfadunterschiede zum Vorgängerprojekt
-
-Das Archiv der Vorgängergruppe liegt auf beiden Setups, aber **unter
-verschiedenen Namen**. Die Dokumentation zitiert durchgängig die Variante des
-lokalen Setups:
-
-| | Pfad |
-|---|---|
-| **Lokal** (Name in der Doku) | `/home/tetripick/UR10_Pick_ws` |
-| **Mobil** | `FuE_Greifen-main/` im Projektroot, in `.gitignore` |
-
-**Die Struktur darunter ist identisch** — `Robot/`, `cameras/`, `docs/`,
-`models/`, `zeroMQ/`. Jede Pfadangabe in der Dokumentation ist relativ zur
-Archivwurzel zu lesen; nur die Wurzel unterscheidet sich. Ein Verweis wie
-`cameras/tracker.hpp` oder `Robot/pose.yaml` ist also auf beiden Setups ohne
-Umrechnung auffindbar.
-
-⚠️ **Read-only, auf beiden Setups.** Im Archiv wird nichts verändert, nur
-ausgelesen.
-
-Ein zweiter Unterschied betrifft die Dateien, die `.gitignore` zurückhält und die
-deshalb auf einem frisch gepullten Rechner **fehlen**: `CLAUDE.md`, `GEMINI.md`,
-das Archiv selbst und `docs/archiv/2026-06-01-robotiq-gripper-component-design.md`.
-Letztere wird in mehreren Dokumenten als Formatvorlage genannt — sie ist dort
-nicht vorhanden, ohne dass das ein Fehler wäre.
+`.gitignore` hält außerdem `CLAUDE.md`, `GEMINI.md` und
+`docs/archiv/2026-06-01-robotiq-gripper-component-design.md` zurück; auf einem
+frisch gepullten Rechner fehlen sie.
 
 ### AICA-Aufbau
 
-Die Kette stammt aus einem AICA-Beispielaufbau mit Frame-Verfolgung:
+Der `object_follower` gibt die Zielpose an den Signal Point Attractor, der
+IK Velocity Controller setzt sie um, der Robot State Broadcaster meldet die
+Flanschpose zurück; das Hardware-Interface läuft mit 500 Hz. Der vollständige Graph
+steht in `systemgraph.md`, die Werte, die in der Anwendung von Hand gesetzt werden,
+in `einrichtung-projektanwendung.md` §2 und §5.
 
-```
-frame_to_signal → signal_point_attractor → ik_velocity_controller
-                            ▲
-              robot_state_broadcaster (cartesian_state)
-```
+### Entscheidungen mit Begründung
 
-Hardware-Rate 100 Hz. Im Betrieb ersetzt der `object_follower` den
-`frame_to_signal`; der vollständige Graph steht in `uebersicht/systemgraph.md`.
+Das Team hatte vorher nicht mit Echtzeitanwendungen gearbeitet. Entscheidungen
+wurden deshalb schrittweise erarbeitet und begründet —
+`architektur/entscheidungen.md` hält zu jeder Festlegung das *Warum* fest, am
+Aufbau jeweils mit Messung.
 
-Die Kenntnisse über verfügbare AICA-Controller sind im Team begrenzt — der
-Aufbau entstand aus dem, was verstanden wurde. Auf AICA-Seite bestehen keine
-Einschränkungen, Ergänzungen sind möglich.
+### Tests
 
-### Vorerfahrung
-
-Das Team hat **noch nicht mit Echtzeitanwendungen gearbeitet**. Entscheidungen
-werden deshalb schrittweise erarbeitet und begründet, nicht nur festgelegt —
-siehe `architektur/entscheidungen.md`, wo zu jeder Festlegung das *Warum* steht.
+`test_contracts.py` prüft jedes Signalformat. Jede Komponente hat ein Logikmodul
+ohne ROS mit eigenen Tests (Ende-zu-Ende-Läufe mit `fake_objects.py`
+eingeschlossen) und einen Konstruktionstest, der im AICA-Testabbild läuft
+(`docker build -f aica-package.toml --target test .`; Fixture `ros_context` aus
+`test/python_tests/conftest.py`). `test_base_cam_contract` und
+`test_interface_streamer` werden dort übersprungen, weil `cv_bridge` im
+Testabbild fehlt. Lokal: `python3 -m pytest` ohne die Dateien, die
+`state_representation` brauchen.
 
 ## 7. Dokumentenlandkarte
 
-**Die Landkarte steht in `docs/README.md`** — dort, wo sie hingehört, samt
-Vorrangregeln und Kurzregister („welche Frage wurde wo entschieden"). Sie wird
-hier bewusst **nicht** wiederholt: Mehrfachpflege ist genau der Fehler, den
-Nachtrag 3 in `entscheidungen.md` einmal teuer bezahlt hat.
+Die Landkarte samt Vorrangregeln und Kurzregister steht in **`docs/README.md`**.
+Das Nötigste:
 
-Das Nötigste für den Einstieg:
-
-- **`ARCHITECTURE.md`** (Projektroot) — verbindliche AICA-Regeln, gilt über
-  allem in `docs/`
+- **`ARCHITECTURE.md`** (Projektroot) — verbindliche AICA-Regeln
 - **`architektur/entscheidungen.md`** und **`architektur/datenvertraege.md`** —
-  **normativ.** Bei Widerspruch gelten diese beiden.
-- **`uebersicht/uebergabe.md`** — Einstieg beim Rechnerwechsel: Stand, gemessene
-  Werte, nächste Schritte
-- Alles Weitere: `docs/README.md`
+  normativ; bei Widerspruch gelten diese beiden
+- **Komponentenplan** (Word) — alle Komponenten und Funktionen zum Einlesen
 
 ## 8. Farbcode der Dokumentation
 
-Im Word-Dokument und im Systemgraph durchgängig verwendet:
+Im Komponentenplan und im Systemgraph durchgängig verwendet:
 
 | Farbe | Hex | Bedeutung |
 |---|---|---|
@@ -307,25 +191,15 @@ Im Word-Dokument und im Systemgraph durchgängig verwendet:
 | Grau | `808080` | Schaltsignale (Bool) |
 | Orange | `FFC000` | Bildsignale |
 | Gelb | `FFFF00` | Zielkoordinaten an die Robotersteuerung |
-| Grün | `92D050` | Roboterzustand (Koordinaten TCP) |
-
-> Anmerkung: `FFFF00` ist auf weißem Grund schwer lesbar. Ein dunkleres Gold
-> (etwa `BF8F00`) bliebe vom Orange unterscheidbar. Noch nicht entschieden.
+| Grün | `92D050` | Roboterzustand (Koordinaten TCP; genau genommen die Flanschpose) |
 
 ## 9. Beobachtungen am Bestand
 
-Ohne Handlungsbedarf, aber gut zu wissen:
-
 - `component_descriptions/roboter_tetris_auto_calibration.json` existiert, die
-  Klasse `AutoCalibration` ist aber **nicht in `setup.cfg` registriert**. Gehört
-  zum Kalibrierprojekt — nicht anfassen.
-- `Safety/workspace_bounds.json` ist seit 23.09.2026 **festgelegt** (am Aufbau
-  abgefahren, `status: defined`, Nachtrag 13 / L14).
-- `Calibration/calibration.json` enthält Legacy-Werte, markiert als
-  `legacy_initial_values` — noch nicht validiert.
-- **Tests:** Seit 1.1 prüft `test_contracts.py` jedes Signalformat. Jede neue
-  Komponente hat ein Logikmodul ohne ROS mit eigenen Tests (Ende-zu-Ende-Läufe mit
-  `fake_objects.py` eingeschlossen) und einen Konstruktionstest, der nur in der
-  AICA-Testumgebung läuft (`ros_context`). Lokal fehlt `pytest`; die Tests laufen
-  in einer venv im Scratchpad mit einem kleinen Runner, der die AICA-Module
-  nachbildet.
+  Klasse `AutoCalibration` ist nicht in `setup.cfg` registriert. Gehört zum
+  Kalibrierprojekt.
+- `Safety/workspace_bounds.json` ist am Aufbau abgefahren und festgelegt
+  (`status: defined`); der Follower trägt dieselben Werte als Standard, ein Test
+  prüft die Gleichheit.
+- `Calibration/calibration.json` enthält Werte des Vorgängerprojekts und ist überholt;
+  die gültige Kalibrierung steht in `Extrinsics/base_cam_extrinsics.json` (L27).

@@ -1,0 +1,111 @@
+{
+  "schema": "roboter_tetris.base_cam_extrinsics",
+  "version": 1,
+  "created": "2026-09-25T09:35:30.555871+00:00",
+  "method": "stufe1_farbkamera",
+  "frame": {
+    "parent": "world",
+    "child": "base camera, color optical frame"
+  },
+  "convention": "R = Rz(yaw) @ Ry(pitch) @ Rx(roll); m, deg",
+  "cal": {
+    "cal_x": -0.769327,
+    "cal_y": 0.809136,
+    "cal_z": 0.916884,
+    "cal_roll": -179.462929,
+    "cal_pitch": -0.022911,
+    "cal_yaw": 179.830102
+  },
+  "matrix": [
+    [
+      -0.999995524,
+      0.002961389,
+      -0.000427652,
+      -0.76932705
+    ],
+    [
+      0.002965268,
+      0.999951683,
+      -0.009372286,
+      0.809136481
+    ],
+    [
+      0.000399877,
+      -0.009373512,
+      -0.999955988,
+      0.916883747
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "quality": {
+    "posen": 39,
+    "posen_ausgelassen": 1,
+    "punkte": 6264,
+    "punkte_verworfen": 0,
+    "bildfehler_px": 0.372,
+    "pruefposen_px": 0.342,
+    "pruefposen_mm_mittel": 0.5,
+    "pruefposen_mm_max": 1.2,
+    "rutschen_mm": 0.13,
+    "rutschen_grad": 0.087,
+    "streuung_position_mm": 33.375,
+    "streuung_drehung_grad": 0.0034,
+    "gegen_vorher_band_mm": 8.86,
+    "gegen_vorher_grad": 1.178,
+    "referenzmarken": 0,
+    "kamerahoehe_aus_tiefe": true,
+    "ebene_neigung_grad": 1.118,
+    "ebene_hoehe_mm": -0.01,
+    "ebene_rest_mm": 1.54,
+    "startverfahren": "bisherige Kalibrierung",
+    "hinweis": "Lage der Farbkamera. Für base_cam erst zusammen mit einer Korrektur des Tiefenbilds (Tiefe gegen Farbe ~1 Grad, 25.09.2026).",
+    "intrinsik": {
+      "K": [
+        [
+          897.8309,
+          0.0,
+          647.0538
+        ],
+        [
+          0.0,
+          897.5387,
+          362.3055
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "D": [
+        0.129869,
+        -0.440544,
+        -0.000885,
+        -0.00064,
+        0.402135
+      ],
+      "bild": [
+        1280,
+        720
+      ]
+    }
+  },
+  "references": {
+    "size_m": 0.0,
+    "corners_world": {}
+  },
+  "grid": {
+    "rows": 7,
+    "cols": 11,
+    "tag_size_m": 0.02,
+    "tag_spacing_m": 0.006,
+    "first_id": 0,
+    "origin": "bottom_left",
+    "tag_rotation_deg": 180
+  }
+}

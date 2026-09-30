@@ -15,9 +15,9 @@ from roboter_tetris.contracts import (
     TrackEntry, pack_target, unpack_target,
 )
 from roboter_tetris.follower_logic import (
-    FollowerCore, FollowerParams, Pose, PoseHistory, SafetyGate, Workspace,
+    FollowerCore, FollowerParams, Pose, SafetyGate, Workspace,
     desired_yaw, nearest_equivalent, tracking_point, vertical_orientation,
-    yaw_of,
+    yaw_deviation, yaw_error, yaw_of,
 )
 
 # Test values, wider than the real workspace (defaults: Nachtrag 13 / L15).
@@ -26,7 +26,9 @@ PARAMS = FollowerParams(
     ws_x_min=-1.10, ws_x_max=-0.20, ws_y_min=-0.60, ws_y_max=0.60,
     ws_z_min=0.30, ws_z_max=0.80,
     observe_x=-0.80, observe_y=-0.10, observe_z=0.60, observe_yaw_deg=90.0,
-    lead_time_s=0.2)
+    lead_time_s=0.2,
+    # Mode 1 pinned: these tests predate the mode-2 default (L26); mode 2 has its own.
+    use_block_orientation=False)
 DOWN = vertical_orientation(0.0)
 
 
@@ -134,27 +136,6 @@ def test_gate_aborts_on_a_jump_within_a_state_but_not_after_reset():
 def test_gate_clamps_to_the_workspace():
     result = SafetyGate(PARAMS).check(Pose(-0.8, 0.0, 0.1, *DOWN))
     assert result.clamped and result.pose.z == 0.30 and result.abort_reason is None
-
-
-# -- Flange history -------------------------------------------------------------------------
-
-def test_history_interpolates_position_between_samples():
-    history = PoseHistory()
-    history.add(1.00, Pose(0.0, 0.0, 0.5, *DOWN))
-    history.add(1.01, Pose(0.002, 0.0, 0.5, *vertical_orientation(1.0)))
-    pose = history.at(1.0075)
-    assert abs(pose.x - 0.0015) < 1e-12
-    assert pose.orientation == vertical_orientation(1.0)    # nearer sample
-    assert history.at(0.99) is None and history.at(1.02) is None
-
-
-def test_history_drops_old_and_out_of_order_samples():
-    history = PoseHistory(max_age_s=1.0)
-    for k in range(300):
-        history.add(k * 0.01, Pose(k, 0, 0, *DOWN))
-    history.add(1.0, Pose(-1, 0, 0, *DOWN))            # older than the newest
-    assert 100 <= len(history) <= 101                   # about one second
-    assert history.at(2.99).x == 299
 
 
 # -- State machine ----------------------------------------------------------------------------
@@ -275,8 +256,8 @@ def test_prediction_and_lead_as_time():
 
 
 def test_prediction_horizon_is_capped_both_ways():
-    old = tracking_point(_s4(1.0, -0.20), 2.0, TRACK, clamp_upstream=False)
     cap = TRACK.max_extrapolation_s
+    old = tracking_point(_s4(1.0, -0.20), 1.0 + cap + 0.5, TRACK, clamp_upstream=False)
     assert old.capped and abs(old.block_y - (-0.20 - 0.1 * cap)) < 1e-12
     future = tracking_point(_s4(1.0, -0.20), 0.9, TRACK, clamp_upstream=False)
     assert future.capped and future.block_y == -0.20
@@ -298,6 +279,10 @@ def test_approach_clamps_only_upstream_and_keeps_the_lane():
 
 # -- Yaw ----------------------------------------------------------------------------------------
 
+def test_mode_2_is_the_default_of_the_final_build():
+    assert FollowerParams().use_block_orientation            # L26
+
+
 def test_mode_1_follows_the_measured_belt_direction():
     assert abs(desired_yaw(_s4(1.0, 0.0), TRACK) - (-math.pi / 2)) < 1e-12
     offset = replace(TRACK, gripper_yaw_offset_deg=90.0)
@@ -306,9 +291,86 @@ def test_mode_1_follows_the_measured_belt_direction():
 
 def test_mode_2_uses_the_block_angle_only_with_enough_quality():
     mode2 = replace(TRACK, use_block_orientation=True)
-    assert desired_yaw(_s4(1.0, 0.0, orientation=0.3, quality=0.9), mode2) == 0.3
-    assert abs(desired_yaw(_s4(1.0, 0.0, orientation=0.3, quality=0.5), mode2)
-               - (-math.pi / 2)) < 1e-12
+    belt = -math.pi / 2
+    turned = belt + math.radians(20.0)
+    assert abs(desired_yaw(_s4(1.0, 0.0, orientation=turned, quality=0.9), mode2)
+               - turned) < 1e-12
+    assert abs(desired_yaw(_s4(1.0, 0.0, orientation=turned, quality=0.5), mode2)
+               - turned) < 1e-12                      # 0.4 is enough since L29
+    assert abs(desired_yaw(_s4(1.0, 0.0, orientation=turned, quality=0.3), mode2)
+               - belt) < 1e-12
+
+
+def _deviation_deg(block_deg, previous_deg=None, limit=50.0):
+    """Mode-2 turn for a block lying block_deg against the belt (-y)."""
+    params = replace(TRACK, use_block_orientation=True, max_yaw_deviation_deg=limit)
+    target = _s4(1.0, 0.0, orientation=-math.pi / 2 + math.radians(block_deg))
+    previous = None if previous_deg is None else math.radians(previous_deg)
+    return math.degrees(yaw_deviation(target, params, previous))
+
+
+def test_mode_2_turns_at_most_45_degrees_from_the_home_yaw():
+    """L25 (user): from the mode-1 stance at most +-45 deg; a rectangle is
+    gripped across whichever side is nearer."""
+    for block, expected in ((0, 0), (20, 20), (-30, -30), (60, -30), (85, -5),
+                            (-70, 20), (90, 0), (180, 0), (135, -45)):
+        assert abs(_deviation_deg(block) - expected) < 1e-9, block
+    # The half-turn wrap of the block angle changes nothing.
+    assert abs(_deviation_deg(20 + 180) - 20) < 1e-9
+
+
+def test_mode_2_keeps_its_side_up_to_the_limit():
+    """Hysteresis at 45 deg: noise around a diagonal block must not flip the
+    wrist by 90 deg; beyond max_yaw_deviation_deg the other side is taken."""
+    assert abs(_deviation_deg(46, previous_deg=44) - 46) < 1e-9
+    assert abs(_deviation_deg(49.9, previous_deg=46) - 49.9) < 1e-9
+    assert abs(_deviation_deg(51, previous_deg=49) - (-39)) < 1e-9
+    assert abs(_deviation_deg(-47, previous_deg=-44) - (-47)) < 1e-9
+    assert abs(_deviation_deg(44, previous_deg=-46) - (-46)) < 1e-9
+    # Without a history: always within +-45.
+    assert abs(_deviation_deg(46) - (-44)) < 1e-9
+
+
+def _mode_2_turns(block_deg_at):
+    """Commanded turn away from the belt direction (deg) in ANFAHREN/FOLGEN
+    while the measured block angle follows block_deg_at(k)."""
+    params = replace(TRACK, use_block_orientation=True)
+    core = FollowerCore(params)
+    flange = params.observe_pose()
+    belt = -math.pi / 2
+    turns = []
+    for k in range(60):
+        target = _s4(k * 0.05, 0.60 - 0.005 * k,
+                     orientation=belt + math.radians(block_deg_at(k)))
+        out = core.step(flange, target, k * 0.05)
+        if out.target is None or core.state not in (1, 2):
+            continue
+        turns.append(math.degrees(yaw_error(yaw_of(out.target.orientation), belt)))
+        flange = out.target
+    return turns
+
+
+def _flips(turns):
+    return sum(1 for a, b in zip(turns, turns[1:]) if abs(a - b) > 45.0)
+
+
+def test_mode_2_does_not_flip_on_noise_around_45_degrees():
+    turns = _mode_2_turns(lambda k: 45.0 + 4.0 * math.sin(k * 1.7))   # 41 ... 49
+    assert turns and all(abs(t) <= 50.0 + 1e-9 for t in turns)
+    assert _flips(turns) == 0
+
+
+def test_mode_2_flips_once_when_the_angle_really_passes_the_limit():
+    turns = _mode_2_turns(lambda k: 40.0 + 0.3 * k)                   # 40 ... 57.7
+    assert turns and all(abs(t) <= 50.0 + 1e-9 for t in turns)
+    assert _flips(turns) == 1
+
+
+def test_max_yaw_deviation_must_allow_every_block_angle():
+    assert replace(TRACK, max_yaw_deviation_deg=44.0).problems()
+    assert replace(TRACK, max_yaw_deviation_deg=90.0).problems()
+    assert not [p for p in replace(TRACK, max_yaw_deviation_deg=45.0).problems()
+                if "yaw" in p]
 
 
 def test_the_nearer_of_the_two_equivalent_wrist_angles_is_chosen():

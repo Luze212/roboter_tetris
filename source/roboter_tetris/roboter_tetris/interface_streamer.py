@@ -29,16 +29,13 @@ class InterfaceStreamer(LifecycleComponent):
                            "Breite des Gesamtbildes (px). Die Höhe folgt aus "
                            "image_height und show_object_list.")
         self.add_parameter(sr.Parameter("image_height", 360, sr.ParameterType.INT),
-                           "Höhe des Bereichs je Kamerabild (px).")
+                           "Höhe des Kamerabildbereichs (px).")
         self.add_parameter(sr.Parameter("show_object_list", True, sr.ParameterType.BOOL),
                            "Objektliste unter dem Status einblenden.")
 
         self._base_msg = Image()
         self.add_input("base_debug_image", "_base_msg", Image,
                        user_callback=self._on_base_image)
-        self._robot_msg = Image()
-        self.add_input("robot_debug_image", "_robot_msg", Image,
-                       user_callback=self._on_robot_image)
         self._world_in = []
         self.add_input("world_state", "_world_in", Float64MultiArray)
         self._status_in = []
@@ -96,9 +93,6 @@ class InterfaceStreamer(LifecycleComponent):
     def _on_base_image(self) -> None:
         self._received["base"] = self._now_s()
 
-    def _on_robot_image(self) -> None:
-        self._received["robot"] = self._now_s()
-
     def _image(self, source: str, msg: Image):
         """The latest image of a source, or None if silent or unreadable."""
         received = self._received.get(source)
@@ -131,8 +125,7 @@ class InterfaceStreamer(LifecycleComponent):
                 follower_stale=status is not None and now - status.t > DATA_STALE_S,
                 world_stale=world is not None and now - world.t > DATA_STALE_S)
             panel = compose(
-                self._image("base", self._base_msg), self._image("robot", self._robot_msg),
-                lines, object_rows(world),
+                self._image("base", self._base_msg), lines, object_rows(world),
                 int(self.get_parameter("panel_width").get_value()),
                 int(self.get_parameter("image_height").get_value()),
                 bool(self.get_parameter("show_object_list").get_value()))

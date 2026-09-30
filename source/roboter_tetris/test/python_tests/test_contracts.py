@@ -288,16 +288,18 @@ def test_picked_id_wrong_length_is_rejected():
 # -- S8 follower_status -----------------------------------------------------
 
 def test_follower_status_round_trip():
-    arr = pack_follower_status(8.0, 3, 11, 0.01, -0.002, 0.03, 0.75)
-    assert len(arr) == FOLLOWER_STATUS_LENGTH
+    arr = pack_follower_status(8.0, 3, 11, 0.01, -0.002, 0.03)
+    assert len(arr) == FOLLOWER_STATUS_LENGTH == 6
     status = unpack_follower_status(arr)
     assert status.state == 3.0
     assert status.target_id == 11.0
-    assert status.w_effective == 0.75
+    assert status.err_z == 0.03
 
 
 def test_follower_status_wrong_length_is_rejected():
-    _expect_contract_error(unpack_follower_status, [0.0] * 6)
+    """Also the old 7-field form with w_effective (until 24.09.2026, L22)."""
+    _expect_contract_error(unpack_follower_status, [0.0] * 5)
+    _expect_contract_error(unpack_follower_status, [0.0] * 7)
 
 
 # -- S10 world_state --------------------------------------------------------

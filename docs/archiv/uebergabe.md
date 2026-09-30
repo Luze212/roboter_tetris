@@ -27,29 +27,47 @@ Kommilitonen) und `vision/board.py`, das die Kalibrierung nutzt; `.init_wizard/`
 `CMakeLists.txt`.
 
 **Geändert werden dürfen** die Komponenten rund um Kameras und Greifer (Vorgabe
-vom 21.09.2026). Seit 23.09.2026 wird nur noch `robot_cam_2` (Kanten) verfolgt;
-der A/B-Vergleich entfällt, die Banddistanz der Roboterkamera kommt aus dem
-Bildmedian (Nachtrag 13 / L5). Die Höhenkorrektur N1 der Roboterkamera bleibt im
-Follower — in `vision/` nicht doppelt korrigieren.
+vom 21.09.2026). Die Roboterkamera ist seit 24.09.2026 **nicht mehr eingebunden**
+(Nachtrag 13 / L22); ihre Blöcke bleiben im Paket.
 
 ---
 
 ## 2. Wo das Projekt steht
 
-**Alle Komponenten sind gebaut** und laufen in AICA. Die Inbetriebnahme am
-Aufbau ist im Gang — Stand und nächste Schritte: **`fahrplan-aufbau.md`**
+**Die Kette greift am Aufbau** Klötze vom laufenden Band und legt sie ab (L19,
+L20). Stand und nächste Schritte: **`fahrplan-aufbau.md`**
 („Stand nach Termin C“). Wie die Teile zusammenhängen: `uebersicht/systemgraph.md`.
 
 | | Komponente | Stand |
 |---|---|---|
 | ✅ läuft am Aufbau | `base_cam` (Übergangskalibrierung, B23 erledigt), `vectoring`, `priority_handler`, `data_tracker`, `robotiq_gripper`, Attractor → IK-Velocity-Controller | Datenpfad bis `data_tracker` geprüft (Nachtrag 12 / K4); Schätzung mit laufendem Band bestätigt (L9, L10). Attractor von Hand auf K = 5 / 50 Hz (L18) |
-| ✅ greift im Lauf | `object_follower` (4a, 4b, 4d) mit `base_cam` | **Sieben von sieben greifbaren Klötzen** bei etwa 0,13 m/s gegriffen und abgelegt (L19/L20), `err_laengs` +0,3 … +2 mm. 4c (Roboterkamera) offen. |
-| 🟡 gebaut, am Aufbau offen | `interface_streamer` | |
-| 🟡 misst, Erkennung unzuverlässig | `robot_cam_2` (weiter verfolgt), `robot_cam` (nicht mehr) | Banddistanz und Nah-Gate korrigiert, Hand-Auge neu (L11–L13); neuer Erkennungskern nötig |
+| ✅ greift im Lauf | `object_follower` (4a, 4b, 4d), `fake_objects.py` | Gedrosselt mit Fake bestanden (L18); **erste echte Griffe mit Ablage am 24.09.** (L19), `err_laengs` ≈ +1 mm, 7 von 7 abgelegt (L20). Stufe 4c entfernt (L22). Mit 0,5 m/s: 15 abgelegt, ~1 Klotz je 7 s, flache Klötze greifbar (L24) |
+| ✅ läuft am Aufbau | `interface_streamer` | nur mit dem Bild der Basiskamera (L22), `rate` 10 für den Vortrag (L24) |
+| ⏸ nicht eingebunden | `robot_cam_2`, `robot_cam` | Im Paket, aber von keiner Komponente mehr abgenommen (L22). Stand bis dahin: Banddistanz und Nah-Gate korrigiert, Hand-Auge neu (L11–L13), Erkennung unzuverlässig |
 
 ### ⚠️ Zuerst lesen: was sich am 24.09. verschoben hat
 
-Nachtrag 13 / L15–L21:
+Nachtrag 13 / L15–L24:
+
+- **Tempo ausgereizt, flache Klötze greifbar** (L24): L23 war zu pessimistisch — aus
+  der Ablagepose wurde kein Klotz in der Zone mehr gewählt. Gemessen und neu als
+  Standardwert: `t_settle_s` 0,4, Faktor 1,0 (darunter Fehlversuche), `t_descend_s` 0,9
+  bei 0,25 m/s Absenken, `t_grasp_s` 0,8, Anfahren 0,5 m/s (Attractor und IK von Hand).
+  Ergebnis: 15 abgelegt, 0 zu spät, ~1 Klotz je 7 s. Klötze ab 2 cm werden gegriffen
+  (`min_graspable_height_m` 0,02, `min_contour_area` 1000); geschlossene Backen dabei
+  11 mm über dem Band (seit L26: 6 mm).
+
+- **Vorhersagedeckel 0,6 → 1,0 s, Ziel-Timeout 1,5 s** (L23): Mit 0,6 wurde die
+  Vorhersage einen Teil der Zeit eingefroren, das Absenken brach ab. Danach 9 von 9.
+  Der `priority_handler` rechnet die Einschwingzeit des Followers mit (`t_settle_s`,
+  seit L24 0,4 s) und wählt nur noch erreichbare Klötze.
+
+- **Die Roboterkamera ist nicht mehr eingebunden** (L22): Follower ohne Stufe 4c,
+  Streamer ohne Roboterkamerabild, S8 mit 6 Feldern. Das Verhalten des Followers
+  ist nachweislich unverändert (27 200 Takte identisch). Nach dem Build Follower
+  und Streamer neu einfügen.
+- **Greifzone = Arbeitsraum, Bildausschnitt der Basiskamera angepasst** (L21);
+  Schutzstopp am Bandrand behoben: UR-Nutzlast 1,3 kg, IK-Beschleunigungsgrenze (L20).
 
 - **Pick-on-the-fly ist am Aufbau bestätigt:** erst zwei von zwei (L19), nach
   Nutzlast- und Beschleunigungskorrektur insgesamt **sieben von sieben
@@ -88,12 +106,12 @@ Nachträge 12 und 13 in `architektur/entscheidungen.md`:
 - **Band ≈ 0,13 m/s** (Stoppuhr), von y +1,08 bis −0,375 in `world` (L7).
 - **Hinter dem Bild führt `vectoring` weiter** (S3-Status 4 „vorhergesagt“, L10);
   Pool nur aus bewegten Klötzen; Band −127,9 mm/s geschätzt — **Ziel 3 bestätigt**.
-  Follower-Deckel 0,6 s, Zeitgrenzen 1,0 s.
+  Follower-Deckel 0,6 s, Zeitgrenzen 1,0 s — seit L23 1,0 / 1,5 s.
 - **Hand-Auge der Roboterkamera neu eingemessen** (Vorgänger lag in z 13 cm
   daneben, L11); die Erkennung von `robot_cam_2` ist an flachen Klötzen noch
   unzuverlässig (L13) → erster Griff ohne Roboterkamera.
 - **Arbeitsraum und Greifzone festgelegt** (L14, `Safety/workspace_bounds.json`),
-  `min_grip_height_m` 0,021; Arbeitsraum und Beobachtungspose seit 24.09. als
+  `min_grip_height_m` 0,021 (seit L26 0,016); Arbeitsraum und Beobachtungspose seit 24.09. als
   Standardwert im Follower (L15).
 
 ### Was sich am 21.09. verschoben hat
@@ -111,8 +129,8 @@ Fundstelle in `architektur/entscheidungen.md`:
   es nicht — Status 1 und 2 sind stillgelegt.
 - **Flansch → Griffpunkt ist 0,235 m** (`flange_to_grip_point_m`), nicht 0,215
   (Z7). Die 215 mm sind der TCP der UR-Steuerung.
-- **Greifen geht auch ohne Roboterkamera** (Z10) — sie ist eine Korrektur, keine
-  Voraussetzung. Gewichte stehen auf 0.
+- **Greifen geht ohne Roboterkamera** (Z10) — am Aufbau bestätigt (L19); seit L22
+  ist sie gar nicht mehr eingebunden.
 - **Die Greifebene** (Z11): Bis dorthin muss das Absenken begonnen haben, sonst
   bricht der Follower mit `outcome = 3` ab. Ziele dürfen stromaufwärts der Zone
   gewählt werden.
@@ -120,12 +138,12 @@ Fundstelle in `architektur/entscheidungen.md`:
   Abbruch.
 - ~~Basiskamera und Roboter sehen das Band an verschiedenen Stellen~~ (F1,
   **B23**) — erledigt 23.09.2026 (Nachtrag 13 / L6).
-- **Arbeitsraum und Beobachtungspose haben keine Defaults** (F3) — ohne sie lässt
-  sich der Follower nicht konfigurieren. Vorschläge für den virtuellen Roboter:
-  Einrichtung §9.
+- **Arbeitsraum und Beobachtungspose sind Pflichtparameter** (F3) — seit L15 mit
+  den am Aufbau festgelegten Werten als Standard; geleert lässt sich der Follower
+  nicht konfigurieren. Werte: Einrichtung §9.
 - **Freihöhe 0,49 m** statt 0,445 (Nachtrag 10 / J1) und **`t_descend_s` 2,0 s**,
   gekoppelt an die Sinkgeschwindigkeit 0,15 m/s (J2). Seit 24.09. **1,2 s** für
-  `observe_z` 0,45 (L18).
+  `observe_z` 0,45 (L18), seit L24 **0,9 s** bei 0,25 m/s.
 - **Neu in den Verträgen:** S3/S4/S10 erweitert, S4 mit Greifebene und Güte,
   S7 `outcome = 4` (vorher abgebrochen), S8 Zustandscodes, S10 `present`.
 
@@ -133,22 +151,22 @@ Fundstelle in `architektur/entscheidungen.md`:
 
 | Punkt | Warum |
 |---|---|
-| 🟡 **B21** — misst der Tracker außerhalb der alten Region sauber? | Voraussetzung für 2.4 und damit für eine nicht zirkuläre Geschwindigkeitsschätzung (Nachtrag 6 / Z4). |
+| ✅ **B21** — misst der Tracker außerhalb der alten Region sauber? | Ja: Messregion über das ganze Band, Pool −127,9 mm/s (Nachtrag 13 / L9, L10). |
 | 🔴 **C3** — Extrinsik der Basiskamera | Läuft als Projekt eines Kommilitonen. Die Basiskamera steht auf einem **beweglichen** Gestell, deshalb wird die Bestimmung automatisiert. **Überbrückt** durch die Übergangskalibrierung (Nachtrag 13 / L6) — wird die Kamera bewegt, gilt sie nicht mehr. |
 | ✅ **B23** — Basiskamera und Roboter im selben System | Erledigt 23.09.2026: fünf Antastpunkte, Rest ≤ 6 mm (Nachtrag 13 / L6). |
-| ✅ **Latenz im Follower** | `max_extrapolation_s` 0,6 s, Zeitgrenzen 1,0 s (Nachtrag 13 / L10). |
+| ✅ **Latenz im Follower** | `max_extrapolation_s` **1,0 s**, `target_timeout_s` 1,5 s (Nachtrag 13 / L23; S4 bis 0,93 s alt). Mit 0,6 brach das Absenken immer wieder ab. |
 | 🔴 **Einbrüche der 500-Hz-Schleife** | Rechner zeitweise voll; ein Einbruch stoppt External Control, der Arm bleibt stehen (L18). Oberfläche minimieren, Nebenprogramme beenden, Mitlesen leicht halten. |
 
 > **B1 ist nicht mehr rot.** Die Bandgeschwindigkeit wird geschätzt; B1 ist nur
 > noch die Gegenprobe mit der Stoppuhr.
 
-### `robot_cam_2` — Banddistanz korrigiert, am Aufbau offen
+### `robot_cam_2` — nicht mehr eingebunden (L22)
 
 Am 15.09. scheiterten beide Varianten an der **Auswahl**, am 22.09. an der
-**Banddistanz**: Sie wurde direkt unter dem Blob abgetastet und traf Schatten,
-Bildrand oder die Klotzoberseite (184 statt 284 mm, K3). Seit 23.09. ist sie der
-Median der Tiefe über das Bild (L5). Weiter nur mit der Kantenvariante; nächster
-Test Block 6. Einzelheiten: `architektur/robot-cam-befunde.md` §9.
+**Banddistanz** (K3); seit 23.09. ist sie der Median der Tiefe über das Bild (L5).
+Hand-Auge neu eingemessen (L11), die Erkennung blieb an flachen Klötzen
+unzuverlässig (L13). Da ohne Roboterkamera gegriffen wird, ist sie seit 24.09.
+nicht mehr eingebunden. Einzelheiten: `architektur/robot-cam-befunde.md` §9.
 
 ---
 
@@ -171,17 +189,21 @@ Nachträge 4 und 5.
 | Greiferöffnung | 127 mm |
 | Backenauflage | 20 mm hoch, 15 mm breit |
 | Bandrichtung | praktisch die y-Achse; das Band läuft von y +1,08 nach −0,375 (L7) |
-| Band im Robotersystem (angetastet) | x −0,70 … −0,93 m, y −0,20 … +0,87 m |
+| Band im Robotersystem (angetastet) | x −0,70 … −0,93 m, y −0,20 … +0,87 m; im Bild der Basiskamera ~0,8 m breit, x ≈ −0,49 … −1,25 (L21) |
 | Bandgeschwindigkeit (Stoppuhr) | ≈ 0,13 m/s |
 | Extrinsik Basiskamera (`world`) | −0,7787 · 0,7934 · 0,9163 · 179,46° · 0,45° · 179,76° |
 | Bild der Basiskamera | y ≈ 0,46 … 1,03 m |
 | Freihöhe Flansch (Transfer, Abbruch) | 0,49 m (J1) |
+| Arbeitsraum = Greifzone | x −1,0 … −0,53 · y −0,32 … +0,445 (Arbeitsraum für die Ablage bis x −0,30 / y +0,48), z 0,3036 … 0,60 (L14, L21) |
+| UR-Nutzlast | 1,3 kg, Schwerpunkt 12 / 24 / 45 mm (L20) |
+| Prozesszeiten (L24) | Einschwingen 0,23–0,33 s · Absenken 0,78–0,93 s bei 0,25 m/s · Greifen 0,63–0,83 s · Ablegen 1,3–2,2 s bei 0,5 m/s; ~1 Klotz je 7 s |
+| Flacher Klotz 50 × 75 × 25 mm | gemessen 23,8 mm, greifbar ab 20 mm; geschlossene Backen 6 mm über dem Band (L24, L26) |
 
 Genauigkeit der Basiskamera bei ruhendem Klotz, 299 Messungen: Position
 σ = 0,2…0,6 mm, Höhe σ = 0,6 mm. Die Grundfläche streut dagegen über 26 mm —
 Grundflächenmaße gehören auf **geglättete** Werte, nie auf Einzelbilder.
-Absolut gegen den Roboter (23.09.): ≤ 6 mm, Höhe nach `top_depth_bias_mm` offen
-zu bestätigen.
+Absolut gegen den Roboter (23.09.): ≤ 6 mm. Höhe mit `top_depth_bias_mm` durch die
+Greifhöhen der ersten echten Griffe bestätigt (≈ 96 bzw. 74 mm, L19).
 
 ---
 
@@ -267,11 +289,11 @@ Pendant gestoppt) — die Werte sind dann ein eingefrorener Altstand.
 | 1.1 | `contracts.py` — alle Signale S1–S10 | Nachtrag 6 |
 | 2.1–2.4 | `base_cam` (S1, Tracker misst die Längsposition), `robot_cam` (Auswahl), Greifer (`motion_done`, `has_object`) | Nachtrag 6 / Z4 |
 | 3.0–3.3 | `fake_objects.py`, `vectoring`, `priority_handler`, `data_tracker` | Nachtrag 7 |
-| 4a–4d | `object_follower`: Start, Folgen, Roboterkamera, Greifzyklus | Nachträge 8–10 |
+| 4a–4d | `object_follower`: Start, Folgen, Roboterkamera (4c, seit L22 entfernt), Greifzyklus | Nachträge 8–10 |
 | 5 | `interface_streamer` | Nachtrag 11 |
 
-Offen am Schreibtisch nur noch: **`Komponentenplan.docx`** nachziehen, wenn das
-System steht.
+Der **Komponentenplan** (`Komponentenplan Robotetris - Stand 2026-09-24.docx`) ist auf
+den finalen Stand nachgezogen (L26).
 
 ### Am Aufbau — in dieser Reihenfolge
 
@@ -283,8 +305,9 @@ Jede Stufe setzt die vorige voraus. Was gemessen wird, ersetzt einen
 dokumentierten Startwert; die Punkte stehen in `offene-punkte.md`.
 
 > **Stand 24.09.2026:** Stufen 1, 2 (bis B21), 5 erledigt; Stufe 3 übersprungen —
-> Stufe 6 lief direkt am echten Roboter mit `fake_objects.py` (L18). Was offen ist,
-> führt `fahrplan-aufbau.md`.
+> Stufe 6 lief am echten Roboter, erst mit `fake_objects.py` (L18), dann mit der
+> Basiskamera und echten Klötzen bis zur Ablage (L19–L21). Stufen 4 und 7 entfallen
+> (L22). Was offen ist, führt `fahrplan-aufbau.md`.
 
 **1. Laden und Registrierung** ✅ — Branch bauen, Systemabbild im Launcher neu
 erzeugen (Einrichtung §1), Anwendung laden: macht der Nutzer. Dann prüfen, ob
@@ -317,9 +340,7 @@ Einrichtung §9.
 - **4d:** voller Zyklus mit `toggle_signal`; ein künstlicher Abbruch mit Klotz im
   Greifer endet in der Kiste.
 
-**4. Roboterkamera** — **B6 Stufe 1** (neue Auswahl, Erwartungspunkt und ROI am
-Debug-Bild ablesen), dann **B8** (Beobachtungshöhe, trägt `observe_z`) und D18.
-**B24:** stempelt die D435i in der Rechneruhr?
+**4. ~~Roboterkamera~~** — nicht weiter verfolgt, nicht mehr eingebunden (L22).
 
 **5. Greifzone** ✅ — **B19 + B10** am 23.09.2026 von Hand abgefahren: Arbeitsraum
 in `Safety/workspace_bounds.json`, Zone (seit 24.09. = Arbeitsraum, L21) als Standardwert im
@@ -328,16 +349,16 @@ B11 nur beobachtet (Gelenke nicht mitgeschrieben).
 `is_zone_feasible` zeigt, ob die Zone lang genug ist. **B10:** Arbeitsraum nach
 `Safety/README.md` festlegen.
 
-**6. Follower am echten Roboter** ✅ für den Basiskamera-Pfad — 4a, 4b und 4d
-sind mit laufendem Band bestätigt. `lead_time_s = 0,24`, die Ablagepose (B9) und
-245 mm Flansch → Backenspitze tragen; nach korrigierter Nutzlast und
-`command_rate_limit = 2,0` auch am Bandrand (L19/L20). Als nächste Abnahme bleiben
-mehrere dicht aufeinanderfolgende Klötze (Priorisierung), Farben, Grenzfälle der
-Greifhöhe, Dauerlauf/Stabilität des 500-Hz-Regelkreises sowie B18/D23. B21 und die
-kleinen Erkennungsoptimierungen der Basiskamera werden gezielt nachgezogen.
+**6. Follower am echten Roboter** — ✅ gedrosselt mit `fake_objects.py` (L18), dann
+echte Griffe mit Ablage, 7 von 7 (L19, L20); B4, B9, B15 bestätigt. Offen: D23, B18,
+B22 unter Last, mehrere Klötze. Erst 4a, dann 4b mit **B4**
+(`lead_time_s` einmessen), **D23** (Montagewinkel der Backen). Dann 4d mit dem
+Referenzklotz: **erster Testgriff** bestätigt die 245 mm (B15), **D22** messen
+(Absenken, Greifen, Heben) und `t_descend_s` nachziehen, **B22** beobachten (bleibt
+die Ziel-ID beim Greifen?), **B18** Toleranzen, **B9** Ablagepose bei laufendem
+Programm gegenlesen.
 
-**7. 4c aufschalten** — erst nach B6 und B24: `weight_across`, dann
-`weight_along` schrittweise auf 1, `w_wirksam` im Übersichtsbild mitlesen.
+**7. ~~4c aufschalten~~** — entfällt, Stufe 4c ist entfernt (Nachtrag 13 / L22).
 
 ---
 

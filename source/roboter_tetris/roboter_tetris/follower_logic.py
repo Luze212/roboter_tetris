@@ -10,26 +10,25 @@ stages (Umsetzungsplan Phase 4):
   ``ANFAHREN`` and ``FOLGEN`` with the base camera alone -- prediction, lead,
   clamp to ``zone_upstream``, yaw. 4d: ``ABSENKEN``, ``GREIFEN``, ``HEBEN``,
   ``ABLEGEN``, ``LOESEN`` and ``ABBRUCH`` with a block in the gripper.
-* :class:`CameraBlend` -- 4c: the robot camera as a filtered correction on
-  top of the base camera prediction, ramped in and out, frozen for the grasp.
 * :class:`SafetyGate` -- the last function before every output (Thema 7).
-* :class:`PoseHistory` -- the flange ring buffer that 4c uses to place a robot
-  camera measurement at its image time.
+
+Stage 4c -- the robot camera as a correction on the base camera prediction --
+was removed on 24.09.2026 (Nachtrag 13 / L22): the follower grips with the
+base camera alone. The robot camera components stay in the package, unwired.
 
 Every pose here is a **flange** pose (``ur_tool0``) in ``world``: the gripper is
 not in the URDF, and the IK controller moves the flange.
 """
 
 import math
-from collections import deque
 from dataclasses import dataclass, fields
-from typing import Deque, List, NamedTuple, Optional, Set, Tuple
+from typing import List, NamedTuple, Optional, Set, Tuple
 
 from .contracts import (
     FOLLOWER_STATES, OUTCOME_ABORTED, OUTCOME_LOST, OUTCOME_MISSED_GRIP,
     OUTCOME_PLACED, OUTCOME_TOO_LATE, STATE_ABORT, STATE_APPROACH,
     STATE_DESCEND, STATE_FOLLOW, STATE_GRASP, STATE_LIFT, STATE_PLACE,
-    STATE_RELEASE, STATE_WAIT, ObjectPosition, Target, along_belt,
+    STATE_RELEASE, STATE_WAIT, Target, along_belt,
 )
 
 
@@ -73,36 +72,6 @@ def yaw_of(orientation: Tuple[float, float, float, float]) -> float:
     return math.atan2(2.0 * (x * y + w * z), 1.0 - 2.0 * (y * y + z * z))
 
 
-def quat_multiply(a, b):
-    aw, ax, ay, az = a
-    bw, bx, by, bz = b
-    return (aw * bw - ax * bx - ay * by - az * bz,
-            aw * bx + ax * bw + ay * bz - az * by,
-            aw * by - ax * bz + ay * bw + az * bx,
-            aw * bz + ax * by - ay * bx + az * bw)
-
-
-def rotate(q, v) -> Tuple[float, float, float]:
-    """Rotate vector ``v`` by the unit quaternion ``q`` = (w, x, y, z)."""
-    w, x, y, z = q
-    vx, vy, vz = v
-    tx, ty, tz = 2 * (y * vz - z * vy), 2 * (z * vx - x * vz), 2 * (x * vy - y * vx)
-    return (vx + w * tx + (y * tz - z * ty),
-            vy + w * ty + (z * tx - x * tz),
-            vz + w * tz + (x * ty - y * tx))
-
-
-def quat_from_rpy(roll: float, pitch: float, yaw: float):
-    """R = Rz(yaw) * Ry(pitch) * Rx(roll) -- the convention of the hand-eye
-    result (``Calibration_results_final.yaml``: its rpy reproduce its
-    quaternion to five digits this way)."""
-    cr, sr = math.cos(roll / 2), math.sin(roll / 2)
-    cp, sp = math.cos(pitch / 2), math.sin(pitch / 2)
-    cy, sy = math.cos(yaw / 2), math.sin(yaw / 2)
-    return (cr * cp * cy + sr * sp * sy, sr * cp * cy - cr * sp * sy,
-            cr * sp * cy + sr * cp * sy, cr * cp * sy - sr * sp * cy)
-
-
 def yaw_error(measured: float, commanded: float) -> float:
     """Yaw difference modulo a half turn (the gripper is symmetric)."""
     return (measured - commanded + math.pi / 2) % math.pi - math.pi / 2
@@ -136,7 +105,7 @@ class FollowerParams:
     ws_x_max: Optional[float] = -0.30
     ws_y_min: Optional[float] = -0.32
     ws_y_max: Optional[float] = 0.48
-    ws_z_min: Optional[float] = 0.3086
+    ws_z_min: Optional[float] = 0.2986
     ws_z_max: Optional[float] = 0.60
     #: Observation pose: belt middle at the start of the grasp zone (y +0.40),
     #: low enough to follow without the robot camera (B8, Nachtrag 13 / L14).
@@ -160,58 +129,44 @@ class FollowerParams:
     lead_time_s: float = 0.24
     #: Added to the prediction horizon (D7).
     latency_compensation_s: float = 0.0
-    #: Cap of the prediction horizon, gate check 3 (D14). Measured at the
-    #: setup: S4 is up to ~0.5 s old before the next one arrives (Nachtrag 13 /
-    #: L2). A cap below that froze the prediction and left the flange 10-60 mm
-    #: behind the block, unseen by err_along (L1). Was 0.2.
-    max_extrapolation_s: float = 0.6
-    #: S4 timestamp standing still this long -> abort, gate check 2. Was 0.5,
-    #: barely above the measured gap between two base camera measurements.
-    target_timeout_s: float = 1.0
+    #: Cap of the prediction horizon, gate check 3 (D14). Must stay above the
+    #: age of S4 before the next one arrives. Was 0.2 (L1), then 0.6 (L10); on
+    #: 24.09.2026 S4 was up to 0.93 s old (median 0.52, 24 % of the time above
+    #: 0.6): the frozen prediction made a 10-17 mm sawtooth in err_along and
+    #: broke off the descent again and again (Nachtrag 13 / L23).
+    max_extrapolation_s: float = 1.0
+    #: S4 timestamp standing still this long -> abort, gate check 2. Above the
+    #: cap: was 1.0 and once aborted a grasp already closing (L23).
+    target_timeout_s: float = 1.5
     #: ANFAHREN may take until the block reaches the zone, plus this (D5).
     timeout_approach_s: float = 2.0
     #: Time in FOLGEN before the grasp must begin (D5, Thema 6: 2-3 s).
     timeout_track_s: float = 3.0
-    #: Mode 2: grip along the block's own angle, if its quality allows.
-    use_block_orientation: bool = False
-    orientation_quality_min: float = 0.7
+    #: Mode 2: grip along the block's own angle, if its quality allows. On since
+    #: the final build (Nachtrag 13 / L26): at most +-45 deg from the mode-1 yaw.
+    use_block_orientation: bool = True
+    #: 0.4 since 28.09.2026: small upright blocks stayed below 0.7 and were
+    #: gripped along the belt; averaged over the smoothing window the angle
+    #: is still good to a few degrees (Nachtrag 13 / L29).
+    orientation_quality_min: float = 0.4
+    #: Mode 2: largest turn away from the mode-1 yaw (degrees). A rectangle is
+    #: gripped across either side, so every block lies within +-45 deg; up to
+    #: this limit the side chosen last is kept (hysteresis at 45 deg). User,
+    #: 24.09.2026: at most 45 deg each way, 50 to be safe (Nachtrag 13 / L25).
+    max_yaw_deviation_deg: float = 50.0
     #: Mounting angle of the jaws relative to the flange x axis (D23).
     gripper_yaw_offset_deg: float = 0.0
-    # -- 4c: robot camera ----------------------------------------------------
-    #: Weight of the robot camera along / across the belt, 0...1 (X/Y of the plan).
-    weight_along: float = 0.0
-    weight_across: float = 0.0
-    #: Fade in / out time of the weights (D8).
-    w_ramp_s: float = 0.2
-    #: Moving average over this many accepted corrections.
-    correction_filter_window: int = 10
-    #: Larger correction -> another object in view (R4, D16).
-    max_correction_m: float = 0.05
-    #: Older measurement -> fall back to w = 0 (D6).
-    robot_cam_max_age_s: float = 0.3
-    #: Start ABSENKEN only with the robot camera fully blended in (D9/D10).
-    require_robot_cam_for_grasp: bool = False
-    #: Hand-eye flange -> camera, R = Rz * Ry * Rx. Re-measured 23.09.2026 from
-    #: five views of one touched block, residual <= 4.4 mm (Nachtrag 13 / L11).
-    #: The previous group's values (C1: 0.1087 / -0.03436 / -0.05987, rpy
-    #: 1.66 / 1.56 / 91.50) put the camera 6 cm ABOVE the flange; it sits 7 cm below.
-    handeye_x: float = 0.0783
-    handeye_y: float = -0.0326
-    handeye_z: float = 0.0720
-    handeye_roll_deg: float = 4.26
-    handeye_pitch_deg: float = 0.08
-    handeye_yaw_deg: float = 90.95
     # -- 4d: grasp cycle -----------------------------------------------------
     belt_surface_z_m: float = 0.0536          # B17
     flange_to_grip_point_m: float = 0.235     # Nachtrag 6 / Z7
-    #: Lowest grip point above the belt (pad centre). 0.021 since 23.09.2026: the
-    #: workspace floor keeps the closed jaw tip 10 mm above the belt (flange
-    #: 0.3086), and 53.6 + 21 + 235 = 309.6 mm clears it (Nachtrag 13 / L14).
-    #: Pad 11...31 mm: a 30 mm block is still gripped. Was 0.015 (B15).
-    min_grip_height_m: float = 0.021
-    #: 0.15 m/s: observation height 0.45 -> grip height 0.31...0.34 in ~1 s. Couples
-    #: to t_descend_s of the priority_handler (Nachtrag 10 / J2).
-    descend_speed_mps: float = 0.15
+    #: Lowest grip point above the belt (pad centre). 0.011 since 28.09.2026:
+    #: closed jaw tip 1 mm above the belt, flange 53.6 + 11 + 235 = 299.6 mm,
+    #: 1 mm above the workspace floor 0.2986 (Nachtrag 13 / L28). Was 0.016
+    #: (L26), 0.021 (L14), 0.015 (B15).
+    min_grip_height_m: float = 0.011
+    #: 0.35 m/s since 28.09.2026 (Nachtrag 13 / L29; 0.25 in L24, 0.15 before).
+    #: Couples to t_descend_s of the priority_handler, 0.7 s (Nachtrag 10 / J2).
+    descend_speed_mps: float = 0.35
     #: Rise above the grip height while still moving with the belt.
     lift_clearance_m: float = 0.10
     #: Grasp release in belt coordinates, as err_laengs/err_quer of S8 (D3, B18).
@@ -252,6 +207,8 @@ class FollowerParams:
             found.append("transfer_height_m liegt außerhalb des Arbeitsraums")
         if self.workspace().clamp(self.place_pose())[1]:
             found.append("Ablagepose liegt außerhalb des Arbeitsraums")
+        if not 45.0 <= self.max_yaw_deviation_deg < 90.0:
+            found.append("max_yaw_deviation_deg muss in [45, 90) liegen")
         return found
 
     def workspace(self) -> "Workspace":
@@ -331,53 +288,6 @@ class SafetyGate:
         return GateResult(pose, None, clamped)
 
 
-# -- Flange history -----------------------------------------------------------------
-
-class PoseHistory:
-    """Ring buffer of (t, flange pose), about one second.
-
-    4c places a robot camera measurement at the flange pose of its *image*
-    time, not the current one: at 0.2 m/s and 40 ms latency that alone is 8 mm,
-    exactly in the fine positioning.
-    """
-
-    def __init__(self, max_age_s: float = 1.0):
-        self.max_age_s = max_age_s
-        self._samples: Deque[Tuple[float, Pose]] = deque()
-
-    def __len__(self) -> int:
-        return len(self._samples)
-
-    def clear(self) -> None:
-        self._samples.clear()
-
-    def add(self, t: float, pose: Pose) -> None:
-        if self._samples and t <= self._samples[-1][0]:
-            return                            # out of order or repeated: drop
-        self._samples.append((t, pose))
-        while self._samples and t - self._samples[0][0] > self.max_age_s:
-            self._samples.popleft()
-
-    def at(self, t: float) -> Optional[Pose]:
-        """Pose at time ``t``: position linear between neighbours, orientation
-        from the nearer one. None outside the stored span -- no extrapolation."""
-        if not self._samples or not self._samples[0][0] <= t <= self._samples[-1][0]:
-            return None
-        previous = self._samples[0]
-        for sample in self._samples:
-            if sample[0] >= t:
-                t0, p0 = previous
-                t1, p1 = sample
-                if t1 == t0:
-                    return p1
-                a = (t - t0) / (t1 - t0)
-                orientation = p0.orientation if a < 0.5 else p1.orientation
-                return Pose(p0.x + a * (p1.x - p0.x), p0.y + a * (p1.y - p0.y),
-                            p0.z + a * (p1.z - p0.z), *orientation)
-            previous = sample
-        return None
-
-
 # -- State machine ------------------------------------------------------------------
 
 #: Once in FOLGEN this long, the mean along-belt error is checked (lead).
@@ -395,7 +305,7 @@ OBJECT_LOSS_S = 0.1
 class TrackingPoint(NamedTuple):
     """Where the block is now and where the flange should go."""
 
-    block_x: float            # predicted block position, with correction
+    block_x: float            # predicted block position
     block_y: float
     target_x: float           # block + lead, clamped if asked
     target_y: float
@@ -403,23 +313,21 @@ class TrackingPoint(NamedTuple):
 
 
 def tracking_point(target: Target, now: float, params: FollowerParams,
-                   clamp_upstream: bool,
-                   correction: Tuple[float, float] = (0.0, 0.0)) -> TrackingPoint:
-    """Prediction, robot camera correction, lead and -- in ANFAHREN -- the
-    clamp to ``zone_upstream``.
+                   clamp_upstream: bool) -> TrackingPoint:
+    """Prediction, lead and -- in ANFAHREN -- the clamp to ``zone_upstream``.
 
     ``p(t) = p + v * (t - t_target + latency)`` with ``t - t_target`` capped to
-    ``[0, max_extrapolation_s]`` (Thema 7); plus the correction (4c); then
-    ``+ v * lead_time_s``. On a standing target v = 0 and the lead vanishes by
-    itself. Only the upstream side is clamped: across stays free (the robot
-    waits on the block's lane), downstream stays free (P4).
+    ``[0, max_extrapolation_s]`` (Thema 7); then ``+ v * lead_time_s``. On a
+    standing target v = 0 and the lead vanishes by itself. Only the upstream
+    side is clamped: across stays free (the robot waits on the block's lane),
+    downstream stays free (P4).
     """
     age = now - target.t
     horizon = min(max(age, 0.0), params.max_extrapolation_s)
     capped = age != horizon
     dt = horizon + params.latency_compensation_s
-    bx = target.x + target.vx * dt + correction[0]
-    by = target.y + target.vy * dt + correction[1]
+    bx = target.x + target.vx * dt
+    by = target.y + target.vy * dt
     tx = bx + target.vx * params.lead_time_s
     ty = by + target.vy * params.lead_time_s
     if clamp_upstream:
@@ -432,18 +340,43 @@ def tracking_point(target: Target, now: float, params: FollowerParams,
     return TrackingPoint(bx, by, tx, ty, capped)
 
 
-def desired_yaw(target: Target, params: FollowerParams) -> float:
-    """Block angle in mode 2 if its quality allows, else the belt direction.
+def yaw_deviation(target: Target, params: FollowerParams,
+                  previous: Optional[float] = None) -> float:
+    """Turn away from the belt direction (rad): 0 in mode 1, the block angle
+    in mode 2 if its quality allows.
+
+    Gripper and block are both symmetric under a half turn, and a rectangle
+    can be gripped across either side -- so the block angle counts modulo a
+    quarter turn and always lies within +-45 deg. Up to
+    ``max_yaw_deviation_deg`` the equivalent closest to ``previous`` is kept,
+    so a block lying at 45 deg does not make the wrist flip between +45 and
+    -45 deg with every noisy reading (Nachtrag 13 / L25).
+    """
+    if not (params.use_block_orientation
+            and target.ori_quality >= params.orientation_quality_min):
+        return 0.0
+    quarter = math.pi / 2.0
+    belt = math.atan2(target.vy, target.vx)
+    deviation = (target.orientation - belt + quarter / 2.0) % quarter - quarter / 2.0
+    if previous is not None:
+        limit = math.radians(params.max_yaw_deviation_deg)
+        for candidate in sorted((deviation, deviation + quarter, deviation - quarter),
+                                key=lambda c: abs(c - previous)):
+            if abs(candidate) <= limit:
+                return candidate
+    return deviation
+
+
+def desired_yaw(target: Target, params: FollowerParams,
+                previous_deviation: Optional[float] = None) -> float:
+    """Belt direction plus the mode-2 turn, plus the jaws' mounting angle.
 
     Mode 1 is the special case ``use_block_orientation = False`` -- one code
     path, so mode 2 is not first tested at the very end.
     """
-    if (params.use_block_orientation
-            and target.ori_quality >= params.orientation_quality_min):
-        base = target.orientation
-    else:
-        base = math.atan2(target.vy, target.vx)
-    return base + math.radians(params.gripper_yaw_offset_deg)
+    return (math.atan2(target.vy, target.vx)
+            + yaw_deviation(target, params, previous_deviation)
+            + math.radians(params.gripper_yaw_offset_deg))
 
 
 def _usable(target: Target) -> bool:
@@ -451,138 +384,6 @@ def _usable(target: Target) -> bool:
     return (all(math.isfinite(v) for v in target)
             and math.hypot(target.vx, target.vy) > 0.0)
 
-
-# -- 4c: robot camera ---------------------------------------------------------------
-
-def camera_to_world(flange: Pose, point_cam: Tuple[float, float, float],
-                    params: FollowerParams) -> Tuple[float, float, float]:
-    """Camera point -> world, via the flange pose. Direction **flange -> camera**
-    (C1): the hand-eye pose is the camera expressed in the flange frame."""
-    q_he = quat_from_rpy(math.radians(params.handeye_roll_deg),
-                         math.radians(params.handeye_pitch_deg),
-                         math.radians(params.handeye_yaw_deg))
-    px, py, pz = rotate(q_he, point_cam)
-    in_flange = (px + params.handeye_x, py + params.handeye_y, pz + params.handeye_z)
-    wx, wy, wz = rotate(flange.orientation, in_flange)
-    return (wx + flange.x, wy + flange.y, wz + flange.z)
-
-
-def robot_cam_world_xy(measurement: ObjectPosition, block_height: float,
-                       flange: Pose, params: FollowerParams
-                       ) -> Optional[Tuple[float, float]]:
-    """S2 -> world (x, y) of the block. The height correction comes FIRST
-    (N1): robot_cam back-projects with the belt distance, but the point lies
-    on the top face, so x and y are too large by z_band / (z_band - h)."""
-    depth = measurement.z_belt - block_height
-    if measurement.z_belt <= 0.0 or depth <= 0.0:
-        return None
-    scale = depth / measurement.z_belt
-    wx, wy, _ = camera_to_world(
-        flange, (measurement.x * scale, measurement.y * scale, depth), params)
-    return (wx, wy)
-
-
-class CameraBlend:
-    """The robot camera as a correction on top of the base camera prediction.
-
-    ``correction = robot_cam_world - prediction`` at the image time, averaged
-    over ``correction_filter_window`` accepted measurements -- nearly constant,
-    so it can be smoothed; the absolute position could not be without lag.
-    Applied per belt axis with ``weight_along`` / ``weight_across``, faded by
-    ``ramp`` (0...1) over ``w_ramp_s``. Back to 0 on: ``valid = 0``, a
-    measurement older than ``robot_cam_max_age_s``, a correction above
-    ``max_correction_m`` (R4: another block), or an image time outside the
-    flange history. Frozen from ABSENKEN to GREIFEN (F2).
-    """
-
-    def __init__(self):
-        self.reset()
-
-    def reset(self) -> None:
-        self._samples: Deque[Tuple[float, float]] = deque()
-        self._last_t: Optional[float] = None
-        self._last_ok_t: Optional[float] = None
-        self._latest_ok = False
-        self.ramp = 0.0
-        self._frozen: Optional[Tuple[float, float]] = None
-        self.events: List[str] = []
-        self._reported: Set[str] = set()
-
-    @property
-    def frozen(self) -> bool:
-        return self._frozen is not None
-
-    def available(self, now: float, params: FollowerParams) -> bool:
-        return (self._latest_ok and self._last_ok_t is not None
-                and now - self._last_ok_t <= params.robot_cam_max_age_s)
-
-    def update(self, now: float, dt: float,
-               measurement: Optional[ObjectPosition], target: Target,
-               history: PoseHistory, params: FollowerParams) -> Tuple[float, float]:
-        if self._frozen is not None:
-            return self._frozen
-        if measurement is not None and measurement.t != self._last_t:
-            self._last_t = measurement.t
-            self._take(measurement, target, history, params)
-        goal = 1.0 if (self.available(now, params)
-                       and max(params.weight_along, params.weight_across) > 0.0) else 0.0
-        step = dt / params.w_ramp_s if params.w_ramp_s > 0.0 else 1.0
-        self.ramp = (min(goal, self.ramp + step) if goal > self.ramp
-                     else max(goal, self.ramp - step))
-        return self.applied(target, params)
-
-    def applied(self, target: Target, params: FollowerParams) -> Tuple[float, float]:
-        if self._frozen is not None:
-            return self._frozen
-        if not self._samples or self.ramp == 0.0:
-            return (0.0, 0.0)
-        cx = sum(c[0] for c in self._samples) / len(self._samples)
-        cy = sum(c[1] for c in self._samples) / len(self._samples)
-        speed = math.hypot(target.vx, target.vy)
-        ux, uy = target.vx / speed, target.vy / speed
-        along = (cx * ux + cy * uy) * params.weight_along * self.ramp
-        across = (-cx * uy + cy * ux) * params.weight_across * self.ramp
-        return (along * ux - across * uy, along * uy + across * ux)
-
-    def freeze(self, target: Target, params: FollowerParams) -> None:
-        self._frozen = self.applied(target, params)
-
-    def unfreeze(self) -> None:
-        self._frozen = None
-
-    def _take(self, m: ObjectPosition, target: Target, history: PoseHistory,
-              params: FollowerParams) -> None:
-        self._latest_ok = False
-        if not m.valid or not all(math.isfinite(v) for v in m):
-            return
-        flange = history.at(m.t)
-        if flange is None:
-            self._report("history", "robot_cam: Bildzeit liegt nicht im Ringpuffer "
-                         "der Flanschposen - Zeitdomäne der Roboterkamera prüfen")
-            return
-        point = robot_cam_world_xy(m, target.height, flange, params)
-        if point is None:
-            return
-        age = m.t - target.t
-        correction = (point[0] - (target.x + target.vx * age),
-                      point[1] - (target.y + target.vy * age))
-        if math.hypot(*correction) > params.max_correction_m:
-            self._report("identity", "robot_cam: Korrektur über max_correction_m "
-                         "verworfen - anderer Klotz im Bild? (R4)")
-            return
-        self._samples.append(correction)
-        while len(self._samples) > max(int(params.correction_filter_window), 1):
-            self._samples.popleft()
-        self._last_ok_t = m.t
-        self._latest_ok = True
-
-    def _report(self, key: str, line: str) -> None:
-        if key not in self._reported:
-            self._reported.add(key)
-            self.events.append(line)
-
-
-# -- State machine ------------------------------------------------------------------
 
 class GripperFeedback(NamedTuple):
     """S9 from the gripper: motion_done covers closing and opening."""
@@ -592,13 +393,12 @@ class GripperFeedback(NamedTuple):
 
 
 class FollowerStatus(NamedTuple):
-    """Fields 2-6 of S8: errors are 0 in states without a block."""
+    """Fields 2-5 of S8: errors are 0 in states without a block."""
 
     target_id: float = 0.0
     err_along: float = 0.0
     err_across: float = 0.0
     err_z: float = 0.0
-    w_effective: float = 0.0
 
 
 class FollowerOutput(NamedTuple):
@@ -628,8 +428,6 @@ class FollowerCore:
     def __init__(self, params: FollowerParams):
         self.params = params
         self.gate = SafetyGate(params)
-        self.history = PoseHistory()
-        self.blend = CameraBlend()
         self.reset()
 
     def reset(self) -> None:
@@ -656,6 +454,7 @@ class FollowerCore:
         self._last_target: Optional[Target] = None
         self._yaw_ref = 0.0
         self._yaw_frozen: Optional[float] = None
+        self._yaw_dev: Optional[float] = None
         self._lead_mean = 0.0
         self._lead_warned = False
         self._last_now: Optional[float] = None
@@ -672,26 +471,22 @@ class FollowerCore:
         self._lift_phase = 1
         self._lift_start: Tuple[float, float, float] = (0.0, 0.0, 0.0)
         self._lift_v: Tuple[float, float] = (0.0, 0.0)
-        self.history.clear()
-        self.blend.reset()
         self.gate.reset()
 
     def pop_events(self) -> List[str]:
-        events = self._events + self.blend.events
-        self._events, self.blend.events = [], []
+        events, self._events = self._events, []
         return events
 
     # -- One cycle ------------------------------------------------------------------
 
     def step(self, flange: Optional[Pose], target: Optional[Target] = None,
-             now: float = 0.0, measurement: Optional[ObjectPosition] = None,
+             now: float = 0.0,
              gripper: GripperFeedback = GripperFeedback()) -> FollowerOutput:
         """One cycle.
 
         ``flange``: current flange pose, None if unknown or stale -- then
         nothing new is published and the attractor holds. ``target``: the
-        latest S4. ``measurement``: the latest S2. ``now``: clock time (s), in
-        the domain of the S4 and S2 timestamps.
+        latest S4. ``now``: clock time (s), in the domain of the S4 timestamps.
         """
         self.gate.params = self.params
         dt = 0.0 if self._last_now is None else max(now - self._last_now, 0.0)
@@ -712,7 +507,7 @@ class FollowerCore:
             else:
                 problem = self._tracking_problem(target, now)
                 if problem is None:
-                    return self._track(target, flange, now, dt, measurement, gripper)
+                    return self._track(target, flange, now, dt, gripper)
                 self._fail_attempt(problem[0], problem[1], flange)
 
         if self.state in _HOLDING:
@@ -751,13 +546,13 @@ class FollowerCore:
         self._attempt_id = target.id
         self._yaw_ref = yaw_of(flange.orientation)
         self._yaw_frozen = None
+        self._yaw_dev = None
         self._lead_mean = 0.0
         self._lead_warned = False
         self._capped_reported = False
         self._stable = 0
         self._place_retry = False
         self._place_stuck_reported = False
-        self.blend.reset()
         point = tracking_point(target, now, self.params, clamp_upstream=False)
         speed = math.hypot(target.vx, target.vy)
         wait = max(0.0, target.zone_upstream
@@ -790,17 +585,13 @@ class FollowerCore:
         return None
 
     def _track(self, target: Target, flange: Pose, now: float, dt: float,
-               measurement: Optional[ObjectPosition],
                gripper: GripperFeedback) -> FollowerOutput:
         self._last_target = target
         params = self.params
         v = (target.vx, target.vy)
         speed = math.hypot(*v)
-        correction = self.blend.update(now, dt, measurement, target,
-                                       self.history, params)
         point = tracking_point(target, now, params,
-                               clamp_upstream=self.state == STATE_APPROACH,
-                               correction=correction)
+                               clamp_upstream=self.state == STATE_APPROACH)
         if point.capped and not self._capped_reported:
             self._capped_reported = True
             self._events.append(
@@ -820,7 +611,10 @@ class FollowerCore:
         if self._yaw_frozen is not None:
             yaw = self._yaw_frozen
         else:
-            yaw = nearest_equivalent(desired_yaw(target, params), self._yaw_ref)
+            self._yaw_dev = yaw_deviation(target, params, self._yaw_dev)
+            yaw = nearest_equivalent(
+                math.atan2(target.vy, target.vx) + self._yaw_dev
+                + math.radians(params.gripper_yaw_offset_deg), self._yaw_ref)
             self._yaw_ref = yaw
 
         dx, dy = flange.x - point.block_x, flange.y - point.block_y
@@ -830,7 +624,7 @@ class FollowerCore:
         if self.state == STATE_FOLLOW:
             self._check_lead(err_along, now, dt)
             z_cmd = params.observe_z
-            if self._release_ok(err_along, err_across, flange, yaw, now):
+            if self._release_ok(err_along, err_across, flange, yaw):
                 self._stable += 1
             else:
                 self._stable = 0
@@ -861,39 +655,32 @@ class FollowerCore:
 
         pose = Pose(point.target_x, point.target_y, z_cmd, *vertical_orientation(yaw))
         self._last_cmd = pose
-        ramp = self.blend.ramp
-        status = FollowerStatus(target.id, err_along, err_across,
-                                flange.z - z_cmd, ramp)
+        status = FollowerStatus(target.id, err_along, err_across, flange.z - z_cmd)
         return self._publish(pose, flange, status, tracking=True)
 
     def _release_ok(self, err_along: float, err_across: float, flange: Pose,
-                    yaw: float, now: float) -> bool:
+                    yaw: float) -> bool:
         """Grasp release: four tolerances (F1), relative to the predicted
         block -- the lead keeps the absolute distance to the target non-zero
         on purpose, so the attractor's is_in_range is no use here."""
         params = self.params
-        ok = (abs(err_along) <= params.tol_along_m
-              and abs(err_across) <= params.tol_across_m
-              and abs(flange.z - params.observe_z) <= params.tol_z_m
-              and abs(yaw_error(yaw_of(flange.orientation), yaw)) <= params.tol_yaw_rad)
-        if ok and params.require_robot_cam_for_grasp:
-            ok = self.blend.available(now, params) and self.blend.ramp >= 0.999
-        return ok
+        return (abs(err_along) <= params.tol_along_m
+                and abs(err_across) <= params.tol_across_m
+                and abs(flange.z - params.observe_z) <= params.tol_z_m
+                and abs(yaw_error(yaw_of(flange.orientation), yaw)) <= params.tol_yaw_rad)
 
     def _enter_descend(self, target: Target, now: float, yaw: float) -> None:
         self._grip_z = self.params.grip_flange_z(target.height)
         self._yaw_frozen = yaw
-        self.blend.freeze(target, self.params)
         drop = max(self.params.observe_z - self._grip_z, 0.0)
         self._descend_deadline = (now + drop / self.params.descend_speed_mps
                                   + self.params.timeout_grasp_s)
         self._enter(STATE_DESCEND, "Toleranz gehalten, Klotz vor der Greifebene", now)
 
     def _back_to_follow(self, now: float) -> None:
-        """F3: back up to observation height, so the camera is valid again and
-        the next attempt starts under the same conditions as the first."""
+        """F3: back up to observation height, so the next attempt starts under
+        the same conditions as the first."""
         self._yaw_frozen = None
-        self.blend.unfreeze()
         self._stable = 0
         self._enter(STATE_FOLLOW, "Abweichung wächst beim Absenken", now)
 
@@ -918,7 +705,6 @@ class FollowerCore:
         self.picked = (seq, float(self._attempt_id), float(outcome))
         self.has_aborted = True
         self._finished.add(self._attempt_id)
-        self.blend.unfreeze()
         self.abort(reason, flange)
 
     # -- Holding: HEBEN, ABLEGEN, LOESEN -------------------------------------------------
@@ -1017,7 +803,6 @@ class FollowerCore:
         self.holding = False
         self._abort_with_block = False
         self._yaw_frozen = None
-        self.blend.unfreeze()
         self._enter(STATE_WAIT, "Klotz abgelegt", now)
 
     # -- ABBRUCH ----------------------------------------------------------------------

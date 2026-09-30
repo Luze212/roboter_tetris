@@ -34,14 +34,14 @@ def _world(entries, n_pool=4, v=(0.0017, -0.101)):
 
 def _status():
     return unpack_follower_status(
-        pack_follower_status(10.0, STATE_FOLLOW, 3, 0.0021, -0.0008, 0.0014, 0.65))
+        pack_follower_status(10.0, STATE_FOLLOW, 3, 0.0021, -0.0008, 0.0014))
 
 
 # -- Text -----------------------------------------------------------------------------
 
-def test_status_lines_show_state_target_weight_errors_and_belt():
+def test_status_lines_show_state_target_errors_and_belt():
     rows = [r.text for r in status_lines(_status(), _world([]))]
-    assert rows[0] == "Zustand: FOLGEN   Ziel: 3   w: 0.65"
+    assert rows[0] == "Zustand: FOLGEN   Ziel: 3"
     assert rows[1] == "Abweichung  laengs +2.1 mm   quer -0.8 mm   z +1.4 mm"
     speed = math.hypot(0.0017, -0.101) * 1000
     heading = math.degrees(math.atan2(-0.101, 0.0017))
@@ -99,18 +99,17 @@ def test_all_text_is_ascii():
 
 def test_panel_size_depends_only_on_the_parameters():
     base = np.zeros((720, 1280, 3), np.uint8)
-    robot = np.zeros((480, 848, 3), np.uint8)
-    for images in ((base, robot), (None, robot), (base, None), (None, None)):
-        panel = compose(*images, status_lines(None, None), object_rows(None), 1280, 360, True)
+    for image in (base, None):
+        panel = compose(image, status_lines(None, None), object_rows(None), 1280, 360, True)
         assert panel.shape == (panel_height(360, True), 1280, 3)
-    small = compose(None, None, status_lines(None, None), [], 640, 180, False)
+    small = compose(None, status_lines(None, None), [], 640, 180, False)
     assert small.shape == (panel_height(180, False), 640, 3)
 
 
 def test_images_are_scaled_keeping_their_aspect():
     """848 x 480 into 640 x 360: factor 0.75 -> 636 x 360, centred."""
     image = np.full((480, 848, 3), 255, np.uint8)
-    area = fit_image(image, 640, 360, "Roboterkamera")
+    area = fit_image(image, 640, 360, "Basiskamera")
     white = np.argwhere(area[:, :, 0] == 255)
     assert white[:, 1].min() == 2 and white[:, 1].max() == 637
     assert white[:, 0].min() == 0 and white[:, 0].max() == 359

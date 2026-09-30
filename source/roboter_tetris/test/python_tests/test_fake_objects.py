@@ -88,7 +88,7 @@ def test_sizes_cover_the_graspability_limits():
     widths = [max(b.length, b.width) for b in belt.blocks]
     assert max(widths) < 0.127
     assert any(h >= 0.030 for h in heights)
-    assert any(h < 0.030 for h in heights)      # the 25 mm cube
+    assert any(h < 0.020 for h in heights)      # the 15 mm block (L24)
 
 
 # -- Toppling on placement ------------------------------------------------------

@@ -1,0 +1,363 @@
+{
+  "name": "Base Kamera Kalibrierung",
+  "description": {
+    "brief": "Kalibriert die Basiskamera für base_cam mit dem Roboter und zeigt sie als Frame: Stufe 1 mit Bewegung, Stufe 2 und Prüfen ohne, Anzeigen aus der Kalibrierdatei.",
+    "details": "Stufe 1 (mode stufe1, der Roboter bewegt sich): Der Greifer hält das AprilGrid flach, Werkzeugachse waagerecht. Der Block hält zuerst die aktuelle Flanschpose, prüft Board-Layout, Abstand des Boards vor dem Flansch und die Kamerahöhe aus dem Tiefenbild und plant 40 Posen plus 4 Prüfposen um diese Startpose (nur Verschiebung und Drehung um die Hochachse); er fährt nur, wenn Board, Flansch und Greifer überall den Mindestabstand und die Untergrenze halten. An jeder Pose wartet er, bis der Flansch ruht, und mittelt mehrere Bilder. Am Ende fährt er zur Startpose zurück und rechnet Farbkamera→world und Board→Flansch gemeinsam; daraus die Kalibrierung für base_cam (Tiefenfehler der L515 über depth_error_*, Neigung und Höhe aus dem Band im Tiefenbild, L27). Geschrieben wird nur innerhalb der Gütegrenzen (Bildfehler, Prüfposen, Rutschen), und zwar direkt in die Datei, die base_cam liest (output_file); die bisherige bleibt als ..._vorher.json. base_cam nutzt sie ab dem nächsten Aktivieren; dauerhaft erst im Repo (roboter_tetris/Extrinsics/) und nach einem Build. Rohdaten schreibt jeder Lauf (raw_file). Entladen bricht ab, der Attractor hält dann die letzte Zielpose. Stufe 2 (stufe2) rechnet die Kamera ohne Bewegung aus Referenzmarken am Bandgestell neu, pruefen meldet nur, ob sich die Kamera bewegt hat (beide brauchen Referenzmarken). anzeigen gibt die Kamera aus der Kalibrierdatei als Pose aus (für einen SignalToTf-Frame) und folgt der Datei, wenn ein Lauf sie überschreibt."
+  },
+  "registration": "roboter_tetris::BaseCamCalibration",
+  "inherits": "modulo_components::LifecycleComponent",
+  "inputs": [
+    {
+      "display_name": "Color Image",
+      "description": "Farbbild der Basiskamera (L515).",
+      "signal_name": "color_image",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::Image"
+    },
+    {
+      "display_name": "Color Camera Info",
+      "description": "Intrinsik des Farbbilds; K und D gehen in die Rechnung und in die Ergebnisdatei.",
+      "signal_name": "color_camera_info",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::CameraInfo"
+    },
+    {
+      "display_name": "Aligned Depth Image",
+      "description": "Tiefenbild, zu Farbe registriert (16UC1 mm oder 32FC1 m). Ein Bild genügt: Gegenprobe der Bandebene (Neigung, Höhe).",
+      "signal_name": "depth_image",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::Image"
+    },
+    {
+      "display_name": "Roboterzustand",
+      "description": "cartesian_state des Flansches (ur_tool0) aus dem robot_state_broadcaster, in world. Stufe 1 rechnet mit der gemessenen, nicht der befohlenen Pose.",
+      "signal_name": "robot_state",
+      "signal_type": "cartesian_state"
+    }
+  ],
+  "outputs": [
+    {
+      "display_name": "Zielpose",
+      "description": "Nur Stufe 1: Zielpose des Flansches in world, an den attractor-Eingang des Signal Point Attractors. Leer, bis der Lauf befiehlt; stufe2 und pruefen senden nie.",
+      "signal_name": "target_pose",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Debug Image",
+      "description": "Farbbild mit erkannten Tags (Board grün, Referenzmarken blau) und Zustand des Laufs.",
+      "signal_name": "debug_image",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::Image"
+    },
+    {
+      "display_name": "Kamerapose",
+      "description": "Nur Betriebsart anzeigen: die Basiskamera aus der Kalibrierdatei (output_file) als Pose in world, Name 'basiskamera' - an einen Signal-to-Frame-Block (SignalToTf) für den Frame in der 3D-Ansicht. Folgt der Datei: überschreibt ein Kalibrierlauf sie, springt der Frame auf die neue Lage. In den anderen Betriebsarten leer.",
+      "signal_name": "camera_pose",
+      "signal_type": "cartesian_pose"
+    }
+  ],
+  "predicates": [
+    {
+      "display_name": "Läuft",
+      "description": "Ein Lauf ist aktiv (weder fertig noch abgebrochen).",
+      "predicate_name": "is_running"
+    },
+    {
+      "display_name": "Fertig",
+      "description": "Der Lauf ist erfolgreich beendet; stufe1/stufe2 haben die Ergebnisdatei geschrieben.",
+      "predicate_name": "is_finished"
+    },
+    {
+      "display_name": "Fehlgeschlagen",
+      "description": "Der Lauf ist abgebrochen; der Grund steht im Log. Nach Bewegung steht der Roboter wieder in der Startpose.",
+      "predicate_name": "has_failed"
+    },
+    {
+      "display_name": "Kamera bewegt",
+      "description": "stufe2/pruefen: Die Kamera weicht über die Grenzen von der Kalibrierdatei ab - nachkalibrieren.",
+      "predicate_name": "camera_moved"
+    }
+  ],
+  "parameters": [
+    {
+      "display_name": "1 Betriebsart [mode]",
+      "description": "Betriebsart: stufe1 = Roboter fährt das Board ab (Grundkalibrierung), stufe2 = neu aus den Referenzmarken ohne Bewegung, pruefen = nur prüfen, ob sich die Kamera bewegt hat (schreibt nichts), anzeigen = nur die Kamera aus der Kalibrierdatei (output_file) als Pose ausgeben, für einen Frame; folgt der Datei, wenn ein Lauf sie überschreibt.",
+      "parameter_name": "mode",
+      "parameter_type": "string",
+      "default_value": "stufe1",
+      "dynamic": false
+    },
+    {
+      "display_name": "1 Kalibrierdatei schreiben nach [output_file]",
+      "description": "Hierhin schreibt stufe1/stufe2 die Kalibrierung für base_cam, relativ zum Paket oder absolut. Standard: die Datei, die base_cam liest - sie gilt ab dem nächsten Aktivieren von base_cam, ohne Build; die bisherige bleibt als ..._vorher.json daneben. Im Container: dauerhaft erst, wenn sie ins Repo kopiert und gebaut ist.",
+      "parameter_name": "output_file",
+      "parameter_type": "string",
+      "default_value": "Extrinsics/base_cam_extrinsics.json",
+      "dynamic": false
+    },
+    {
+      "display_name": "1 Rohdaten nach [raw_file]",
+      "description": "Rohdaten jedes Laufs (alle Posen, auch wenn eine Gütegrenze greift), zum Nachrechnen mit test/tools/basecam_kalibrierung.py.",
+      "parameter_name": "raw_file",
+      "parameter_type": "string",
+      "default_value": "/tmp/base_cam_extrinsics_rohdaten.json",
+      "dynamic": false
+    },
+    {
+      "display_name": "1 Bisherige Kalibrierdatei [calibration_file]",
+      "description": "Bisher gültige Kalibrierdatei, relativ zum Paket oder absolut: Vergleich, Lage der Referenzmarken für stufe2/pruefen. Leer = Übergangswerte L6.",
+      "parameter_name": "calibration_file",
+      "parameter_type": "string",
+      "default_value": "Extrinsics/base_cam_extrinsics.json",
+      "dynamic": false
+    },
+    {
+      "display_name": "2 Board: Zeilen [grid_rows]",
+      "description": "Board: Tag-Zeilen des AprilGrid.",
+      "parameter_name": "grid_rows",
+      "parameter_type": "int",
+      "default_value": "7",
+      "dynamic": false
+    },
+    {
+      "display_name": "2 Board: Spalten [grid_cols]",
+      "description": "Board: Tag-Spalten des AprilGrid.",
+      "parameter_name": "grid_cols",
+      "parameter_type": "int",
+      "default_value": "11",
+      "dynamic": false
+    },
+    {
+      "display_name": "2 Board: Taggröße (mm) [tag_size_mm]",
+      "description": "Board: Kantenlänge eines Tags (schwarzer Rand außen) in mm.",
+      "parameter_name": "tag_size_mm",
+      "parameter_type": "double",
+      "default_value": "20.0",
+      "dynamic": false
+    },
+    {
+      "display_name": "2 Board: Tagabstand (mm) [tag_spacing_mm]",
+      "description": "Board: Abstand zwischen zwei Tags in mm.",
+      "parameter_name": "tag_spacing_mm",
+      "parameter_type": "double",
+      "default_value": "6.0",
+      "dynamic": false
+    },
+    {
+      "display_name": "2 Tag-Familie [tag_dictionary]",
+      "description": "Tag-Familie (OpenCV-Name), Board und Referenzmarken.",
+      "parameter_name": "tag_dictionary",
+      "parameter_type": "string",
+      "default_value": "DICT_APRILTAG_36h11",
+      "dynamic": false
+    },
+    {
+      "display_name": "3 Referenzmarken: erste ID [reference_first_id]",
+      "description": "Referenzmarken am Bandgestell: kleinste ID. Tags ab dieser ID gelten als Referenz.",
+      "parameter_name": "reference_first_id",
+      "parameter_type": "int",
+      "default_value": "100",
+      "dynamic": false
+    },
+    {
+      "display_name": "3 Referenzmarken: Größe (mm) [reference_size_mm]",
+      "description": "Referenzmarken: Kantenlänge (schwarzer Rand außen) in mm.",
+      "parameter_name": "reference_size_mm",
+      "parameter_type": "double",
+      "default_value": "70.0",
+      "dynamic": false
+    },
+    {
+      "display_name": "4 Plan: Verschiebung (m) [max_shift_m]",
+      "description": "Posenplan: Verschiebung der Board-Mitte um die Startpose, je Richtung (m).",
+      "parameter_name": "max_shift_m",
+      "parameter_type": "double",
+      "default_value": "0.08",
+      "dynamic": false
+    },
+    {
+      "display_name": "4 Plan: Höhenschritt (m) [height_step_m]",
+      "description": "Posenplan: Höhenänderung nach oben und unten (m).",
+      "parameter_name": "height_step_m",
+      "parameter_type": "double",
+      "default_value": "0.08",
+      "dynamic": false
+    },
+    {
+      "display_name": "4 Plan: Kippen um Werkzeugachse (Grad) [max_tilt_deg]",
+      "description": "Posenplan: seitliches Kippen um die Werkzeugachse (Grad). 0 = aus: das Board bewegt sich im Griff, sobald es gekippt wird; die Kamerahöhe kommt dann aus dem Tiefenbild.",
+      "parameter_name": "max_tilt_deg",
+      "parameter_type": "double",
+      "default_value": "0.0",
+      "dynamic": false
+    },
+    {
+      "display_name": "4 Plan: Nicken quer (Grad) [max_pitch_deg]",
+      "description": "Posenplan: Nicken quer zur Werkzeugachse (Grad). Der Flansch schwingt dabei um Abstand x sin(Winkel) nach unten - bestimmt die Mindesthöhe der Startpose.",
+      "parameter_name": "max_pitch_deg",
+      "parameter_type": "double",
+      "default_value": "0.0",
+      "dynamic": false
+    },
+    {
+      "display_name": "4 Plan: Drehung Hochachse (Grad) [max_yaw_deg]",
+      "description": "Posenplan: Drehung um die Hochachse (Grad). Schwenkt den Flansch um die Board-Mitte mit - klein halten.",
+      "parameter_name": "max_yaw_deg",
+      "parameter_type": "double",
+      "default_value": "20.0",
+      "dynamic": false
+    },
+    {
+      "display_name": "4 Plan: Durchgänge [passes]",
+      "description": "Posenplan: Durchgänge zu je 20 Posen. Mehr Posen mitteln den Posenfehler des Roboters.",
+      "parameter_name": "passes",
+      "parameter_type": "int",
+      "default_value": "2",
+      "dynamic": false
+    },
+    {
+      "display_name": "4 Plan: Mindestabstand zum Band (m) [min_clearance_m]",
+      "description": "Mindestabstand von Board, Flansch und Greifer zum Band (m).",
+      "parameter_name": "min_clearance_m",
+      "parameter_type": "double",
+      "default_value": "0.1",
+      "dynamic": false
+    },
+    {
+      "display_name": "4 Plan: Flansch-Untergrenze z (m) [min_flange_z_m]",
+      "description": "Unterste Flanschhöhe in world (m), 0 = aus. Tiefere Posen werden auf diese Höhe angehoben, ihre Drehungen bleiben. Am Aufbau 0,34 (Handgelenk, 25.09.2026).",
+      "parameter_name": "min_flange_z_m",
+      "parameter_type": "double",
+      "default_value": "0.0",
+      "dynamic": false
+    },
+    {
+      "display_name": "4 Plan: Flansch-Abweichung max. (m) [max_flange_offset_m]",
+      "description": "Größte waagerechte Abweichung des Flansches von der Startpose (m); darüber verweigert der Plan den Lauf.",
+      "parameter_name": "max_flange_offset_m",
+      "parameter_type": "double",
+      "default_value": "0.25",
+      "dynamic": false
+    },
+    {
+      "display_name": "4 Plan: Bandoberfläche z (m) [belt_z_m]",
+      "description": "Bandoberfläche in world (m), B17.",
+      "parameter_name": "belt_z_m",
+      "parameter_type": "double",
+      "default_value": "0.0536",
+      "dynamic": false
+    },
+    {
+      "display_name": "5 Aufnahme: Ruhezeit (s) [settle_s]",
+      "description": "Wartezeit nach dem Ankommen, in der der Flansch ruhen muss (s).",
+      "parameter_name": "settle_s",
+      "parameter_type": "double",
+      "default_value": "1.0",
+      "dynamic": false
+    },
+    {
+      "display_name": "5 Aufnahme: Bilder je Pose [frames_per_pose]",
+      "description": "Bilder, die je Pose gemittelt werden.",
+      "parameter_name": "frames_per_pose",
+      "parameter_type": "int",
+      "default_value": "8",
+      "dynamic": false
+    },
+    {
+      "display_name": "5 Aufnahme: Tiefenskala (mm/Wert) [depth_scale_to_mm]",
+      "description": "mm pro Tiefen-Rohwert (16UC1), wie in base_cam.",
+      "parameter_name": "depth_scale_to_mm",
+      "parameter_type": "double",
+      "default_value": "1.0",
+      "dynamic": false
+    },
+    {
+      "display_name": "6 Bandbereich: x (px) [roi_x]",
+      "description": "Bandbereich im Bild für die Vergleiche: x-Offset in px (wie base_cam).",
+      "parameter_name": "roi_x",
+      "parameter_type": "int",
+      "default_value": "342",
+      "dynamic": false
+    },
+    {
+      "display_name": "6 Bandbereich: y (px) [roi_y]",
+      "description": "Bandbereich: y-Offset in px.",
+      "parameter_name": "roi_y",
+      "parameter_type": "int",
+      "default_value": "60",
+      "dynamic": false
+    },
+    {
+      "display_name": "6 Bandbereich: Breite (px) [roi_width]",
+      "description": "Bandbereich: Breite in px.",
+      "parameter_name": "roi_width",
+      "parameter_type": "int",
+      "default_value": "618",
+      "dynamic": false
+    },
+    {
+      "display_name": "6 Bandbereich: Höhe (px) [roi_height]",
+      "description": "Bandbereich: Höhe in px.",
+      "parameter_name": "roi_height",
+      "parameter_type": "int",
+      "default_value": "580",
+      "dynamic": false
+    },
+    {
+      "display_name": "7 Prüfen: Grenze Verschiebung (mm) [max_belt_shift_mm]",
+      "description": "Prüfen: ab dieser Verschiebung auf dem Band gilt die Kamera als bewegt (mm).",
+      "parameter_name": "max_belt_shift_mm",
+      "parameter_type": "double",
+      "default_value": "3.0",
+      "dynamic": false
+    },
+    {
+      "display_name": "7 Prüfen: Grenze Verdrehung (Grad) [max_angle_deg]",
+      "description": "Prüfen: ab dieser Verdrehung gilt die Kamera als bewegt (Grad).",
+      "parameter_name": "max_angle_deg",
+      "parameter_type": "double",
+      "default_value": "0.5",
+      "dynamic": false
+    },
+    {
+      "display_name": "8 Debug-Bild [debug_enable]",
+      "description": "Debug-Bild mit erkannten Tags und Zustand senden.",
+      "parameter_name": "debug_enable",
+      "parameter_type": "bool",
+      "default_value": "true",
+      "dynamic": false
+    },
+    {
+      "display_name": "9 Tiefenfehler: fester Anteil (mm) [depth_error_c0_mm]",
+      "description": "Tiefenfehler der L515 gegen das Farbbild (L27): fester Anteil in mm. Die vier Werte rechnen die Lage der Farbkamera in die Kalibrierung für base_cam um; gemessen am 27.09.2026, eine Eigenschaft der Kamera. Alle 0 = ohne Tiefenfehler.",
+      "parameter_name": "depth_error_c0_mm",
+      "parameter_type": "double",
+      "default_value": "3.715",
+      "dynamic": false
+    },
+    {
+      "display_name": "9 Tiefenfehler: je m Bild-x (mm/m) [depth_error_cx_mm_per_m]",
+      "description": "Tiefenfehler: Anteil je m quer im Bild (Bild-x) in mm/m.",
+      "parameter_name": "depth_error_cx_mm_per_m",
+      "parameter_type": "double",
+      "default_value": "3.359",
+      "dynamic": false
+    },
+    {
+      "display_name": "9 Tiefenfehler: je m Bild-y (mm/m) [depth_error_cy_mm_per_m]",
+      "description": "Tiefenfehler: Anteil je m längs im Bild (Bild-y) in mm/m.",
+      "parameter_name": "depth_error_cy_mm_per_m",
+      "parameter_type": "double",
+      "default_value": "21.812",
+      "dynamic": false
+    },
+    {
+      "display_name": "9 Tiefenfehler: je m Abstand (mm/m) [depth_error_cz_mm_per_m]",
+      "description": "Tiefenfehler: Anteil je m Abstand in mm/m.",
+      "parameter_name": "depth_error_cz_mm_per_m",
+      "parameter_type": "double",
+      "default_value": "4.427",
+      "dynamic": false
+    }
+  ]
+}

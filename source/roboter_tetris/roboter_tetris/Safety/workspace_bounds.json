@@ -11,18 +11,18 @@
     "x_max": -0.3,
     "y_min": -0.32,
     "y_max": 0.48,
-    "z_min": 0.3086,
+    "z_min": 0.2986,
     "z_max": 0.6
   },
   "basis": {
     "method": "Vermessung am Aufbau: Flansch per Handfuehrung ueber den Bandbereich gefahren (23.09.2026)",
-    "notes": "Band: x -1.000 ... -0.530, y -0.320 ... +0.445 -- sicher erreichbar, ohne Singularitaet, ausserhalb des Bildes der Basiskamera (beginnt bei y ~ +0.46); y -0.32 ist das Bandende (danach senkt sich das Band ab). z_max 0.60: darueber faehrt der Arm im hinteren Bereich in eine Singularitaet. z_min 0.3086 = Band 0.0536 + 0.010 Abstand der geschlossenen Backenspitze + 0.245 Flansch->Backenspitze. ERWEITERT fuer die Ablage neben dem Band (x -0.316, y +0.476): x_max -0.530 -> -0.30, y_max 0.445 -> 0.48. Auf dem Band zielt der Follower nie in die Erweiterung (Greifzone y <= +0.40, Anfahren auf zone_upstream geklemmt); sie wird nur beim Transfer auf Freihoehe zur Ablage durchfahren. Die Ecke x -1.0 / y +0.48 liegt im Quader, wird aber von keinem Zustand angefahren. Gelenkwinkel wurden beim Abfahren nicht mitgeschrieben; der Abstand zu Singularitaeten beruht auf Beobachtung."
+    "notes": "Band: x -1.000 ... -0.530, y -0.320 ... +0.445 -- sicher erreichbar, ohne Singularitaet, ausserhalb des Bildes der Basiskamera (beginnt bei y ~ +0.46); y -0.32 ist das Bandende (danach senkt sich das Band ab). z_max 0.60: darueber faehrt der Arm im hinteren Bereich in eine Singularitaet. z_min 0.2986 = Band 0.0536 + 0.000 Abstand der geschlossenen Backenspitze + 0.245 Flansch->Backenspitze (28.09.2026, Nachtrag 13 / L28, am Aufbau erprobt; vorher 0.3036 mit 5 mm (L26), 0.3086 mit 10 mm). ERWEITERT fuer die Ablage neben dem Band (x -0.316, y +0.476): x_max -0.530 -> -0.30, y_max 0.445 -> 0.48. Auf dem Band zielt der Follower nie in die Erweiterung (Greifzone y <= +0.40, Anfahren auf zone_upstream geklemmt); sie wird nur beim Transfer auf Freihoehe zur Ablage durchfahren. Die Ecke x -1.0 / y +0.48 liegt im Quader, wird aber von keinem Zustand angefahren. Gelenkwinkel wurden beim Abfahren nicht mitgeschrieben; der Abstand zu Singularitaeten beruht auf Beobachtung."
   },
   "validation": {
     "defined_at": "2026-09-23",
     "operator": "Projektteam am Aufbau (Handfuehrung), dokumentiert in docs/architektur/entscheidungen.md Nachtrag 13 / L14",
-    "safety_margin_m": 0.01,
-    "notes": "Marge 10 mm nur in z (Backenspitze ueber dem Band). Die Bandhoehe 53.6 mm hat +-5 mm systematische Unsicherheit (B17) -- beim ersten Testgriff pruefen."
+    "safety_margin_m": 0.0,
+    "notes": "Keine Marge in z mehr: Grenze = geschlossene Backenspitze auf Bandhoehe; beim Greifen 1 mm darueber (min_grip_height_m 0.011, L28). Auf der hohen Bandseite (x ~ -0.93) liegt das Band rund 1 mm hoeher (Querneigung 0.39-0.64 Grad, B17/L27). Die Bandhoehe 53.6 mm ist mit geschlossenem Greifer angetastet (B17), der Abstand haengt daher nicht an der +-5 mm Unsicherheit der 245 mm; es bleiben Ebenheit (+-1 mm) und Durchhang des Bandes."
   },
   "runtime_parameters": {
     "note": "Laufzeitwirksam sind die AICA-Parameter ws_x_min/ws_x_max/ws_y_min/ws_y_max/ws_z_min/ws_z_max des object_follower. Seit 24.09.2026 sind diese Werte dort als Standardwert eingetragen (follower_logic.FollowerParams und component_descriptions, Nachtrag 13 / L15); ein Test prueft die Gleichheit mit dieser Datei. Aendert sich diese Datei, beide Stellen nachziehen. Von Hand gesetzte Werte eines Blocks gehen dem Standardwert vor."
