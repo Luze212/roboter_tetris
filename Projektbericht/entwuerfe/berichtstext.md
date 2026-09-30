@@ -834,6 +834,13 @@ unverändert
 
 ### 4.3 Hand-Auge-Kalibrierung der Roboterkamera
 
+Die Kalibrierung der Roboterkamera findet im finalen Greifablauf keine
+Anwendung, da die Roboterkamera nicht in den Regelpfad eingebunden ist
+(Abschnitte 2.1.6 und 3.1). Sie liegt dem Projekt als eigenständige
+Kalibrieranwendung für Nachfolgeprojekte bei. Damit ist die Voraussetzung
+geschaffen, die Roboterkamera später als Korrektursignal nahe dem Greifpunkt
+einzubinden.
+
 Die Roboterkamera bewegt sich mit dem Flansch. Ihre Messungen sind nur dann in
 `world` auswertbar, wenn die feste Transformation zwischen Flansch und Kamera
 bekannt ist. Dieses Problem ist von dem in Abschnitt 4.2 zu unterscheiden. Dort
@@ -845,7 +852,8 @@ bezeichnet
 Unbekannt sind zwei Transformationen: die Lage der Kamera relativ zum Flansch
 (`T_ee_cam`) und die Lage des Boards im Bezugssystem `world`. Beide werden
 gemeinsam bestimmt. Als Nebenprodukt entsteht die Transformation zwischen
-Roboterbasis und Förderband-Koordinatensystem (`T_robot_conveyor`). Dafür wird
+Roboterbasis und Förderband-Koordinatensystem `conveyor_frame` aus Abschnitt
+2.2.1 (`T_robot_conveyor`). Dafür wird
 der Ursprung des Boards als bekannter Punkt im Förderband-Koordinatensystem
 festgelegt. Die Berechnung nutzt dieselben Verfahren wie in Abschnitt 4.2.
 
@@ -871,7 +879,7 @@ Detektionen. Nach dem letzten Wegpunkt kehrt er zur Startposition zurück.
 Abbildung `fig-orbit-trajektorie` zeigt die Trajektorie mit den Standardwerten
 von 9 Wegpunkten und einem Kreisradius von 50 mm in Drauf- und Seitenansicht.
 
-<!-- Word-Übernahme: `fig-orbit-trajektorie` an dieser Stelle einfügen und die
+<!-- Word-Übernahme: `fig-orbit-trajektorie` an dieser Stelle einfügen.
 Bildunterschrift: Orbit-Trajektorie der Eye-in-Hand-Kalibrierung. Draufsicht:
 9 Wegpunkte (Startpose 0 im Zentrum, Wegpunkte 1–8 auf dem Kreisring mit
 r = 50 mm, 45°-Abstände). Seitenansicht: Die Kamera zeigt an jedem Wegpunkt
@@ -889,11 +897,12 @@ Basiskamera nicht mitbewegt wird, deckt sie dabei nur einen Blickwinkel ab.
 Diese Messungen ergänzen die Messungen der Roboterkamera, ohne sie zu ersetzen.
 
 Aus den gesammelten Flanschposen und Board-Posen berechnet OpenCV die
-Transformation `T_ee_cam`. Daraus folgen `T_robot_conveyor` und die Lage der
-Basiskamera in `world`. Alle drei Transformationen werden in der Datei
-`calibration.yaml` gespeichert. Die Hauptanwendung liest diese Datei beim Start
-ein. Damit ist keine laufende Signalverbindung zwischen Kalibrierung und Betrieb
-erforderlich.
+Transformation `T_ee_cam`. Daraus folgen `T_robot_conveyor` und eine Lage der
+Basiskamera in `world`. Für die Basiskamera gilt im Projekt jedoch das
+Verfahren aus Abschnitt 4.2. Alle drei Transformationen werden in der Datei
+`calibration.yaml` gespeichert. Eine Anwendung, die die Roboterkamera
+einbindet, kann diese Datei beim Start einlesen. Damit ist keine laufende
+Signalverbindung zwischen Kalibrierung und Betrieb erforderlich.
 
 Der Positionsfehler über alle Wegpunkte wird als RMSE im Log ausgegeben. Im
 durchgeführten Kalibrierlauf lag er bei etwa 1,5 bis 2 mm.
@@ -909,13 +918,10 @@ System platziert das Fadenkreuz mittig auf dem Board. Danach fährt der Flansch
 parallel zur Bandkante ohne seitliche Abweichung, bestätigt das die berechnete
 Ausrichtung des Förderband-Koordinatensystems.
 
-Im finalen Greifablauf ist die Roboterkamera nicht in den aktiven Regelpfad
-eingebunden (Abschnitt 3.1). Die Kalibrierung schafft jedoch die Voraussetzung
-für eine spätere Einbindung als Korrektursignal nahe dem Greifpunkt.
-
 ### 4.4 Validierung der Koordinatentransformation und Positionsgenauigkeit
 
-Die Validierung prüft das automatische Verfahren in drei Schritten: die Güte
+Die Validierung prüft das automatische Verfahren der Basiskamera aus
+Abschnitt 4.2 in drei Schritten: die Güte
 eines einzelnen Laufs, die Wiederholbarkeit über mehrere Tage und die
 Positionsgenauigkeit im Greifbetrieb. Tabelle `tab-kalibrierung-vergleich`
 fasst die Ergebnisse zusammen
