@@ -13,6 +13,7 @@ GEMINI.md
 # Finale Abbildungen unter Projektbericht/abbildungen bleiben versionierbar.
 /.codex-build/
 /.codex-finalizer/
+/.codex
 
 # Lokale Zwischenstände für Systemskizzen und Koordinatengrafiken.
 # Finale Bilddateien wie fig-*.png und freigegebene PDFs bleiben versionierbar.
