@@ -22,7 +22,7 @@ Stand: 02.10.2026. Die freigegebene Präsentation wurde als `Abschlussprasentati
 - Folie 3: `conveyor_frame` bleibt neben `world` sichtbar. Historischer Kalibrierrahmen und Laufzeitrahmen klar unterscheiden.
 - Folie 3: spätere maßstabsgetreue Überarbeitung der Draufsicht. Förderband und Greifbereich müssen relativ zueinander korrekt dimensioniert sein. Tatsächliche Maße des Greifbereichs eintragen. Roboter-/Kistenposition erhalten. Jetzt noch nicht zeichnen.
 - OFFENER CHECKPOINT: Nach den nächsten drei inhaltlichen Arbeitsschritten zur Präsentation nur fragen: „Sollen wir die Aufbauzeichnung jetzt im Detail angehen?“ Noch keine Vorgehensweise zur Zeichnungsbearbeitung erläutern und noch nicht direkt die Datei anfordern. Der Nutzer möchte die bearbeitbare Quelle später bereitstellen.
-- Erinnerungszähler: 1 von 3 weiteren Arbeitsschritten seit der Nutzerantwort vom 02.10.2026. Schritt 1 ist die Erstellung der finalen Präsentation V01. Die vorherige Ausgabe des überarbeiteten Folienplans zählt nicht als einer der nächsten drei Schritte. Ein Arbeitsschritt ist eine weitere inhaltliche Abstimmung oder Ausarbeitung auf Nutzerauftrag, kein einzelner Tool-Aufruf. Nach jedem solchen Schritt Zähler hier aktualisieren. Keine zeitgesteuerte Benachrichtigung gewünscht.
+- Erinnerungszähler: 2 von 3 weiteren Arbeitsschritten seit der Nutzerantwort vom 02.10.2026. Schritt 1 ist die Erstellung der finalen Präsentation V01. Schritt 2 ist die separate Überarbeitung von Folie 6 als `Folie_06_Systemkonzept_AICA_V02.pptx`. Die vorherige Ausgabe des überarbeiteten Folienplans zählt nicht als einer der nächsten drei Schritte. Ein Arbeitsschritt ist eine weitere inhaltliche Abstimmung oder Ausarbeitung auf Nutzerauftrag, kein einzelner Tool-Aufruf. Nach jedem solchen Schritt Zähler hier aktualisieren. Keine zeitgesteuerte Benachrichtigung gewünscht.
 - Bisherige Folie 4 wird in zwei Folien aufgeteilt: Folie 4 Roboterkamera/ChArUco, Folie 5 Basiskamera/AprilGrid im Greifer. Bisherige Folien 5 bis 12 werden dadurch Folien 6 bis 13.
 - Der Nutzer hat alle übrigen Folieninhalte am 02.10.2026 mit „Rest passt“ freigegeben und die Präsentationserstellung beauftragt. Spätere Änderungen an Grafiken erfolgen getrennt.
 
@@ -92,6 +92,7 @@ Keine vollständige Sortierung in verschiedene Zielkisten oder beliebige Objektg
 
 ### 6. Systemkonzept und AICA (0:45, bisher Folie 5)
 
+- Separate Revision vom 02.10.2026: `Folie_06_Systemkonzept_AICA_V02.pptx` enthält genau eine Folie. Oben abgerundete Kästen für `base_cam` (15 Hz), `vectoring` (15 Hz), `priority_handler` (20 Hz), `object_follower` (50 Hz), Signal Point Attractor (50 Hz) und IK Velocity Controller im Hardware-Regelpfad (500 Hz). Darunter die hellblaue Funktionskette mit Zuordnungspfeilen. Die Rückmeldekästen entfallen in dieser Übersicht. Die Gesamtpräsentation wurde dabei nicht geändert; die Einzelfolie muss später übernommen werden.
 - Neue editierbare Funktionskette: Bildauswertung, Bewegungsschätzung, Zielauswahl, Greifablauf, Bewegungsregelung. Roboter-/Greiferrückmeldungen getrennt einzeichnen.
 - Sichtbar: AICA; 15 Hz für Kameraauswertung/Schätzung; 20 Hz Zielauswahl; Zielpose 50 Hz; Roboterregelung 500 Hz.
 - Notizen: Komponenten als Funktionsgruppen erklären. Follower liefert Zielpose, Attractor Twist, IK Gelenkgeschwindigkeiten. Keine Verwechslung von Zielposenaktualisierung und Roboterregelung.
@@ -150,4 +151,4 @@ Reserve: vollständiger AICA-Regelpfad, Koordinaten-/Greifgeometrie, ausführlic
 
 ## Nächste Abstimmung
 
-V01 gemeinsam durchsehen und gegebenenfalls einzelne Folien oder Grafiken überarbeiten. Die Aufbauzeichnung bleibt vorerst im bestehenden Stand. Den Wunsch zur Aufbauzeichnung nach zwei weiteren inhaltlichen Arbeitsschritten mit der oben festgelegten kurzen Frage wieder aufgreifen.
+V01 gemeinsam durchsehen und gegebenenfalls einzelne Folien oder Grafiken überarbeiten. Die Aufbauzeichnung bleibt vorerst im bestehenden Stand. Den Wunsch zur Aufbauzeichnung nach einem weiteren inhaltlichen Arbeitsschritt mit der oben festgelegten kurzen Frage wieder aufgreifen.
