@@ -43,6 +43,12 @@
       "signal_type": "double_array"
     },
     {
+      "display_name": "Board Observation ID",
+      "description": "Laufende Nummer jedes neu verarbeiteten Farbbilds. Zusammen mit board_pose verwenden, damit keine Beobachtung mehrfach gezählt wird.",
+      "signal_name": "board_observation_id",
+      "signal_type": "int"
+    },
+    {
       "display_name": "Board Depth",
       "description": "Tiefeninformationen des Board-Zentrums [Mittelwert, Median, gültige Pixel].",
       "signal_name": "board_depth",

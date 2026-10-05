@@ -11,15 +11,16 @@ from modulo_components.lifecycle_component import LifecycleComponent
 from modulo_core.encoded_state import EncodedState
 from clproto import MessageType
 import state_representation as sr
-from std_msgs.msg import Float64MultiArray
+from std_msgs.msg import Float64MultiArray, Int32
 from modulo_interfaces.srv import StringTrigger
 
 from .extrinsic_calibration import (
     CalibrationResult, CalibrationSample,
+    average_rotation_matrices,
     orthonormalize_rotation,
     rotation_matrix_to_quaternion,
     rpy_to_rotation_matrix,
-    save_calibration_json, save_calibration_yaml, solve_eye_in_hand,
+    save_calibration_json, solve_eye_in_hand,
 )
 
 
@@ -79,14 +80,38 @@ class AutoCalibration(LifecycleComponent):
         self.add_parameter(
             sr.Parameter(
                 "calibration_file_path",
-                "/home/tetripick/Desktop/AICA/roboter_tetris/calibration.yaml",
+                "/data/calibration.json",
                 sr.ParameterType.STRING
             ),
-            "Zielpfad für die generierte calibration.yaml"
+            "Absoluter Pfad zur verbindlichen calibration.json (persistent unter /data)"
         )
         self.add_parameter(
             sr.Parameter("settle_time_s", 0.8, sr.ParameterType.DOUBLE),
-            "Wartezeit (s) nach Anfahren einer Pose vor der Bildaufnahme"
+            "Zeit (s), die der Flansch innerhalb der Toleranzen an der Zielpose stehen muss"
+        )
+        self.add_parameter(
+            sr.Parameter("settle_timeout_s", 10.0, sr.ParameterType.DOUBLE),
+            "Maximale Wartezeit (s) bis der Flansch die Zielpose erreicht"
+        )
+        self.add_parameter(
+            sr.Parameter("position_tolerance_mm", 2.0, sr.ParameterType.DOUBLE),
+            "Zulässiger Flansch-Abstand zur Zielpose während der Messung"
+        )
+        self.add_parameter(
+            sr.Parameter("orientation_tolerance_deg", 2.0, sr.ParameterType.DOUBLE),
+            "Zulässige Flansch-Winkelabweichung zur Zielpose während der Messung"
+        )
+        self.add_parameter(
+            sr.Parameter("sampling_timeout_s", 5.0, sr.ParameterType.DOUBLE),
+            "Maximale Wartezeit (s) auf genügend neue gültige Board-Beobachtungen"
+        )
+        self.add_parameter(
+            sr.Parameter("max_position_rmse_mm", 10.0, sr.ParameterType.DOUBLE),
+            "Maximaler Positions-RMSE des rekonstruierten Boards für ein gültiges Ergebnis"
+        )
+        self.add_parameter(
+            sr.Parameter("max_rotation_rmse_deg", 3.0, sr.ParameterType.DOUBLE),
+            "Maximaler Orientierungs-RMSE des rekonstruierten Boards für ein gültiges Ergebnis"
         )
         self.add_parameter(
             sr.Parameter("samples_per_waypoint", 5, sr.ParameterType.INT),
@@ -117,8 +142,14 @@ class AutoCalibration(LifecycleComponent):
         self._base_cam_board_pose_msg = []
         self.add_input("base_cam_board_pose", "_base_cam_board_pose_msg", Float64MultiArray)
 
+        self._base_cam_observation_id = -1
+        self.add_input("base_cam_observation_id", "_base_cam_observation_id", Int32)
+
         self._robot_cam_board_pose_msg = []
         self.add_input("robot_cam_board_pose", "_robot_cam_board_pose_msg", Float64MultiArray)
+
+        self._robot_cam_observation_id = -1
+        self.add_input("robot_cam_observation_id", "_robot_cam_observation_id", Int32)
 
         self._robot_cam_board_depth_msg = []
         self.add_input("robot_cam_board_depth", "_robot_cam_board_depth_msg", Float64MultiArray)
@@ -127,7 +158,9 @@ class AutoCalibration(LifecycleComponent):
         self._board_geometry_msg = []
         self.add_input("board_geometry", "_board_geometry_msg", Float64MultiArray)
 
-        self._robot_ee_pose = sr.CartesianState("end_effector", "world")
+        # Contract: input is world_T_ur_tool0 from the robot hardware.  It is
+        # the flange pose, never a TCP or gripper-point pose.
+        self._robot_ee_pose = sr.CartesianState("ur_tool0", "world")
         self.add_input("robot_ee_pose", "_robot_ee_pose", EncodedState)
 
         # Outputs
@@ -169,9 +202,13 @@ class AutoCalibration(LifecycleComponent):
         self._collected_samples: List[CalibrationSample] = []
         self._sample_buffer_robot_cam: List[List[float]] = []
         self._sample_buffer_base_cam: List[List[float]] = []
+        self._sample_buffer_robot_ee: List[np.ndarray] = []
+        self._last_robot_cam_observation_id = -1
+        self._last_base_cam_observation_id = -1
+        self._settled_since_time = None
 
     def _generate_waypoints(self):
-        num_wp = max(3, int(self.get_parameter("num_waypoints").get_value()))
+        num_wp = max(4, int(self.get_parameter("num_waypoints").get_value()))
         self._waypoint_labels = ["center"]
         self._waypoint_offsets = [(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)]
 
@@ -203,6 +240,7 @@ class AutoCalibration(LifecycleComponent):
         return True
 
     def _get_current_ee_transform(self) -> np.ndarray:
+        """Return world_T_ur_tool0 from the required hardware input pose."""
         T = np.eye(4, dtype=np.float64)
         try:
             pos = self._robot_ee_pose.get_position()
@@ -230,6 +268,36 @@ class AutoCalibration(LifecycleComponent):
         except Exception as e:
             self.get_logger().warn(f"Could not extract current robot_ee_pose: {e}")
         return T
+
+    @staticmethod
+    def _observation_id(value) -> int:
+        try:
+            if hasattr(value, "data"):
+                value = value.data
+            return int(value)
+        except (TypeError, ValueError):
+            return -1
+
+    def _is_ee_at_target(self) -> bool:
+        """Check measured flange pose against the currently commanded target."""
+        current = self._get_current_ee_transform()
+        position_error_mm = float(np.linalg.norm(
+            current[:3, 3] - self._moving_target_pos
+        ) * 1000.0)
+        current_quat = rotation_matrix_to_quaternion(current[:3, :3])
+        target_quat = self._moving_target_quat
+        dot = abs(float(np.dot(current_quat, target_quat)))
+        orientation_error_deg = math.degrees(2.0 * math.acos(min(1.0, max(-1.0, dot))))
+        return (
+            position_error_mm <= float(self.get_parameter("position_tolerance_mm").get_value())
+            and orientation_error_deg <= float(self.get_parameter("orientation_tolerance_deg").get_value())
+        )
+
+    def _fail_calibration(self, message: str) -> None:
+        self.get_logger().error(message)
+        self.set_predicate("has_failed", True)
+        self.set_predicate("is_running", False)
+        self._state = "FAILED"
 
     def _on_start_calibration_service(self, request: StringTrigger.Request) -> StringTrigger.Response:
         response = StringTrigger.Response()
@@ -346,6 +414,7 @@ class AutoCalibration(LifecycleComponent):
             if progress_raw >= 1.0:
                 self._state = "SETTLING"
                 self._state_start_time = now_time
+                self._settled_since_time = None
 
         elif self._state == "SETTLING":
             try:
@@ -354,12 +423,33 @@ class AutoCalibration(LifecycleComponent):
             except Exception:
                 pass
             settle_target = float(self.get_parameter("settle_time_s").get_value())
+            settle_timeout = float(self.get_parameter("settle_timeout_s").get_value())
             dt = (now_time - self._state_start_time).nanoseconds / 1e9
-            if dt >= settle_target:
-                self._state = "SAMPLING"
-                self._sample_buffer_robot_cam.clear()
-                self._sample_buffer_base_cam.clear()
-                self._state_start_time = now_time
+            if dt >= settle_timeout:
+                self._fail_calibration(
+                    f"Wegpunkt {self._current_waypoint_idx + 1}: Flansch erreichte die Zielpose nicht "
+                    f"innerhalb von {settle_timeout:.1f} s."
+                )
+                return
+
+            if self._is_ee_at_target():
+                if self._settled_since_time is None:
+                    self._settled_since_time = now_time
+                stable_time = (now_time - self._settled_since_time).nanoseconds / 1e9
+                if stable_time >= settle_target:
+                    self._state = "SAMPLING"
+                    self._sample_buffer_robot_cam.clear()
+                    self._sample_buffer_base_cam.clear()
+                    self._sample_buffer_robot_ee.clear()
+                    self._last_robot_cam_observation_id = self._observation_id(
+                        self._robot_cam_observation_id
+                    )
+                    self._last_base_cam_observation_id = self._observation_id(
+                        self._base_cam_observation_id
+                    )
+                    self._state_start_time = now_time
+            else:
+                self._settled_since_time = None
 
         elif self._state == "SAMPLING":
             try:
@@ -367,20 +457,44 @@ class AutoCalibration(LifecycleComponent):
                 self._target_pose.set_orientation(self._moving_target_quat)
             except Exception:
                 pass
-            target_samples = int(self.get_parameter("samples_per_waypoint").get_value())
+            target_samples = max(1, int(self.get_parameter("samples_per_waypoint").get_value()))
+            sampling_timeout = float(self.get_parameter("sampling_timeout_s").get_value())
+            elapsed_sampling = (now_time - self._state_start_time).nanoseconds / 1e9
+            if elapsed_sampling >= sampling_timeout:
+                self._fail_calibration(
+                    f"Wegpunkt {self._current_waypoint_idx + 1}: Nur "
+                    f"{len(self._sample_buffer_robot_cam)}/{target_samples} neue gültige "
+                    f"Roboterkamera-Beobachtungen innerhalb von {sampling_timeout:.1f} s."
+                )
+                return
+
             robot_cam_data = list(self._robot_cam_board_pose_msg.data) if hasattr(self._robot_cam_board_pose_msg, "data") else list(self._robot_cam_board_pose_msg)
             base_cam_data = list(self._base_cam_board_pose_msg.data) if hasattr(self._base_cam_board_pose_msg, "data") else list(self._base_cam_board_pose_msg)
 
-            if len(robot_cam_data) >= 6 and np.linalg.norm(robot_cam_data[:3]) > 1e-3:
-                self._sample_buffer_robot_cam.append(robot_cam_data)
-            if len(base_cam_data) >= 6 and np.linalg.norm(base_cam_data[:3]) > 1e-3:
-                self._sample_buffer_base_cam.append(base_cam_data)
+            robot_observation_id = self._observation_id(self._robot_cam_observation_id)
+            if robot_observation_id > self._last_robot_cam_observation_id:
+                self._last_robot_cam_observation_id = robot_observation_id
+                if len(robot_cam_data) >= 6 and np.linalg.norm(robot_cam_data[:3]) > 1e-3:
+                    self._sample_buffer_robot_cam.append(robot_cam_data[:6])
+                    self._sample_buffer_robot_ee.append(self._get_current_ee_transform())
+
+            base_observation_id = self._observation_id(self._base_cam_observation_id)
+            if base_observation_id > self._last_base_cam_observation_id:
+                self._last_base_cam_observation_id = base_observation_id
+                if len(base_cam_data) >= 6 and np.linalg.norm(base_cam_data[:3]) > 1e-3:
+                    self._sample_buffer_base_cam.append(base_cam_data[:6])
 
             if len(self._sample_buffer_robot_cam) >= target_samples:
                 avg_robot_cam = np.mean(self._sample_buffer_robot_cam, axis=0).tolist()
                 avg_base_cam = np.mean(self._sample_buffer_base_cam, axis=0).tolist() if self._sample_buffer_base_cam else None
 
-                T_ee = self._get_current_ee_transform()
+                T_ee = np.eye(4, dtype=np.float64)
+                T_ee[:3, 3] = np.mean(
+                    [transform[:3, 3] for transform in self._sample_buffer_robot_ee], axis=0
+                )
+                T_ee[:3, :3] = average_rotation_matrices(
+                    [transform[:3, :3] for transform in self._sample_buffer_robot_ee]
+                )
                 
                 if np.linalg.norm(avg_robot_cam[:3]) > 1e-3:
                     sample = CalibrationSample(
@@ -451,20 +565,27 @@ class AutoCalibration(LifecycleComponent):
                         f"-> {board_w_m*1000:.1f}x{board_h_m*1000:.1f}mm"
                     )
                 else:
-                    # Fallback: default 5x7 board @ 35mm (245mm x 175mm)
-                    board_rows = 5
-                    board_cols = 7
-                    checker_size_m = 0.035
-                    board_w_m = board_cols * checker_size_m
-                    board_h_m = board_rows * checker_size_m
-                    self.get_logger().warn(
-                        "board_geometry not received from board_detection. "
-                        "Using default 5x7 @ 35mm board dimensions for center calculation."
+                    raise ValueError(
+                        "board_geometry fehlt oder ist ungültig. Die Board-Abmessungen werden "
+                        "nicht geschätzt; bitte die Board-Geometry-Verbindung prüfen."
                     )
 
                 result: CalibrationResult = solve_eye_in_hand(
                     self._collected_samples, conveyor_offset_m=(off_x_m, off_y_m, off_z_m)
                 )
+
+                max_position_rmse_mm = float(self.get_parameter("max_position_rmse_mm").get_value())
+                max_rotation_rmse_deg = float(self.get_parameter("max_rotation_rmse_deg").get_value())
+                if result.position_rmse_mm > max_position_rmse_mm:
+                    raise ValueError(
+                        f"Positions-RMSE {result.position_rmse_mm:.3f} mm überschreitet den "
+                        f"Grenzwert von {max_position_rmse_mm:.3f} mm."
+                    )
+                if result.rotation_rmse_deg > max_rotation_rmse_deg:
+                    raise ValueError(
+                        f"Orientierungs-RMSE {result.rotation_rmse_deg:.3f} Grad überschreitet den "
+                        f"Grenzwert von {max_rotation_rmse_deg:.3f} Grad."
+                    )
 
                 T = result.T_robot_base_cam
                 self._calibration_matrix = T.flatten().tolist()
@@ -493,50 +614,28 @@ class AutoCalibration(LifecycleComponent):
                     quat_bc = rotation_matrix_to_quaternion(T_bc[:3, :3])
                     self._base_cam_pose_out.set_orientation(np.array(quat_bc, dtype=np.float64))
 
-                    # Compute geometric board center:
-                    # The conveyor_offset defines the Board KS origin (corner).
-                    # Board X-axis points along -X_conveyor (R_y_180[0,0] = -1.0)
-                    # Board Y-axis points along +Y_conveyor (R_y_180[1,1] = +1.0)
-                    # In conveyor frame: center = (off_x - board_w/2, off_y + board_h/2, off_z)
-                    center_conv = np.array([
-                        off_x_m - board_w_m / 2.0,
-                        off_y_m + board_h_m / 2.0,
-                        off_z_m,
-                        1.0
-                    ], dtype=np.float64)
-                    center_world = (T_conv @ center_conv)[:3]
-                    T_inv = np.linalg.inv(T_conv)
-                    # Verify round-trip (should equal center_conv[:3])
-                    center_back = (T_inv @ np.append(center_world, 1.0))[:3]
-                    board_center_mm = (
-                        round(center_back[0] * 1000.0, 2),
-                        round(center_back[1] * 1000.0, 2),
-                        round(center_back[2] * 1000.0, 2)
-                    )
-                    self.get_logger().info(
-                        f"Board KS-Ursprung (conveyor): X={off_x_m*1000:.1f} mm, Y={off_y_m*1000:.1f} mm"
-                    )
-                    self.get_logger().info(
-                        f"Board-Abmessungen: {board_w_m*1000:.1f} x {board_h_m*1000:.1f} mm"
-                    )
-                    self.get_logger().info(
-                        f"Berechnetes Board-Zentrum (conveyor): "
-                        f"X={board_center_mm[0]:.1f} mm, Y={board_center_mm[1]:.1f} mm"
-                    )
-                else:
-                    # Fallback: no conveyor transform available, use origin as center
-                    board_center_mm = (off_x_m * 1000.0, off_y_m * 1000.0, off_z_m * 1000.0)
-                    self.get_logger().warn(
-                        "No T_robot_conveyor in result – saving board origin as center (fallback)."
-                    )
+                # Board center depends only on geometry and the configured origin
+                # in conveyor coordinates, not on observations of the base camera.
+                # Ry(180): board +X = conveyor -X, board +Y = conveyor +Y.
+                board_center_mm = (
+                    round((off_x_m - board_w_m / 2.0) * 1000.0, 2),
+                    round((off_y_m + board_h_m / 2.0) * 1000.0, 2),
+                    round(off_z_m * 1000.0, 2),
+                )
+                self.get_logger().info(
+                    f"Board KS-Ursprung (conveyor): X={off_x_m*1000:.1f} mm, Y={off_y_m*1000:.1f} mm"
+                )
+                self.get_logger().info(
+                    f"Board-Abmessungen: {board_w_m*1000:.1f} x {board_h_m*1000:.1f} mm"
+                )
+                self.get_logger().info(
+                    f"Berechnetes Board-Zentrum (conveyor): "
+                    f"X={board_center_mm[0]:.1f} mm, Y={board_center_mm[1]:.1f} mm"
+                )
 
                 save_path = self.get_parameter("calibration_file_path").get_value()
 
                 save_calibration_json(
-                    save_path, result,
-                    board_center_conveyor_mm=board_center_mm
-                )
-                save_calibration_yaml(
                     save_path, result,
                     board_center_conveyor_mm=board_center_mm
                 )
@@ -547,6 +646,9 @@ class AutoCalibration(LifecycleComponent):
                 self.get_logger().info(f"Verwendete Samples: {result.sample_count}")
                 self.get_logger().info(f"Position RMSE:    {result.position_rmse_mm:.3f} mm")
                 self.get_logger().info(f"Rotation RMSE:    {result.rotation_rmse_deg:.3f} deg")
+                self.get_logger().info(
+                    f"Flansch-Rotationsspanne: {result.flange_rotation_span_deg:.3f} deg"
+                )
                 
                 t_cam = T[:3, 3]
                 self.get_logger().info(f"Robot Cam Pos in Base: X={t_cam[0]*1000:.1f}mm, Y={t_cam[1]*1000:.1f}mm, Z={t_cam[2]*1000:.1f}mm")

@@ -9,7 +9,7 @@ import numpy as np
 from cv_bridge import CvBridge
 from modulo_components.lifecycle_component import LifecycleComponent
 import state_representation as sr
-from std_msgs.msg import Float64MultiArray
+from std_msgs.msg import Float64MultiArray, Int32
 from sensor_msgs.msg import Image, CameraInfo
 
 from ..vision.board import (
@@ -67,6 +67,11 @@ class BoardDetection(LifecycleComponent):
         # [tx, ty, tz, rx, ry, rz]: board origin in the camera frame.
         self._board_pose = []
         self.add_output("board_pose", "_board_pose", Float64MultiArray)
+
+        # Increments once for every newly processed color frame. Consumers use
+        # it to distinguish a fresh observation from a repeated output value.
+        self._board_observation_id = 0
+        self.add_output("board_observation_id", "_board_observation_id", Int32)
         
         # Output for board center depth information [depth_mean_mm, depth_median_mm, valid_pixels_count]
         self._board_depth = []
@@ -129,6 +134,7 @@ class BoardDetection(LifecycleComponent):
         self._debug_msg = Image()
         self._board_corners = []
         self._board_pose = []
+        self._board_observation_id = 0
         self._board_depth = []
         self.set_predicate("has_board", False)
         self.set_predicate("has_pose", False)
@@ -246,6 +252,7 @@ class BoardDetection(LifecycleComponent):
             return
 
         self._last_stamp = stamp
+        self._board_observation_id += 1
         self._last_frame_walltime = self.get_clock().now()
         self.set_predicate("is_receiving_frames", True)
 

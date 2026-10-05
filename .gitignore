@@ -9,3 +9,6 @@ docs/superpowers/specs/2026-06-01-robotiq-gripper-component-design.md
 /FuE_Greifen-main
 GEMINI.md
 /docs/superpowers/
+
+# Lokale Verknüpfung auf das persistente AICA-Kalibrierergebnis
+/calibration.json

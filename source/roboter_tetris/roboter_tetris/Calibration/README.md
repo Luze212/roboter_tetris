@@ -12,7 +12,7 @@ Das Kalibrier-Subsystem besteht aus vier Hauptkomponenten:
 
 * **`board_detection.py` (`BoardDetection`)**: Erkennt ChArUco-Boards im Kamerabild und berechnet die Pose des Board-Ursprungs in der Kamera (`[tx, ty, tz, rx, ry, rz]`). Dient als führende Instanz für die physikalischen Board-Parameter.
 * **`auto_calibration.py` (`AutoCalibration`)**: Steuert eine automatische Orbit-Trajektorie an, erfasst Aufnahmen, führt die Tsai-Hand-Eye-Kalibrierung aus und ermittelt das Förderband-Koordinatensystem (`conveyor_frame`).
-* **`extrinsic_calibration.py`**: Mathematik-Bibliothek für `solve_eye_in_hand`, Quaternionen-Normierung und YAML/JSON-Export.
+* **`extrinsic_calibration.py`**: Mathematik-Bibliothek für `solve_eye_in_hand`, Quaternionen-Normierung und JSON-Export.
 * **`test_drive.py` (`CalibrationTestDrive`)**: Validierungskomponente, die das Kamera-Fadenkreuz präzise über dem Board-Zentrum ausrichtet und eine Testfahrt entlang der Förderband-Y-Achse ausführt.
 
 ---
@@ -31,8 +31,11 @@ Um Redundanzen zu vermeiden, werden die physikalischen Board-Eigenschaften **nur
 | `marker_size_mm` | double | `26.0` | Kantenlänge eines ArUco-Markers in mm |
 | `min_detected_markers` | int | `4` | Mindestanzahl erkannter Marker für eine gültige Pose |
 
-### Dynamische Parameterabfrage in AutoCalibration
-`AutoCalibration` fragt beim Ausführen im Zustand `SOLVING` die Parameter `board_rows`, `board_cols` und `checker_size_mm` dynamisch über den ROS 2 Service `/{board_detection_node_name}/get_parameters` ab. Lokale Fallback-Parameter greifen automatisch, falls der Service nicht erreichbar ist.
+### Board-Geometrie in AutoCalibration
+`AutoCalibration` liest im Zustand `SOLVING` den Eingang `board_geometry` mit
+`[board_rows, board_cols, checker_size_mm]` von `BoardDetection`. Ohne nutzbare
+Geometrie bricht die Kalibrierung ab. Bei jedem Board muss der Eingang die
+tatsächlichen Abmessungen liefern.
 
 ---
 
@@ -40,6 +43,30 @@ Um Redundanzen zu vermeiden, werden die physikalischen Board-Eigenschaften **nur
 
 ### Board-Ursprung (Marker ID 0)
 Der mathematische Ursprung $(0,0,0)$ des ChArUco-Boards liegt an der **äußersten linken oberen Ecke des ersten Markers (Marker ID 0)**.
+
+### Verbindliche Frame-Konvention
+
+`world` ist AICAs globaler Frame `ur_base_link` am Roboterfuß. Gegenüber dem
+UR-Frame `base` ist er um 180° um die Z-Achse gedreht, ohne Verschiebung.
+Die Kalibrierung und der Pick-Ablauf verwenden beide ausschließlich `world`; eine
+weitere Umrechnung erfolgt nicht. Die Eingabe `robot_ee_pose` muss direkt die Hardware-Flanschpose
+`world_T_ur_tool0` liefern. TCP-, Greifpunkt- oder andere versetzte Posen dürfen
+nicht angeschlossen werden.
+
+Alle gespeicherten Matrizen verwenden die Schreibweise `T_target_source`:
+eine Matrix transformiert Punkte von `source_frame` nach `target_frame`.
+Die verbindliche `calibration.json` hat Schema-Version 3 und speichert daher:
+
+- `T_world_base_static_cam`: statische Basiskamera → `world`; dies ist die
+  relevante Transformation für eine spätere Anbindung des Pick-Systems.
+- `T_flange_robot_cam`: Roboterkamera → Flansch `ur_tool0`.
+- `T_world_conveyor`: Förderband → `world`; nur für die optionale Testfahrt.
+- `T_world_robot_cam_at_first_sample`: bewegte Roboterkamera beim ersten Sample;
+  nur Diagnose und keine feste Kamerakalibrierung.
+
+Ältere Dateien mit Schema-Version 2 und Namen wie `T_robot_conveyor` werden von
+der Testfahrt bewusst abgelehnt. Nach dieser Umstellung ist ein neuer,
+ausdrücklich freigegebener Kalibrierlauf erforderlich.
 
 ### Conveyor Frame Transformation
 Das Förderband-Koordinatensystem (`conveyor_frame`) wird wie folgt definiert:
@@ -59,7 +86,20 @@ $$\text{center}_x = \text{conveyor\_offset\_x\_m} - \frac{\text{board\_width\_m}
 $$\text{center}_y = \text{conveyor\_offset\_y\_m} + \frac{\text{board\_height\_m}}{2.0}$$
 $$\text{center}_z = \text{conveyor\_offset\_z\_m}$$
 
-Dieses Zentrum wird zusammen mit der Hand-Eye-Matrix in der Kalibrierungsdatei (`/tmp/calibration.yaml`) abgespeichert.
+Dieses Zentrum wird zusammen mit der Hand-Eye-Matrix in der Kalibrierungsdatei (`/data/calibration.json`) abgespeichert.
+
+Die Berechnung erfolgt unabhängig davon, ob Basiskameradaten vorliegen.
+Bei den Standardwerten (7 × 5 Felder mit 35 mm und Offset −130 / 243 / 0 mm)
+beträgt das Zentrum −252,5 / 330,5 / 0 mm. `CalibrationTestDrive` übernimmt
+`board_center_conveyor_mm` direkt und rechnet lediglich Millimeter in Meter um.
+Eine nachträgliche Verschiebung anhand des X-Werts findet nicht mehr statt.
+
+Ältere Ergebnisdateien können durch den bisherigen Fehler statt des Zentrums die
+Board-Ecke enthalten. Solche Dateien werden nicht automatisch umgedeutet. Vor einer
+Testfahrt mit dem geänderten Code ist das gespeicherte Zentrum anhand der damaligen
+Board-Geometrie und Offsets zu prüfen oder durch einen ausdrücklich freigegebenen
+neuen Kalibrierlauf zu erzeugen. Diese Codeänderung verändert keine vorhandenen
+Messdateien.
 
 ---
 
@@ -71,13 +111,54 @@ Dieses Zentrum wird zusammen mit der Hand-Eye-Matrix in der Kalibrierungsdatei (
 4. **Lösung (`SOLVING`):** 
    * Berechnung der Eye-in-Hand Transformation $T_{\text{ee\_robot\_cam}}$ via `solve_eye_in_hand`.
    * Berechnung von $T_{\text{robot\_conveyor}}$ und `board_center_conveyor_mm`.
-   * Speichern der Ergebnisse nach `/tmp/calibration.yaml` und `/tmp/calibration.json`.
+   * Speichern der Ergebnisse ausschließlich in die unter `calibration_file_path` konfigurierte JSON-Datei (Standard: `/data/calibration.json`).
+
+### Verbindliche Aufnahme eines Wegpunkts
+
+Ein Wegpunkt wird erst ausgewertet, wenn die gemessene Flanschpose innerhalb von
+`position_tolerance_mm` und `orientation_tolerance_deg` an der Zielpose liegt und
+dort für `settle_time_s` bleibt. Wird dieser Zustand nicht innerhalb von
+`settle_timeout_s` erreicht, bricht die Kalibrierung mit `has_failed` ab.
+
+Danach zählen ausschließlich neue gültige Beobachtungen der Roboterkamera. Dafür
+gibt jede `BoardDetection` neben `board_pose` einen `board_observation_id` aus,
+der sich pro neu verarbeitetem Farbbild erhöht. `AutoCalibration` merkt sich die
+letzte ID; dieselbe Pose kann daher nicht mehrfach gezählt werden. Zu jeder
+akzeptierten Roboterkamera-Beobachtung wird sofort die aktuelle Flanschpose
+gespeichert. Nach `samples_per_waypoint` neuen Beobachtungen mittelt der Ablauf
+Kameraposen und Flanschpose getrennt. Genügend neue Beobachtungen müssen innerhalb
+von `sampling_timeout_s` eintreffen, sonst bricht der Lauf ab.
+
+### Qualitätsprüfung vor dem Speichern
+
+Ein Lauf wird nur als erfolgreich gespeichert, wenn mindestens vier gültige
+Wegpunktproben vorliegen und die Flanschbewegung genügend unterschiedliche
+Rotationen enthält. Rein translatorische Bewegungen oder Rotationen um nur eine
+Achse sind für Hand-Eye unbestimmt und führen zu `has_failed`.
+
+Der Solver verwendet keine Ersatzwerte: Ein OpenCV-Solverfehler, nicht-endliche
+Werte oder ein unplausibler Abstand zwischen Flansch und Kamera brechen den Lauf
+ab. Der rekonstruierte Board-Frame muss außerdem die Grenzwerte
+`max_position_rmse_mm` (Standard: 10 mm) und `max_rotation_rmse_deg` (Standard:
+3 Grad) einhalten. Erst danach ersetzt der atomare Export die vorhandene
+`calibration.json`.
+
+In AICA Studio müssen diese zusätzlichen Leitungen gesetzt sein:
+
+- Roboterkamera-`BoardDetection.board_observation_id` → `AutoCalibration.robot_cam_observation_id`
+- Basiskamera-`BoardDetection.board_observation_id` → `AutoCalibration.base_cam_observation_id`
+- Roboterkamera-`BoardDetection.board_geometry` → `AutoCalibration.board_geometry`
+
+Die bestehenden `board_pose`-Leitungen bleiben unverändert. Die Basiskamera-ID ist
+für die optionale Berechnung ihrer statischen Lage; die Roboterkamera-ID ist für
+einen erfolgreichen Eye-in-Hand-Lauf zwingend. Die Board-Geometrie ist für die
+korrekte Berechnung und Speicherung des Board-Zentrums zwingend.
 
 ---
 
 ## 5. Validierung via Test Drive (`CalibrationTestDrive`)
 
-`CalibrationTestDrive` liest sowohl $T_{\text{robot\_conveyor}}$ als auch die Eye-in-Hand Transformation $T_{\text{ee\_robot\_cam}}$ aus der generierten `calibration.yaml` ein:
+`CalibrationTestDrive` liest sowohl $T_{\text{robot\_conveyor}}$ als auch die Eye-in-Hand Transformation $T_{\text{ee\_robot\_cam}}$ aus der generierten `calibration.json` ein:
 
 * **Kamera-Fadenkreuz-Zentrierung (Phase 0 & 1):** 
   Der Roboter kompensiert den physischen Abstand von $100\text{ mm}$ zwischen Kamera-Optik und Flansch ($T_{\text{ee\_robot\_cam}}$). Dadurch fährt **das Fadenkreuz der Kamera im Debug Image** exakt zentriert über die Mitte des ChArUco-Boards.
@@ -88,25 +169,99 @@ Dieses Zentrum wird zusammen mit der Hand-Eye-Matrix in der Kalibrierungsdatei (
 
 ---
 
-## 6. Kalibrierungsdatei Format (`calibration.yaml`)
+## 6. Eine verbindliche Ergebnisdatei: `calibration.json`
 
-Auszug der generierten Kalibrierungsstruktur:
+`AutoCalibration` schreibt ausschließlich die konfigurierte JSON-Datei;
+`CalibrationTestDrive` liest ausschließlich diese Datei. Beide Komponenten haben
+als Standard `calibration_file_path = /data/calibration.json`. Der Pfad muss absolut
+sein und auf `.json` enden. Es gibt keinen YAML-Export und keine automatische Suche
+nach anderen Dateien mehr. Die JSON-Datenstruktur verwendet Schema-Version 3.
 
-```yaml
-transformations:
-  T_ee_robot_cam:
-    source_frame: robot_cam
-    target_frame: end_effector
-    homogeneous_matrix: [...]
-  T_robot_conveyor:
-    source_frame: conveyor_frame
-    target_frame: robot_base
-    homogeneous_matrix: [...]
+Der Export schreibt zunächst eine temporäre Datei im selben Verzeichnis und ersetzt
+die Ergebnisdatei erst nach vollständigem Schreiben. Bei einem Schreibfehler wird
+`has_failed` gesetzt; der Lauf meldet keinen Speichererfolg. Ein vorhandenes Ergebnis
+bleibt bei einem Fehler vor dem Ersetzen erhalten. Nicht endliche Zahlen (`NaN`,
+`Infinity`) werden beim Export abgewiesen. Vor dem Export prüft der Ablauf außerdem
+die Hand-Eye-Anregung sowie Positions- und Orientierungs-RMSE.
 
-board_center_conveyor_mm:
-  x: -252.5
-  y: 330.5
-  z: 0.0
+### Datei im Projektordner öffnen
 
-validation:
-  position_rmse_mm: 1.25
+Im lokalen Projekt-Hauptordner liegt die symbolische Verknüpfung `calibration.json`.
+Sie lässt sich im Editor oder Dateimanager wie eine normale Datei öffnen und zeigt
+auf dasselbe Ergebnis, das die Komponente im Container unter `/data/calibration.json`
+schreibt. Es ist keine zweite, zu synchronisierende Kopie.
+
+Aktuelle Zuordnung auf diesem Rechner:
+
+- Projekt: `/home/tetripick/Desktop/AICA/roboter_tetris/calibration.json`
+- Container: `/data/calibration.json`
+- Tatsächliche Host-Datei:
+  `/home/tetripick/.local/share/tech.aica.launcher/dataVolumes/cacfadb8-5142-4d50-8610-d4a9f94d8eaf/calibration.json`
+
+Der Launcher bindet diesen Host-Datenordner bereits nach `/data` ein. Die Datei bleibt
+bei einem Austausch des Containers erhalten, solange derselbe Launcher-Datenordner
+weiterverwendet wird. Das Löschen dieses Datenordners würde auch die Datei löschen.
+Die Projektverknüpfung ist lokal und wird von Git ignoriert. Auf einem anderen Rechner
+oder bei einem anderen Launcher-System muss sie auf dessen Datenordner zeigen.
+Den jeweiligen Host-Pfad zeigt `docker inspect <container>` unter `Mounts` für `/data`.
+
+### Umstellung bestehender AICA-Anwendungen
+
+1. Das geänderte Paket durch den Benutzer bauen und im Launcher bereitstellen.
+2. In **Auto Calibration** und **Calibration Test Drive** den Parameter
+   `calibration_file_path` prüfen und auf `/data/calibration.json` setzen.
+   Ein zuvor manuell gesetzter YAML-Pfad wird nicht automatisch geändert.
+3. Vor einer späteren Testfahrt den Zeitstempel `last_calibrated_at` der JSON-Datei
+   prüfen. Ein fehlgeschlagener neuer Lauf kann ein älteres Ergebnis zurücklassen.
+
+Die vorhandene JSON-Datei aus dem Container wurde am 05.10.2026 einmalig von `/tmp`
+nach `/data` übernommen. Das ist keine neue Messung oder Validierung. Alte Dateien
+unter `/tmp` und das mitgelieferte historische `Calibration/calibration.json` werden
+vom geänderten Ablauf nicht automatisch gelesen und sind keine aktuellen Ergebnisse.
+
+### Struktur
+
+Die Datei enthält unter anderem:
+
+- `last_calibrated_at`: Zeitpunkt der Kalibrierung.
+- `transformations.T_flange_robot_cam`: Kamera relativ zum Flansch.
+- `transformations.T_world_conveyor`: Förderband relativ zu `world`.
+- `transformations.T_world_base_static_cam`: Basiskamera relativ zu `world`,
+  sofern Basiskameradaten vorlagen.
+- `board_center_conveyor_mm`: Board-Zentrum im Förderbandkoordinatensystem.
+- `validation`: Anzahl der Samples, Positions- und Orientierungs-RMSE sowie die
+  größte Flansch-Rotationsspanne.
+
+Eine automatische Übernahme in das JSON-Schema der Basiskamera des Pick-Hauptprogramms
+ist noch nicht implementiert. Sie gehört zur späteren Integration.
+
+---
+
+## Verschobene Absicherungen
+
+Die folgenden Verbesserungen sind sinnvoll, aber für die Grundfunktion der
+Kalibrierung und die nächste Integration in den Pick-Ablauf nicht erforderlich.
+Sie werden bewusst erst nach der Integration bearbeitet:
+
+- Abbruch vor dem Start und während eines Laufs, wenn `robot_ee_pose` fehlt,
+  veraltet oder nicht plausibel ist.
+- Zusätzliche Bereichsprüfungen für Zeitlimits, Toleranzen und Qualitätsgrenzen.
+- Automatische Ausreißerbehandlung und feinere, messdatenbasierte Abstimmung der
+  RMSE-Grenzwerte.
+- Erweiterte Offline-Tests für Solverfehler, Signalabbrüche und ungültige Daten.
+- Test-Drive-spezifische Verbesserungen; die Testfahrt ist kein Bestandteil der
+  späteren Pick-Integration.
+
+### Geplante Genauigkeitssteigerung: mehrere Boardlagen
+
+Für eine spätere Verbesserung der statischen Basiskamera-Kalibrierung werden
+mehrere vollständige, voneinander unabhängige Kalibrierläufe mit verschieden
+positioniertem Board vorgesehen. Pro Lauf bleibt das Board fest; anschließend
+werden ausschließlich die invarianten Ergebnisse `T_world_base_static_cam` und,
+optional, `T_flange_robot_cam` auf dem Rotationsraum gemittelt. Die Streuung
+zwischen den Läufen dient als zusätzlicher Qualitätswert.
+
+Rohdaten unterschiedlicher Boardlagen dürfen nicht in einen einzelnen
+Hand-Eye-Solverlauf gemischt werden, weil dieser ein feststehendes Zielboard
+voraussetzt. Ein späteres Mehrboard-Setup benötigt entweder ein starres Rig mit
+bekannten Relativposen oder eine Erweiterung um getrennte Board-IDs und Frames.

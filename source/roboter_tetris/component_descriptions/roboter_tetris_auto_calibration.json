@@ -2,7 +2,7 @@
   "name": "Auto Calibration",
   "description": {
     "brief": "Automatische extrinsische Hand-Eye-Kalibrierung für Roboter-Tetris.",
-    "details": "Führt eine Orbit-Trajektorie aus, sammelt Bild- und Posenproben, berechnet die Eye-in-Hand-Transformation sowie das Förderband-Koordinatensystem und speichert die Ergebnisse in YAML/JSON-Dateien."
+    "details": "Führt eine Orbit-Trajektorie aus, sammelt Bild- und Posenproben, berechnet die Eye-in-Hand-Transformation sowie das Förderband-Koordinatensystem und speichert die Ergebnisse in einer verbindlichen JSON-Datei."
   },
   "registration": "roboter_tetris::AutoCalibration",
   "inherits": "modulo_components::LifecycleComponent",
@@ -14,10 +14,22 @@
       "signal_type": "double_array"
     },
     {
+      "display_name": "Base Cam Observation ID",
+      "description": "Board Observation ID derselben Base-Cam-BoardDetection; neue ID bedeutet neue Beobachtung.",
+      "signal_name": "base_cam_observation_id",
+      "signal_type": "int"
+    },
+    {
       "display_name": "Robot Cam Board Pose",
       "description": "Board-Pose von der Hand-Eye-Kamera am Roboterflansch [tx, ty, tz, rx, ry, rz].",
       "signal_name": "robot_cam_board_pose",
       "signal_type": "double_array"
+    },
+    {
+      "display_name": "Robot Cam Observation ID",
+      "description": "Board Observation ID derselben Roboter-Cam-BoardDetection; jede Kalibrierprobe benötigt eine neue ID.",
+      "signal_name": "robot_cam_observation_id",
+      "signal_type": "int"
     },
     {
       "display_name": "Robot Cam Board Depth",
@@ -33,7 +45,7 @@
     },
     {
       "display_name": "Robot End-Effector Pose",
-      "description": "Aktuelle kartesische Pose des Roboter-Endeffektors im Base-Frame.",
+      "description": "Aktuelle Flanschpose world_T_ur_tool0 vom Roboter-Hardware-State; world ist der globale Frame am Roboterfuß.",
       "signal_name": "robot_ee_pose",
       "signal_type": "cartesian_state"
     }
@@ -47,31 +59,31 @@
     },
     {
       "display_name": "Conveyor Pose",
-      "description": "Berechnetes Förderband-Koordinatensystem (conveyor_frame) zur Visualisierung.",
+      "description": "Berechnetes Förderband-Koordinatensystem in world zur Visualisierung.",
       "signal_name": "conveyor_pose",
       "signal_type": "cartesian_pose"
     },
     {
       "display_name": "Board Pose Output",
-      "description": "Berechnetes Board-Koordinatensystem (board_frame) zur Visualisierung.",
+      "description": "Berechnetes Board-Koordinatensystem in world zur Visualisierung.",
       "signal_name": "board_pose_out",
       "signal_type": "cartesian_pose"
     },
     {
       "display_name": "Robot Cam Pose Output",
-      "description": "Berechnete Pose der Roboter-Kamera am Flansch zur Visualisierung.",
+      "description": "Berechnete Pose der Roboterkamera in world zur Visualisierung.",
       "signal_name": "robot_cam_pose_out",
       "signal_type": "cartesian_pose"
     },
     {
       "display_name": "Base Cam Pose Output",
-      "description": "Berechnete Pose der statischen Base-Kamera zur Visualisierung.",
+      "description": "Berechnete Pose der statischen Basiskamera in world zur Visualisierung.",
       "signal_name": "base_cam_pose_out",
       "signal_type": "cartesian_pose"
     },
     {
       "display_name": "Calibration Matrix",
-      "description": "Flache 4x4-Transformationsmatrix (T_robot_base_cam).",
+      "description": "Flache 4x4-Transformationsmatrix T_world_robot_cam_at_first_sample zur Visualisierung; für den Pick-Betrieb ist T_world_base_static_cam maßgeblich.",
       "signal_name": "calibration_matrix",
       "signal_type": "double_array"
     },
@@ -110,18 +122,66 @@
   "parameters": [
     {
       "display_name": "Calibration File Path",
-      "description": "Zielpfad für die generierte YAML-Datei.",
+      "description": "Absoluter Zielpfad der verbindlichen JSON-Datei; /data ist der persistente AICA-Datenordner.",
       "parameter_name": "calibration_file_path",
       "parameter_type": "string",
-      "default_value": "/home/tetripick/Desktop/AICA/roboter_tetris/calibration.yaml",
+      "default_value": "/data/calibration.json",
       "dynamic": true
     },
     {
       "display_name": "Settle Time (s)",
-      "description": "Wartezeit in Sekunden nach Anfahren eines Wegpunkts vor der Datenaufnahme.",
+      "description": "Zeit in Sekunden, die der gemessene Flansch innerhalb der Positions- und Orientierungstoleranz stehen muss.",
       "parameter_name": "settle_time_s",
       "parameter_type": "double",
       "default_value": "0.8",
+      "dynamic": true
+    },
+    {
+      "display_name": "Settle Timeout (s)",
+      "description": "Maximale Zeit bis der gemessene Flansch die Zielpose erreicht; danach wird der Lauf abgebrochen.",
+      "parameter_name": "settle_timeout_s",
+      "parameter_type": "double",
+      "default_value": "10.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Position Tolerance (mm)",
+      "description": "Maximaler Abstand der gemessenen Flanschpose von der Zielposition während der Messung.",
+      "parameter_name": "position_tolerance_mm",
+      "parameter_type": "double",
+      "default_value": "2.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Orientation Tolerance (deg)",
+      "description": "Maximale Winkelabweichung der gemessenen Flanschpose von der Zielorientierung während der Messung.",
+      "parameter_name": "orientation_tolerance_deg",
+      "parameter_type": "double",
+      "default_value": "2.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Sampling Timeout (s)",
+      "description": "Maximale Zeit für genügend neue gültige Roboterkamera-Beobachtungen an einem Wegpunkt.",
+      "parameter_name": "sampling_timeout_s",
+      "parameter_type": "double",
+      "default_value": "5.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Max Position RMSE (mm)",
+      "description": "Größter zulässiger Positions-RMSE des rekonstruierten Boards; bei Überschreitung wird kein Ergebnis gespeichert.",
+      "parameter_name": "max_position_rmse_mm",
+      "parameter_type": "double",
+      "default_value": "10.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Max Rotation RMSE (deg)",
+      "description": "Größter zulässiger Orientierungs-RMSE des rekonstruierten Boards; bei Überschreitung wird kein Ergebnis gespeichert.",
+      "parameter_name": "max_rotation_rmse_deg",
+      "parameter_type": "double",
+      "default_value": "3.0",
       "dynamic": true
     },
     {

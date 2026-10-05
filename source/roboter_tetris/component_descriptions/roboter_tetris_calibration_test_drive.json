@@ -3,7 +3,7 @@
 
   "description": {
     "brief": "Testfahrt zur Validierung der Kalibrierung entlang der Förderband Y-Achse.",
-    "details": "Liest die kalibrierte Transformationsmatrix (T_robot_conveyor) sowie die Eye-in-Hand Transformation (T_ee_robot_cam) aus calibration.yaml/json. Richtet das Fadenkreuz der Kamera über der Board-Mitte aus und steuert den Roboter vor und zurück entlang der Y-Achse des Förderbandes. Wird per Service/Trigger-Button in AICA Studio gestartet."
+    "details": "Liest T_world_conveyor sowie T_flange_robot_cam aus calibration.json. Richtet das Fadenkreuz der Kamera über dem Board-Zentrum aus und steuert den Roboter entlang der Förderband-Y-Achse. Der Hardware-Eingang robot_ee_pose ist die Flanschpose world_T_ur_tool0."
   },
 
   "registration": "roboter_tetris::CalibrationTestDrive",
@@ -13,9 +13,9 @@
   "inputs": [
     {
       "display_name": "Robot EE Pose",
-      "description": "Endeffektor-Pose im Roboter-Base-Frame.",
+      "description": "Flanschpose world_T_ur_tool0 vom Roboter-Hardware-State.",
       "signal_name": "robot_ee_pose",
-      "signal_type": "cartesian_pose"
+      "signal_type": "cartesian_state"
     },
     {
       "display_name": "Board Geometry",
@@ -50,7 +50,7 @@
     },
     {
       "display_name": "Fehlgeschlagen",
-      "description": "True, falls calibration.yaml/json nicht gelesen werden konnte.",
+      "description": "True, falls calibration.json nicht gelesen werden konnte.",
       "predicate_name": "has_failed"
     }
   ],
@@ -58,10 +58,10 @@
   "parameters": [
     {
       "display_name": "Kalibrierdateipfad",
-      "description": "Pfad zur calibration.yaml oder calibration.json Datei.",
+      "description": "Pfad zur calibration.json Datei.",
       "parameter_name": "calibration_file_path",
       "parameter_type": "string",
-      "default_value": "/home/tetripick/Desktop/AICA/roboter_tetris/calibration.yaml",
+      "default_value": "/data/calibration.json",
       "dynamic": true
     },
     {

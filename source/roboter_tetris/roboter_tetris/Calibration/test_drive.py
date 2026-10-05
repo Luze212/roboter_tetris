@@ -1,6 +1,6 @@
 """AICA Lifecycle Component: Calibration Test Drive for roboter_tetris.
 
-Validates the extrinsic calibration by reading calibration.yaml/json (T_robot_conveyor & T_ee_robot_cam),
+Validates the extrinsic calibration by reading calibration.json (T_world_conveyor & T_flange_robot_cam),
 and moving the robot camera/end-effector back and forth along the Y-axis of the conveyor frame
 when triggered via a Service / Event button in AICA Studio.
 """
@@ -11,7 +11,6 @@ import os
 from typing import Optional, Tuple
 
 import numpy as np
-import yaml
 from modulo_components.lifecycle_component import LifecycleComponent
 from modulo_core.encoded_state import EncodedState
 from clproto import MessageType
@@ -99,10 +98,10 @@ class CalibrationTestDrive(LifecycleComponent):
         self.add_parameter(
             sr.Parameter(
                 "calibration_file_path",
-                "/home/tetripick/Desktop/AICA/roboter_tetris/calibration.yaml",
+                "/data/calibration.json",
                 sr.ParameterType.STRING
             ),
-            "Pfad zur calibration.yaml oder calibration.json"
+            "Pfad zur calibration.json"
         )
         self.add_parameter(
             sr.Parameter("test_distance_y_mm", 200.0, sr.ParameterType.DOUBLE),
@@ -122,7 +121,9 @@ class CalibrationTestDrive(LifecycleComponent):
         )
 
         # Inputs
-        self._robot_ee_pose = sr.CartesianState("end_effector", "world")
+        # Contract: input is world_T_ur_tool0 from the robot hardware.  It is
+        # the flange pose, never a TCP or gripper-point pose.
+        self._robot_ee_pose = sr.CartesianState("ur_tool0", "world")
         self.add_input(
             "robot_ee_pose",
             "_robot_ee_pose",
@@ -162,8 +163,8 @@ class CalibrationTestDrive(LifecycleComponent):
         self._start_orientation_robot = None
         self._initial_position_robot = None
         self._initial_orientation_robot = None
-        self._T_robot_conveyor = None
-        self._T_ee_robot_cam = None
+        self._T_world_conveyor = None
+        self._T_flange_robot_cam = None
 
     def on_configure_callback(self) -> bool:
         return True
@@ -204,76 +205,43 @@ class CalibrationTestDrive(LifecycleComponent):
 
     def _load_calibration_data(self) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         calib_path = self.get_parameter("calibration_file_path").get_value()
-        if not os.path.exists(calib_path):
-            candidate_fallbacks = [
-                "/home/tetripick/Desktop/AICA/roboter_tetris/calibration.yaml",
-                "/home/tetripick/Desktop/AICA/roboter_tetris/calibration.json",
-                "/tmp/calibration.yaml",
-                "/tmp/calibration.json"
-            ]
-            fallback_found = None
-            for fb in candidate_fallbacks:
-                if os.path.exists(fb):
-                    fallback_found = fb
-                    break
-
-            if fallback_found:
-                self.get_logger().info(
-                    f"Configured calibration file {calib_path} not found. "
-                    f"Using fallback: {fallback_found}"
-                )
-                calib_path = fallback_found
-            else:
-                self.get_logger().error(f"Calibration file not found at {calib_path} or fallbacks {candidate_fallbacks}")
-                return None, None
-
+        self._calib_data = None
         try:
+            if not os.path.isabs(calib_path) or not calib_path.lower().endswith(".json"):
+                raise ValueError("calibration_file_path muss ein absoluter Pfad zu einer .json-Datei sein.")
             with open(calib_path, "r", encoding="utf-8") as f:
-                if calib_path.endswith((".yaml", ".yml")):
-                    data = yaml.safe_load(f)
-                else:
-                    data = json.load(f)
+                data = json.load(f)
+            self.get_logger().info(f"Kalibrierung geladen aus: {calib_path}")
 
-            T_robot_conveyor = None
-            T_ee_robot_cam = None
-
-            if isinstance(data, dict):
-                self._calib_data = data
-                
-                # 1. T_robot_conveyor laden
-                if "transformations" in data and "T_robot_conveyor" in data["transformations"]:
-                    mat = data["transformations"]["T_robot_conveyor"]["homogeneous_matrix"]
-                    T_robot_conveyor = np.array(mat, dtype=np.float64)
-                elif "conveyor_frame" in data and "matrix_4x4" in data["conveyor_frame"]:
-                    T_robot_conveyor = np.array(data["conveyor_frame"]["matrix_4x4"], dtype=np.float64)
-                elif "homogeneous_matrix" in data:
-                    T_robot_conveyor = np.array(data["homogeneous_matrix"], dtype=np.float64)
-                elif "T_robot_conveyor" in data:
-                    T_robot_conveyor = np.array(data["T_robot_conveyor"], dtype=np.float64)
-
-                # 2. T_ee_robot_cam laden
-                if "transformations" in data and "T_ee_robot_cam" in data["transformations"]:
-                    mat_cam = data["transformations"]["T_ee_robot_cam"]["homogeneous_matrix"]
-                    T_ee_robot_cam = np.array(mat_cam, dtype=np.float64)
-                elif "T_ee_robot_cam" in data:
-                    T_ee_robot_cam = np.array(data["T_ee_robot_cam"], dtype=np.float64)
-
-            if T_robot_conveyor is None:
-                self.get_logger().error(f"No valid T_robot_conveyor matrix found in {calib_path}")
-
-            if T_ee_robot_cam is None:
-                self.get_logger().warn(
-                    f"T_ee_robot_cam not found in {calib_path}. Assuming camera is at EE origin."
+            if not isinstance(data, dict) or data.get("schema_version") != 3:
+                raise ValueError(
+                    "Erwartet wird calibration.json im Schema 3. "
+                    "Bitte eine neue Kalibrierung mit der aktuellen Komponente erzeugen."
                 )
-                T_ee_robot_cam = np.eye(4, dtype=np.float64)
-            elif np.linalg.norm(T_ee_robot_cam[:3, 3]) > 0.15:
-                self.get_logger().warn(
-                    f"Unphysical T_ee_robot_cam translation detected ({np.linalg.norm(T_ee_robot_cam[:3, 3])*1000:.1f}mm). "
-                    "Defaulting camera translation to flange origin."
-                )
-                T_ee_robot_cam[:3, 3] = 0.0
+            frames = data.get("frame_convention", {})
+            if (
+                frames.get("global_frame") != "world"
+                or frames.get("flange_frame") != "ur_tool0"
+                or frames.get("matrix_notation") != "T_target_source transformiert Punkte von source_frame nach target_frame."
+            ):
+                raise ValueError("Die Frame-Konvention der Kalibrierdatei passt nicht zum Roboter-Setup.")
 
-            return T_robot_conveyor, T_ee_robot_cam
+            T_world_conveyor = None
+            T_flange_robot_cam = None
+
+            self._calib_data = data
+            transformations = data.get("transformations", {})
+            try:
+                T_world_conveyor = np.array(
+                    transformations["T_world_conveyor"]["homogeneous_matrix"], dtype=np.float64
+                )
+                T_flange_robot_cam = np.array(
+                    transformations["T_flange_robot_cam"]["homogeneous_matrix"], dtype=np.float64
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError("Pflicht-Transformation fehlt oder ist ungültig.") from exc
+
+            return T_world_conveyor, T_flange_robot_cam
 
         except Exception as e:
             self.get_logger().error(f"Failed to parse calibration file {calib_path}: {e}")
@@ -290,41 +258,12 @@ class CalibrationTestDrive(LifecycleComponent):
                 y_m = float(bc["y"]) / 1000.0
                 z_m = float(bc.get("z", 0.0)) / 1000.0
 
-                # Determine board dimensions
-                geom = []
-                if hasattr(self._board_geometry_msg, "data") and len(self._board_geometry_msg.data) >= 3:
-                    geom = list(self._board_geometry_msg.data)
-                elif isinstance(self._board_geometry_msg, (list, tuple, np.ndarray)) and len(self._board_geometry_msg) >= 3:
-                    geom = list(self._board_geometry_msg)
-
-                if len(geom) >= 3 and geom[1] > 0 and geom[2] > 0:
-                    board_rows = int(round(geom[0]))
-                    board_cols = int(round(geom[1]))
-                    checker_size_m = float(geom[2]) / 1000.0
-                    board_w_m = board_cols * checker_size_m
-                    board_h_m = board_rows * checker_size_m
-                else:
-                    # Default 5x7 @ 35mm board: 245mm x 175mm
-                    board_w_m = 0.245
-                    board_h_m = 0.175
-
-                # Check if loaded x_m is the board corner origin (e.g. x_m >= -0.18 m, such as -0.13m / -0.128m)
-                # If so, convert corner origin to geometric board center in conveyor frame:
-                # X_center = X_origin - board_w / 2.0
-                # Y_center = Y_origin + board_h / 2.0
-                if x_m > -0.18:
-                    x_orig_m, y_orig_m = x_m, y_m
-                    x_m = x_orig_m - board_w_m / 2.0
-                    y_m = y_orig_m + board_h_m / 2.0
-                    self.get_logger().info(
-                        f"Detected board corner origin in calibration file (X={x_orig_m*1000:.1f} mm, Y={y_orig_m*1000:.1f} mm). "
-                        f"Automatically converted to geometric board center: X={x_m*1000:.1f} mm, Y={y_m*1000:.1f} mm"
-                    )
-                else:
-                    self.get_logger().info(
-                        f"Board center from calibration: X={x_m*1000:.1f} mm, Y={y_m*1000:.1f} mm "
-                        f"(in conveyor_frame)"
-                    )
+                # The file stores the center, not a corner. Only convert units;
+                # never infer a different meaning from the coordinate values.
+                self.get_logger().info(
+                    f"Board center from calibration: X={x_m*1000:.1f} mm, Y={y_m*1000:.1f} mm "
+                    f"(in conveyor_frame)"
+                )
                 return (x_m, y_m, z_m)
         except Exception as e:
             self.get_logger().warn(f"Error loading board center: {e}")
@@ -347,24 +286,24 @@ class CalibrationTestDrive(LifecycleComponent):
         response.message = (
             "Testfahrt gestartet."
             if success
-            else "Testfahrt konnte nicht gestartet werden (Fehler in calibration.yaml/json)."
+            else "Testfahrt konnte nicht gestartet werden (Schema oder Pflichtdaten in calibration.json ungültig)."
         )
         return response
 
     def _on_start_test_drive(self) -> bool:
-        T_robot_conveyor, T_ee_robot_cam = self._load_calibration_data()
+        T_world_conveyor, T_flange_robot_cam = self._load_calibration_data()
 
-        if T_robot_conveyor is None:
+        if T_world_conveyor is None:
             self.set_predicate("has_failed", True)
             return False
 
-        self._T_robot_conveyor = T_robot_conveyor
-        self._T_ee_robot_cam = T_ee_robot_cam
+        self._T_world_conveyor = T_world_conveyor
+        self._T_flange_robot_cam = T_flange_robot_cam
 
-        X_conv = T_robot_conveyor[:3, 0]
-        Y_conv = T_robot_conveyor[:3, 1]
-        Z_conv = T_robot_conveyor[:3, 2]
-        self.get_logger().info("=== Conveyor Frame Axes in robot_base (world) ===")
+        X_conv = T_world_conveyor[:3, 0]
+        Y_conv = T_world_conveyor[:3, 1]
+        Z_conv = T_world_conveyor[:3, 2]
+        self.get_logger().info("=== Conveyor Frame Axes in world ===")
         self.get_logger().info(f"  X_conv (Width) : [{X_conv[0]:.4f}, {X_conv[1]:.4f}, {X_conv[2]:.4f}]")
         self.get_logger().info(f"  Y_conv (Flow)  : [{Y_conv[0]:.4f}, {Y_conv[1]:.4f}, {Y_conv[2]:.4f}]")
         self.get_logger().info(f"  Z_conv (Height): [{Z_conv[0]:.4f}, {Z_conv[1]:.4f}, {Z_conv[2]:.4f}]")
@@ -376,12 +315,12 @@ class CalibrationTestDrive(LifecycleComponent):
         self._initial_orientation_robot = rotation_matrix_to_quaternion(R_ee_curr)
 
         # Target camera orientation parallel to conveyor (looking straight down at conveyor surface)
-        R_conv = T_robot_conveyor[:3, :3]
+        R_conv = T_world_conveyor[:3, :3]
         R_y_180 = rpy_to_rotation_matrix(0.0, math.radians(180.0), 0.0)
         R_cam_target = R_conv @ R_y_180
 
         # Target EE Flange orientation
-        R_ee_cam = T_ee_robot_cam[:3, :3]
+        R_ee_cam = T_flange_robot_cam[:3, :3]
         R_ee_target = R_cam_target @ R_ee_cam.T
         quat_ee_target = rotation_matrix_to_quaternion(R_ee_target)
 
@@ -392,7 +331,7 @@ class CalibrationTestDrive(LifecycleComponent):
             bc_x_m, bc_y_m, _ = board_center
 
             # t_ee_cam: Translation of camera optical center relative to EE flange, in meters
-            t_ee_cam = T_ee_robot_cam[:3, 3]
+            t_ee_cam = T_flange_robot_cam[:3, 3]
             # Sanity check: if the norm is unrealistically large (e.g. stored in mm), scale it
             if np.linalg.norm(t_ee_cam) > 0.5:
                 self.get_logger().warn(
@@ -404,12 +343,12 @@ class CalibrationTestDrive(LifecycleComponent):
             curr_cam_world = curr_ee_pos + R_ee_curr @ t_ee_cam
 
             # Transform current camera pos to conveyor frame to get current Z height above conveyor
-            T_inv = np.linalg.inv(T_robot_conveyor)
+            T_inv = np.linalg.inv(T_world_conveyor)
             curr_cam_conv = T_inv @ np.array([curr_cam_world[0], curr_cam_world[1], curr_cam_world[2], 1.0], dtype=np.float64)
 
             # Target camera position: board center in XY, same height Z above conveyor
             p_cam_target_conv = np.array([bc_x_m, bc_y_m, float(curr_cam_conv[2]), 1.0], dtype=np.float64)
-            p_cam_target_world = (T_robot_conveyor @ p_cam_target_conv)[:3]
+            p_cam_target_world = (T_world_conveyor @ p_cam_target_conv)[:3]
 
             # Required EE flange position so camera optical center is above board center
             # EE_pos = cam_target_world - R_ee_target * t_ee_cam
@@ -496,7 +435,7 @@ class CalibrationTestDrive(LifecycleComponent):
             progress_raw = min(dt / duration_s, 1.0)
             p = smooth_s_curve(progress_raw)
             offset_conveyor = np.array([0.0, p * dist_m, 0.0, 0.0])
-            current_offset = (self._T_robot_conveyor @ offset_conveyor)[:3]
+            current_offset = (self._T_world_conveyor @ offset_conveyor)[:3]
             target_pos = self._start_position_robot + current_offset
 
             self._target_pose.set_position(target_pos)
@@ -507,7 +446,7 @@ class CalibrationTestDrive(LifecycleComponent):
                 last_log = getattr(self, "_last_drive_log_time", 0.0)
                 if now_s - last_log >= 0.2:
                     self._last_drive_log_time = now_s
-                    T_inv = np.linalg.inv(self._T_robot_conveyor)
+                    T_inv = np.linalg.inv(self._T_world_conveyor)
                     p_world = np.array([curr_pos[0], curr_pos[1], curr_pos[2], 1.0], dtype=np.float64)
                     p_conv = T_inv @ p_world
                     self.get_logger().info(
@@ -524,7 +463,7 @@ class CalibrationTestDrive(LifecycleComponent):
         elif self._state == "PAUSING_AFTER_FORWARD":
             pause_s = float(self.get_parameter("phase_pause_s").get_value())
             offset_conveyor = np.array([0.0, dist_m, 0.0, 0.0])
-            current_offset = (self._T_robot_conveyor @ offset_conveyor)[:3]
+            current_offset = (self._T_world_conveyor @ offset_conveyor)[:3]
             self._target_pose.set_position(self._start_position_robot + current_offset)
             self._target_pose.set_orientation(self._start_orientation_robot)
             if dt >= pause_s:
@@ -537,7 +476,7 @@ class CalibrationTestDrive(LifecycleComponent):
             progress_raw = min(dt / duration_s, 1.0)
             p = smooth_s_curve(progress_raw)
             offset_conveyor = np.array([0.0, (1.0 - p) * dist_m, 0.0, 0.0])
-            current_offset = (self._T_robot_conveyor @ offset_conveyor)[:3]
+            current_offset = (self._T_world_conveyor @ offset_conveyor)[:3]
             target_pos = self._start_position_robot + current_offset
 
             self._target_pose.set_position(target_pos)

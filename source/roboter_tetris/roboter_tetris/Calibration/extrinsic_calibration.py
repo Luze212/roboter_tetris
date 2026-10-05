@@ -1,15 +1,21 @@
-"""Extrinsic calibration mathematics and JSON/YAML generator for roboter_tetris."""
+"""Extrinsic calibration mathematics and JSON export for roboter_tetris."""
 
 from dataclasses import dataclass
 import datetime
 import json
 import math
 import os
+import tempfile
 from typing import List, Optional, Tuple
 
 import cv2
 import numpy as np
-import yaml
+
+
+MIN_HAND_EYE_SAMPLES = 4
+MIN_HAND_EYE_ROTATION_DEG = 5.0
+MIN_HAND_EYE_AXIS_SEPARATION_DEG = 15.0
+MAX_FLANGE_CAMERA_DISTANCE_M = 0.5
 
 
 def rpy_to_rotation_matrix(roll_rad: float, pitch_rad: float, yaw_rad: float) -> np.ndarray:
@@ -137,7 +143,54 @@ class CalibrationResult:
     T_robot_base_static_cam: Optional[np.ndarray] = None
     position_rmse_mm: float = 0.0
     rotation_rmse_deg: float = 0.0
+    flange_rotation_span_deg: float = 0.0
     sample_count: int = 0
+
+
+def _rotation_angle_deg(R: np.ndarray) -> float:
+    """Return the principal rotation angle of a rotation matrix in degrees."""
+    cosine = (float(np.trace(R)) - 1.0) / 2.0
+    return math.degrees(math.acos(min(1.0, max(-1.0, cosine))))
+
+
+def _validate_hand_eye_motion(rotations: List[np.ndarray]) -> float:
+    """Reject hand-eye sample sets without enough rotational excitation."""
+    relative_axes = []
+    largest_angle_deg = 0.0
+
+    for i in range(len(rotations)):
+        for j in range(i + 1, len(rotations)):
+            R_relative = rotations[i].T @ rotations[j]
+            angle_deg = _rotation_angle_deg(R_relative)
+            largest_angle_deg = max(largest_angle_deg, angle_deg)
+            if angle_deg >= MIN_HAND_EYE_ROTATION_DEG:
+                rvec, _ = cv2.Rodrigues(R_relative)
+                axis = rvec.flatten()
+                axis_norm = np.linalg.norm(axis)
+                if axis_norm > 1e-12:
+                    relative_axes.append(axis / axis_norm)
+
+    if largest_angle_deg < MIN_HAND_EYE_ROTATION_DEG:
+        raise ValueError(
+            "Hand-Eye-Kalibrierung unbestimmt: Die Flanschposen enthalten weniger als "
+            f"{MIN_HAND_EYE_ROTATION_DEG:.1f} Grad Rotationsänderung."
+        )
+
+    largest_axis_separation_deg = 0.0
+    for i in range(len(relative_axes)):
+        for j in range(i + 1, len(relative_axes)):
+            # An axis and its inverse describe the same physical rotation axis.
+            cosine = abs(float(np.dot(relative_axes[i], relative_axes[j])))
+            separation_deg = math.degrees(math.acos(min(1.0, max(-1.0, cosine))))
+            largest_axis_separation_deg = max(largest_axis_separation_deg, separation_deg)
+
+    if largest_axis_separation_deg < MIN_HAND_EYE_AXIS_SEPARATION_DEG:
+        raise ValueError(
+            "Hand-Eye-Kalibrierung unbestimmt: Die Flanschrotationen erfolgen nur um "
+            "eine nahezu gemeinsame Achse."
+        )
+
+    return largest_angle_deg
 
 
 def solve_eye_in_hand(
@@ -177,8 +230,13 @@ def solve_eye_in_hand(
         R_target2cam.append(R_cam)
         t_target2cam.append(tvec.reshape(3, 1))
 
-    if len(valid_samples) < 3:
-        raise ValueError(f"Mindestens 3 valide Samples erforderlich, nur {len(valid_samples)} erhalten.")
+    if len(valid_samples) < MIN_HAND_EYE_SAMPLES:
+        raise ValueError(
+            f"Mindestens {MIN_HAND_EYE_SAMPLES} valide Samples erforderlich, "
+            f"nur {len(valid_samples)} erhalten."
+        )
+
+    flange_rotation_span_deg = _validate_hand_eye_motion(R_gripper2base)
 
     try:
         R_cam2gripper, t_cam2gripper = cv2.calibrateHandEye(
@@ -186,26 +244,19 @@ def solve_eye_in_hand(
             R_target2cam, t_target2cam,
             method=method
         )
-        R_cam2gripper = orthonormalize_rotation(R_cam2gripper)
-        t_cam2gripper_flat = t_cam2gripper.flatten()
-    except Exception:
-        t_cam2gripper_flat = np.array([0.0, 0.0, 10.0])
-        R_cam2gripper = np.eye(3)
+    except cv2.error as exc:
+        raise ValueError(f"OpenCV Hand-Eye-Solver fehlgeschlagen: {exc}") from exc
 
-    # Fallback if Hand-Eye solver is singular (e.g. pure translation waypoints with no rotation variation)
-    if np.linalg.norm(t_cam2gripper_flat) > 1.5 or np.isnan(t_cam2gripper_flat).any():
-        R_ee0 = R_gripper2base[0]
-        R_cam0 = R_target2cam[0]
-        # Board orientation in base: Ry(180)
-        R_board_base = rpy_to_rotation_matrix(0.0, math.radians(180.0), 0.0)
-        R_cam2gripper = orthonormalize_rotation(R_ee0.T @ R_board_base @ R_cam0.T)
-        
-        # Mean EE position and mean camera-to-board vector
-        t_ee_mean = np.mean([sample.T_robot_ee[:3, 3] if np.linalg.norm(sample.T_robot_ee[:3, 3]) <= 2.0 else sample.T_robot_ee[:3, 3]/1000.0 for sample in valid_samples], axis=0)
-        t_cam_target_mean = np.mean([np.array(sample.robot_cam_board_pose[:3]) for sample in valid_samples], axis=0)
-        
-        # Camera is mounted near EE flange by default in fallback
-        t_cam2gripper_flat = np.array([0.0, 0.0, 0.0], dtype=np.float64)
+    if not np.isfinite(R_cam2gripper).all() or not np.isfinite(t_cam2gripper).all():
+        raise ValueError("Hand-Eye-Solver lieferte nicht-endliche Werte.")
+
+    R_cam2gripper = orthonormalize_rotation(R_cam2gripper)
+    t_cam2gripper_flat = t_cam2gripper.flatten()
+    if np.linalg.norm(t_cam2gripper_flat) > MAX_FLANGE_CAMERA_DISTANCE_M:
+        raise ValueError(
+            "Hand-Eye-Solver lieferte einen unplausiblen Flansch-Kamera-Abstand von "
+            f"{np.linalg.norm(t_cam2gripper_flat) * 1000.0:.1f} mm."
+        )
 
     T_ee_cam = np.eye(4, dtype=np.float64)
     T_ee_cam[:3, :3] = R_cam2gripper
@@ -249,6 +300,10 @@ def solve_eye_in_hand(
 
     errors = [np.linalg.norm(pos - mean_board_pos) for pos in board_positions]
     pos_rmse_mm = float(np.sqrt(np.mean(np.square(errors))) * 1000.0)
+    rotation_errors_deg = [
+        _rotation_angle_deg(mean_board_rot.T @ rotation) for rotation in board_rotations
+    ]
+    rotation_rmse_deg = float(np.sqrt(np.mean(np.square(rotation_errors_deg))))
 
     # Static Base Camera Pose in Robot Base (from base_cam_board_pose detections)
     base_cam_transforms = []
@@ -283,7 +338,8 @@ def solve_eye_in_hand(
         T_robot_conveyor=T_robot_conveyor,
         T_robot_base_static_cam=T_robot_base_static_cam,
         position_rmse_mm=pos_rmse_mm,
-        rotation_rmse_deg=0.0,
+        rotation_rmse_deg=rotation_rmse_deg,
+        flange_rotation_span_deg=flange_rotation_span_deg,
         sample_count=len(valid_samples)
     )
 
@@ -295,17 +351,21 @@ def save_calibration_json(
     notes: str = "Automatic extrinsic calibration via Eye-in-Hand ChArUco board detection",
     board_center_conveyor_mm: Optional[Tuple[float, float, float]] = None
 ) -> None:
-    """Save calibration results to json/yaml."""
+    """Atomically replace only the configured JSON file; propagate write errors."""
+    if not os.path.isabs(filepath) or not filepath.lower().endswith(".json"):
+        raise ValueError("calibration_file_path muss ein absoluter Pfad zu einer .json-Datei sein.")
+    # This is the moving robot camera pose at the first sample, expressed in
+    # world. It is diagnostic only; the reusable hand-eye result is below.
     T_cam = result.T_robot_base_cam
     roll_cam, pitch_cam, yaw_cam = rotation_matrix_to_rpy(T_cam[:3, :3])
 
     now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
     transformations = {
-        "T_robot_base_cam": {
-            "description": "Transformation von statischer Base-Kamera zu Roboter-Basis",
-            "source_frame": "base_camera_frame",
-            "target_frame": "robot_base",
+        "T_world_robot_cam_at_first_sample": {
+            "description": "Pose der bewegten Roboterkamera beim ersten Sample in world; nur Diagnose, nicht für den Pick-Betrieb",
+            "source_frame": "robot_camera_frame",
+            "target_frame": "world",
             "translation_m": {
                 "x": round(float(T_cam[0, 3]), 6),
                 "y": round(float(T_cam[1, 3]), 6),
@@ -325,10 +385,10 @@ def save_calibration_json(
     if result.T_robot_conveyor is not None:
         T_conv = result.T_robot_conveyor
         roll_conv, pitch_conv, yaw_conv = rotation_matrix_to_rpy(T_conv[:3, :3])
-        transformations["T_robot_conveyor"] = {
-            "description": "Transformation von Förderband-Frame zu Roboter-Basis",
+        transformations["T_world_conveyor"] = {
+            "description": "Transformation vom Förderband-Frame in den globalen Roboter-Frame world",
             "source_frame": "conveyor_frame",
-            "target_frame": "robot_base",
+            "target_frame": "world",
             "translation_m": {
                 "x": round(float(T_conv[0, 3]), 6),
                 "y": round(float(T_conv[1, 3]), 6),
@@ -347,10 +407,10 @@ def save_calibration_json(
     if result.T_ee_robot_cam is not None:
         T_ee_cam = result.T_ee_robot_cam
         roll_ee, pitch_ee, yaw_ee = rotation_matrix_to_rpy(T_ee_cam[:3, :3])
-        transformations["T_ee_robot_cam"] = {
-            "description": "Transformation von Kamera zu Endeffektor",
+        transformations["T_flange_robot_cam"] = {
+            "description": "Transformation von der Roboterkamera zum Roboterflansch ur_tool0",
             "source_frame": "robot_camera_frame",
-            "target_frame": "end_effector",
+            "target_frame": "ur_tool0",
             "translation_m": {
                 "x": round(float(T_ee_cam[0, 3]), 6),
                 "y": round(float(T_ee_cam[1, 3]), 6),
@@ -369,10 +429,10 @@ def save_calibration_json(
     if result.T_robot_base_static_cam is not None:
         T_stat = result.T_robot_base_static_cam
         roll_stat, pitch_stat, yaw_stat = rotation_matrix_to_rpy(T_stat[:3, :3])
-        transformations["T_robot_base_static_cam"] = {
-            "description": "Transformation von statischer Base-Kamera zu Roboter-Basis (berechnet aus base_cam_board_pose)",
+        transformations["T_world_base_static_cam"] = {
+            "description": "Transformation von der statischen Basiskamera in den globalen Roboter-Frame world (aus base_cam_board_pose)",
             "source_frame": "base_camera_frame",
-            "target_frame": "robot_base",
+            "target_frame": "world",
             "translation_m": {
                 "x": round(float(T_stat[0, 3]), 6),
                 "y": round(float(T_stat[1, 3]), 6),
@@ -389,23 +449,17 @@ def save_calibration_json(
         }
 
     data = {
-        "schema_version": 2,
+        "schema_version": 3,
         "status": "validated",
         "last_calibrated_at": now_iso,
-        "translation_m": {
-            "x": round(float(T_cam[0, 3]), 6),
-            "y": round(float(T_cam[1, 3]), 6),
-            "z": round(float(T_cam[2, 3]), 6),
-        },
-        "rotation_rpy_deg": {
-            "roll": round(float(math.degrees(roll_cam)), 4),
-            "pitch": round(float(math.degrees(pitch_cam)), 4),
-            "yaw": round(float(math.degrees(yaw_cam)), 4),
-        },
-        "homogeneous_matrix": [
-            [round(float(val), 8) for val in row] for row in T_cam.tolist()
-        ],
         "units": {"translation": "m", "rotation": "deg"},
+        "frame_convention": {
+            "global_frame": "world",
+            "global_frame_definition": "AICA ur_base_link am Roboterfuß. Gegenüber dem UR-Frame base ist world um 180 Grad um z gedreht; innerhalb von AICA wird keine Umrechnung vorgenommen.",
+            "flange_frame": "ur_tool0",
+            "robot_ee_pose_requirement": "world_T_ur_tool0: Flanschpose vom Hardware-State, keine TCP- oder Greifpunktpose.",
+            "matrix_notation": "T_target_source transformiert Punkte von source_frame nach target_frame.",
+        },
         "transformations": transformations,
         "board_center_conveyor_mm": {
             "x": round(float(board_center_conveyor_mm[0]), 2) if board_center_conveyor_mm else None,
@@ -418,44 +472,29 @@ def save_calibration_json(
             "sample_count": result.sample_count,
             "position_rmse_mm": round(float(result.position_rmse_mm), 4),
             "rotation_rmse_deg": round(float(result.rotation_rmse_deg), 4),
+            "flange_rotation_span_deg": round(float(result.flange_rotation_span_deg), 4),
         }
     }
 
-    base_no_ext, ext = os.path.splitext(filepath)
-    yaml_path = base_no_ext + ".yaml" if ext in (".json", ".yaml", ".yml") else filepath + ".yaml"
-    json_path = base_no_ext + ".json" if ext in (".json", ".yaml", ".yml") else filepath + ".json"
-
-    persistent_dir = "/home/tetripick/Desktop/AICA/roboter_tetris"
-    target_paths = set([
-        filepath, yaml_path, json_path,
-        os.path.join(persistent_dir, "calibration.yaml"),
-        os.path.join(persistent_dir, "calibration.json"),
-        "/tmp/calibration.yaml",
-        "/tmp/calibration.json"
-    ])
-
-    for path in target_paths:
-        try:
-            dirname = os.path.dirname(os.path.abspath(path))
-            if dirname:
-                os.makedirs(dirname, exist_ok=True)
-
-            with open(path, "w", encoding="utf-8") as f:
-                if path.endswith((".yaml", ".yml")):
-                    yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-                else:
-                    json.dump(data, f, indent=2, ensure_ascii=False)
-        except Exception:
-            pass
-
-
-def save_calibration_yaml(
-    filepath: str,
-    result: CalibrationResult,
-    operator: str = "auto_calibration_component",
-    notes: str = "Automatic extrinsic calibration via Eye-in-Hand ChArUco board detection",
-    board_center_conveyor_mm: Optional[Tuple[float, float, float]] = None
-) -> None:
-    """Save calibration results to YAML and JSON formats."""
-    save_calibration_json(filepath, result, operator=operator, notes=notes,
-                          board_center_conveyor_mm=board_center_conveyor_mm)
+    # Resolve host-side symlinks as well, so replacement preserves the link.
+    target = os.path.realpath(filepath)
+    dirname = os.path.dirname(target)
+    os.makedirs(dirname, exist_ok=True)
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=dirname,
+            prefix=".calibration-", suffix=".tmp", delete=False
+        ) as f:
+            temporary_path = f.name
+            json.dump(data, f, indent=2, ensure_ascii=False, allow_nan=False)
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+            # Calibration results must also be readable from the host project.
+            os.fchmod(f.fileno(), 0o644)
+        os.replace(temporary_path, target)
+        temporary_path = None
+    finally:
+        if temporary_path is not None:
+            os.unlink(temporary_path)
