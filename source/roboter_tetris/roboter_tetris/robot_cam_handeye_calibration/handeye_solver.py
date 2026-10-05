@@ -11,6 +11,8 @@ from typing import List, Optional, Tuple
 import cv2
 import numpy as np
 
+from ..basecam_extrinsics import ExtrinsicsRecord, record_to_dict
+
 
 MIN_HAND_EYE_SAMPLES = 4
 MIN_HAND_EYE_ROTATION_DEG = 5.0
@@ -344,6 +346,35 @@ def solve_robot_cam_handeye(
     )
 
 
+def add_base_cam_compatibility_fields(data: dict) -> dict:
+    """Expose the static color-camera pose in BaseCam's existing JSON schema.
+
+    The hand-eye fields stay intact. With no static-camera observation, the
+    result remains hand-eye-only rather than exporting a guessed camera pose.
+    """
+    static_cam = data.get("transformations", {}).get("T_world_base_static_cam")
+    if static_cam is None:
+        return data
+
+    T_world_cam = np.asarray(static_cam["homogeneous_matrix"], dtype=np.float64)
+    if T_world_cam.shape != (4, 4) or not np.all(np.isfinite(T_world_cam)):
+        raise ValueError("T_world_base_static_cam ist keine gültige 4x4-Matrix.")
+    validation = data["validation"]
+    base_cam_record = ExtrinsicsRecord(
+        world_T_cam=T_world_cam,
+        method="robot_cam_handeye_charuco",
+        created=data["last_calibrated_at"],
+        quality={
+            "source_transformation": "T_world_base_static_cam",
+            "handeye_sample_count": validation["sample_count"],
+            "handeye_board_position_rmse_mm": validation["position_rmse_mm"],
+            "handeye_board_rotation_rmse_deg": validation["rotation_rmse_deg"],
+        },
+    )
+    data.update(record_to_dict(base_cam_record))
+    return data
+
+
 def save_handeye_calibration_json(
     filepath: str,
     result: HandEyeCalibrationResult,
@@ -475,6 +506,9 @@ def save_handeye_calibration_json(
             "flange_rotation_span_deg": round(float(result.flange_rotation_span_deg), 4),
         }
     }
+
+    # BaseCam uses these fields only when calibration_file explicitly points here.
+    add_base_cam_compatibility_fields(data)
 
     # Resolve host-side symlinks as well, so replacement preserves the link.
     target = os.path.realpath(filepath)

@@ -11,3 +11,7 @@ Basiskamera-Kalibrierung bleibt davon getrennt: Ihre Datei ist
 
 `2026-10-05T143927Z.json` ist ein archivierter Lauf der vorigen Benennung
 `/data/calibration.json`; sein Inhalt bleibt unverändert als Messhistorie erhalten.
+
+`2026-10-05T165730Z.json` ist der erfolgreiche Lauf der
+`RobotCamHandEyeCalibration` vom 05.10.2026. Die Messdaten wurden vor der
+Ergänzung der BaseCam-kompatiblen Darstellungsfelder unverändert archiviert.

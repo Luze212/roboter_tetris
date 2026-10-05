@@ -7,7 +7,7 @@ Verfahrens `BaseCamCalibration`.
 | Verfahren | AICA-Komponente | Ergebnisdatei | Verwendung |
 |---|---|---|---|
 | Basiskamera-Kalibrierung | `BaseCamCalibration` | `Extrinsics/base_cam_extrinsics.json` | Bestehende `base_cam`-Pick-Anwendung |
-| Robot-Kamera-Hand-Auge-Kalibrierung | `RobotCamHandEyeCalibration` | `/data/robot_cam_handeye_calibration.json` | Eigenständige Kalibrierung und Diagnose |
+| Robot-Kamera-Hand-Auge-Kalibrierung | `RobotCamHandEyeCalibration` | `/data/robot_cam_handeye_calibration.json` | Eigenständige Kalibrierung und Diagnose; optional als Basiskamera-Extrinsik für `BaseCam` auswählbar |
 
 ## Komponenten
 
@@ -31,7 +31,7 @@ beiden Board-Beobachtungen im AICA-Graphen nicht verwechselt werden.
 - Die Robot-Kamera hängt am Flansch; ihre Transformation wird als
   `T_flange_robot_cam` gespeichert.
 - Die berechnete statische Basiskamera-Pose ist ein Ergebnis dieser Methode. Sie
-  wird noch nicht in `base_cam` übernommen und nicht mit
+  wird nicht automatisch in `base_cam` übernommen und nicht mit
   `Extrinsics/base_cam_extrinsics.json` kombiniert.
 - `T_world_conveyor` dient nur der Testfahrt und Diagnose. Die Hauptanwendung
   bleibt im globalen Frame `world`.
@@ -69,3 +69,19 @@ Der Parameter heißt in beiden Komponenten
 Laufzeitquelle für dieses Verfahren. Nach einem erfolgreichen Lauf wird sie als
 JSON atomar ersetzt. Für die Versionshistorie wird sie anschließend in
 `calibration_history/` kopiert und dort mit dem Quellcode versioniert.
+
+Wenn die statische Basiskamera während des Laufs beobachtet wurde, enthält
+dieselbe Datei zusätzlich die von `BaseCam` lesbaren Felder `schema`, `version`
+und `matrix`. `matrix` ist ausschließlich `T_world_base_static_cam` im
+**Farbkamera-Optik-Frame**; die bewegte Roboterkamera-Pose und der diagnostische
+Conveyor-Frame werden dafür nicht verwendet. Die vorhandenen Hand-Auge-Felder
+(`schema_version: 3`, `transformations` usw.) bleiben für die Testfahrt erhalten.
+
+Die Pick-Anwendung bleibt standardmäßig bei
+`Extrinsics/base_cam_extrinsics.json`. Um die alternative Schätzung bewusst zu
+erproben, in der Komponente `BaseCam` den Parameter **Kalibrierdatei**
+(`calibration_file`) auf `/data/robot_cam_handeye_calibration.json` setzen und
+`BaseCam` neu aktivieren. Im Log muss `robot_cam_handeye_charuco` als geladene
+Methode erscheinen. Ein leerer, fehlender oder ungültiger Pfad führt stattdessen
+zu den `cal_*`-Rückfallwerten. Der Wechsel ist keine automatische Kombination
+beider Kalibrierverfahren; die bestehende Datei bleibt unverändert.

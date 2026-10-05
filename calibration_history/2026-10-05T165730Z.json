@@ -1,0 +1,195 @@
+{
+  "schema_version": 3,
+  "status": "validated",
+  "last_calibrated_at": "2026-10-05T16:57:30.454007+00:00",
+  "units": {
+    "translation": "m",
+    "rotation": "deg"
+  },
+  "frame_convention": {
+    "global_frame": "world",
+    "global_frame_definition": "AICA ur_base_link am Roboterfuß. Gegenüber dem UR-Frame base ist world um 180 Grad um z gedreht; innerhalb von AICA wird keine Umrechnung vorgenommen.",
+    "flange_frame": "ur_tool0",
+    "robot_ee_pose_requirement": "world_T_ur_tool0: Flanschpose vom Hardware-State, keine TCP- oder Greifpunktpose.",
+    "matrix_notation": "T_target_source transformiert Punkte von source_frame nach target_frame."
+  },
+  "transformations": {
+    "T_world_robot_cam_at_first_sample": {
+      "description": "Pose der bewegten Roboterkamera beim ersten Sample in world; nur Diagnose, nicht für den Pick-Betrieb",
+      "source_frame": "robot_camera_frame",
+      "target_frame": "world",
+      "translation_m": {
+        "x": -0.605957,
+        "y": 0.804576,
+        "z": 0.529527
+      },
+      "rotation_rpy_deg": {
+        "roll": -178.3375,
+        "pitch": -1.0876,
+        "yaw": -0.8064
+      },
+      "homogeneous_matrix": [
+        [
+          0.99972082,
+          -0.01351735,
+          0.01937961,
+          -0.6059574
+        ],
+        [
+          -0.01407135,
+          -0.99948783,
+          0.02874153,
+          0.80457601
+        ],
+        [
+          0.01898118,
+          -0.02900621,
+          -0.999399,
+          0.52952722
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "T_world_conveyor": {
+      "description": "Transformation vom Förderband-Frame in den globalen Roboter-Frame world",
+      "source_frame": "conveyor_frame",
+      "target_frame": "world",
+      "translation_m": {
+        "x": -0.868669,
+        "y": 1.1701,
+        "z": 0.080021
+      },
+      "rotation_rpy_deg": {
+        "roll": -0.0292,
+        "pitch": -0.614,
+        "yaw": 177.6606
+      },
+      "homogeneous_matrix": [
+        [
+          -0.99910918,
+          -0.04082467,
+          0.01068591,
+          -0.86866855
+        ],
+        [
+          0.04081687,
+          -0.9991662,
+          -0.00094743,
+          1.17010024
+        ],
+        [
+          0.01071568,
+          -0.00051042,
+          0.99994246,
+          0.08002116
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "T_flange_robot_cam": {
+      "description": "Transformation von der Roboterkamera zum Roboterflansch ur_tool0",
+      "source_frame": "robot_camera_frame",
+      "target_frame": "ur_tool0",
+      "translation_m": {
+        "x": 0.104104,
+        "y": -0.040315,
+        "z": 0.043237
+      },
+      "rotation_rpy_deg": {
+        "roll": 1.1412,
+        "pitch": 0.5976,
+        "yaw": 92.0752
+      },
+      "homogeneous_matrix": [
+        [
+          -0.03620887,
+          -0.99915346,
+          0.01952633,
+          0.10410392
+        ],
+        [
+          0.99928982,
+          -0.03599606,
+          0.01114213,
+          -0.04031546
+        ],
+        [
+          -0.01042983,
+          0.01991591,
+          0.99974726,
+          0.043237
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    "T_world_base_static_cam": {
+      "description": "Transformation von der statischen Basiskamera in den globalen Roboter-Frame world (aus base_cam_board_pose)",
+      "source_frame": "base_camera_frame",
+      "target_frame": "world",
+      "translation_m": {
+        "x": -0.778801,
+        "y": 0.805734,
+        "z": 0.930538
+      },
+      "rotation_rpy_deg": {
+        "roll": 179.9174,
+        "pitch": 0.306,
+        "yaw": 178.8641
+      },
+      "homogeneous_matrix": [
+        [
+          -0.99978924,
+          0.0198155,
+          0.00536884,
+          -0.77880099
+        ],
+        [
+          0.01982293,
+          0.99980262,
+          0.00133492,
+          0.80573405
+        ],
+        [
+          -0.00534133,
+          0.00144107,
+          -0.9999847,
+          0.93053779
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    }
+  },
+  "board_center_conveyor_mm": {
+    "x": -252.5,
+    "y": 330.5,
+    "z": 0.0
+  },
+  "validation": {
+    "measured_at": "2026-10-05T16:57:30.454007+00:00",
+    "operator": "robot_cam_handeye_calibration_component",
+    "sample_count": 9,
+    "position_rmse_mm": 2.3672,
+    "rotation_rmse_deg": 0.3409,
+    "flange_rotation_span_deg": 12.7084
+  }
+}

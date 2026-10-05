@@ -2,7 +2,7 @@
   "name": "Robot-Kamera Hand-Auge-Kalibrierung",
   "description": {
     "brief": "Kalibriert die am Roboterflansch montierte Kamera per ChArUco-Hand-Auge-Verfahren gegen die statische Basiskamera.",
-    "details": "Der Roboter fährt definierte Flanschposen an. Die Robot-Kamera beobachtet dabei ein stillliegendes ChArUco-Board; die fest montierte Basiskamera beobachtet dasselbe Board. Das Ergebnis enthält die Hand-Auge-Transformation Flansch→Robot-Kamera und eine davon abgeleitete statische Basiskamera-Pose in world. Es wird ausschließlich nach /data/robot_cam_handeye_calibration.json geschrieben und überschreibt weder die Kalibrierdatei der bestehenden BaseCamCalibration noch deren Anwendung. Die Conveyor-Transformation dient nur der Diagnose/Testfahrt; die Pick-Anwendung arbeitet weiter im globalen Frame world."
+    "details": "Der Roboter fährt definierte Flanschposen an. Die Robot-Kamera beobachtet dabei ein stillliegendes ChArUco-Board; die fest montierte Basiskamera beobachtet dasselbe Board. Das Ergebnis enthält die Hand-Auge-Transformation Flansch→Robot-Kamera und eine davon abgeleitete statische Basiskamera-Pose in world. Es wird ausschließlich nach /data/robot_cam_handeye_calibration.json geschrieben und überschreibt die Kalibrierdatei der bestehenden BaseCamCalibration nicht. Bei gültiger Basiskamera-Pose enthält dieselbe Datei zusätzlich BaseCam-kompatible Felder; die Pick-Anwendung nutzt sie erst, wenn dort calibration_file ausdrücklich auf diesen Pfad gesetzt wird. Die Conveyor-Transformation dient nur der Diagnose/Testfahrt; die Pick-Anwendung arbeitet weiter im globalen Frame world."
   },
   "registration": "roboter_tetris::RobotCamHandEyeCalibration",
   "inherits": "modulo_components::LifecycleComponent",
