@@ -30,9 +30,10 @@
   ],
   "services": [
     {
-      "display_name": "Testfahrt Starten",
-      "description": "Button zum manuellen Auslösen der Testfahrt entlang der Förderband-Y-Achse.",
-      "service_name": "start_test_drive"
+      "display_name": "Robot-Kamera Hand-Auge-Testfahrt starten",
+      "description": "Service zum Auslösen der Testfahrt entlang der Förderband-Y-Achse.",
+      "service_name": "start_robot_cam_handeye_test_drive",
+      "service_type": "modulo_interfaces::srv::StringTrigger"
     }
   ],
   "predicates": [

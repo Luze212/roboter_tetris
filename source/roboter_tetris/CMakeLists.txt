@@ -40,7 +40,7 @@ if(BUILD_TESTING)
 find_package(ament_cmake_pytest REQUIRED)
 
   # run python tests
-  file(GLOB_RECURSE TEST_PYTHON_SOURCES ${PROJECT_SOURCE_DIR}/test/ test_*.py)
+  file(GLOB_RECURSE TEST_PYTHON_SOURCES "${PROJECT_SOURCE_DIR}/test/test_*.py")
 
   foreach(TEST_PYTHON IN LISTS TEST_PYTHON_SOURCES)
     get_filename_component(TEST_FILENAME ${TEST_PYTHON} NAME_WE)

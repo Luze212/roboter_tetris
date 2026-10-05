@@ -113,9 +113,9 @@
   ],
   "services": [
     {
-      "display_name": "Start Calibration",
-      "description": "Service zum Auslösen des automatischen Kalibrierlaufs.",
-      "service_name": "start_calibration",
+      "display_name": "Robot-Kamera Hand-Auge-Kalibrierung starten",
+      "description": "Service zum Auslösen des Robot-Kamera-Hand-Auge-Kalibrierlaufs.",
+      "service_name": "start_robot_cam_handeye_calibration",
       "service_type": "modulo_interfaces::srv::StringTrigger"
     }
   ],
