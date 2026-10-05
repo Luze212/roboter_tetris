@@ -1,63 +1,69 @@
 {
-  "name": "Board Detection",
+  "name": "Robot-Kamera ChArUco-Erkennung",
   "description": {
-    "brief": "Erkennt ein ChArUco-Board und extrahiert Posen sowie Tiefendaten.",
-    "details": "Detektiert ArUco-Markierungen eines ChArUco-Boards und berechnet Eckinformationen, Posen sowie Tiefeninformationen aus dem ausgerichteten Tiefenbild."
+    "brief": "Erkennt das ChArUco-Board im Bild der Robot-Kamera.",
+    "details": "Liefert Board-Pose, Frische-ID, Geometrie und Debug-Bild. Die Signale tragen den Kamera-Rollennamen, damit sie in der Hand-Auge-Kalibrierung nicht verwechselt werden."
   },
-  "registration": "roboter_tetris::BoardDetection",
+  "registration": "roboter_tetris::RobotCamBoardDetection",
   "inherits": "modulo_components::LifecycleComponent",
   "inputs": [
     {
-      "display_name": "Color Image",
+      "display_name": "Robot-Kamera: Color Image",
       "description": "RGB-Farbbild der Kamera.",
-      "signal_name": "color_image",
+      "signal_name": "robot_cam_color_image",
       "signal_type": "other",
       "custom_signal_type": "sensor_msgs::msg::Image"
     },
     {
-      "display_name": "Color Camera Info",
+      "display_name": "Robot-Kamera: Color Camera Info",
       "description": "Kamera-Intrinsics für die Pose-Schätzung.",
-      "signal_name": "color_camera_info",
+      "signal_name": "robot_cam_color_camera_info",
       "signal_type": "other",
       "custom_signal_type": "sensor_msgs::msg::CameraInfo"
     },
     {
-      "display_name": "Aligned Depth Image",
+      "display_name": "Robot-Kamera: Aligned Depth Image",
       "description": "Ausgerichtetes Tiefenbild zur Live-Tiefenmessung.",
-      "signal_name": "aligned_depth_image",
+      "signal_name": "robot_cam_aligned_depth_image",
       "signal_type": "other",
       "custom_signal_type": "sensor_msgs::msg::Image"
     }
   ],
   "outputs": [
     {
-      "display_name": "Board-Ecken",
+      "display_name": "Robot-Kamera: Board-Ecken",
       "description": "Flaches Array [id, x, y] pro erkannter ChArUco-Board-Ecke.",
-      "signal_name": "board_corners",
+      "signal_name": "robot_cam_board_corners",
       "signal_type": "double_array"
     },
     {
-      "display_name": "Board-Pose im Kamera-Frame",
+      "display_name": "Robot-Kamera: Board-Pose im Kamera-Frame",
       "description": "Flaches Array [tx, ty, tz, rx, ry, rz].",
-      "signal_name": "board_pose",
+      "signal_name": "robot_cam_board_pose",
       "signal_type": "double_array"
     },
     {
-      "display_name": "Board Depth",
+      "display_name": "Robot-Kamera: Board Observation ID",
+      "description": "Laufende Nummer jedes neu verarbeiteten Farbbilds. Zusammen mit board_pose verwenden, damit keine Beobachtung mehrfach gezählt wird.",
+      "signal_name": "robot_cam_board_observation_id",
+      "signal_type": "int"
+    },
+    {
+      "display_name": "Robot-Kamera: Board Depth",
       "description": "Tiefeninformationen des Board-Zentrums [Mittelwert, Median, gültige Pixel].",
-      "signal_name": "board_depth",
+      "signal_name": "robot_cam_board_depth",
       "signal_type": "double_array"
     },
     {
-      "display_name": "Board Geometry",
+      "display_name": "Robot-Kamera: Board Geometry",
       "description": "Board-Geometrie [Zeilen, Spalten, Feldgröße in mm] zur Nutzung in Kalibrierung und Testfahrt.",
-      "signal_name": "board_geometry",
+      "signal_name": "robot_cam_board_geometry",
       "signal_type": "double_array"
     },
     {
-      "display_name": "Debug Image",
+      "display_name": "Robot-Kamera: Debug Image",
       "description": "Debug-Bild mit erkannten Markern.",
-      "signal_name": "debug_image",
+      "signal_name": "robot_cam_debug_image",
       "signal_type": "other",
       "custom_signal_type": "sensor_msgs::msg::Image"
     }

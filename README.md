@@ -37,6 +37,7 @@ Anzeige: data_tracker, interface_streamer (RViz)
 | `data_tracker`, `interface_streamer` | Klotzliste und Übersichtsbild |
 | `base_cam_calibration` | kalibriert die Basiskamera mit dem Roboter, eigene Anwendung; zeigt die Kamera als Frame |
 | `true_signal`, `toggle_signal` | Schaltsignale der Kalibrieranwendung (Greifer zu / auf) |
+| `RobotCamBoardDetection`, `StaticBaseCamBoardDetection`, `RobotCamHandEyeCalibration`, `RobotCamHandEyeTestDrive` | getrennte Robot-Kamera-Hand-Auge-Kalibrierung; noch nicht in der Pick-Anwendung verwendet |
 
 ## Dokumentation
 

@@ -9,3 +9,4 @@ CLAUDE.md
 GEMINI.md
 .venv/
 /calibration.json
+/robot_cam_handeye_calibration.json

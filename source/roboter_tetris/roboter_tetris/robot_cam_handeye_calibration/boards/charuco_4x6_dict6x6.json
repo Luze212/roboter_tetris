@@ -1,0 +1,10 @@
+{
+  "aruco_dictionary": "DICT_6X6_250",
+  "board_rows": 4,
+  "board_cols": 6,
+  "checker_size_mm": 45.0,
+  "marker_size_mm": 33.0,
+  "min_detected_markers": 4,
+  "usage": "Unterstützte Konfiguration für die AICA-Komponenten RobotCamBoardDetection und StaticBaseCamBoardDetection.",
+  "notes": "ChArUco 4x6 mit DICT_6X6_250 (45mm Checker, 33mm Marker)."
+}

@@ -1,39 +1,33 @@
 {
-  "name": "Calibration Test Drive",
-
+  "name": "Robot-Kamera Hand-Auge-Testfahrt",
   "description": {
-    "brief": "Testfahrt zur Validierung der Kalibrierung entlang der Förderband Y-Achse.",
-    "details": "Liest die kalibrierte Transformationsmatrix (T_robot_conveyor) sowie die Eye-in-Hand Transformation (T_ee_robot_cam) aus calibration.yaml/json. Richtet das Fadenkreuz der Kamera über der Board-Mitte aus und steuert den Roboter vor und zurück entlang der Y-Achse des Förderbandes. Wird per Service/Trigger-Button in AICA Studio gestartet."
+    "brief": "Prüft die Robot-Kamera-Hand-Auge-Kalibrierung mit einer Fahrt entlang der diagnostischen Conveyor-Y-Achse.",
+    "details": "Liest ausschließlich /data/robot_cam_handeye_calibration.json. Diese Testfahrt bewegt den Roboter nach Aktivierung beziehungsweise beim Service-Aufruf. Sie verwendet keine Datei der bestehenden BaseCamCalibration."
   },
-
-  "registration": "roboter_tetris::CalibrationTestDrive",
-
+  "registration": "roboter_tetris::RobotCamHandEyeTestDrive",
   "inherits": "modulo_components::LifecycleComponent",
-
   "inputs": [
     {
-      "display_name": "Robot EE Pose",
-      "description": "Endeffektor-Pose im Roboter-Base-Frame.",
-      "signal_name": "robot_ee_pose",
-      "signal_type": "cartesian_pose"
+      "display_name": "Flanschzustand in world",
+      "description": "cartesian_state des Flansches ur_tool0 in world; keine TCP- oder Greifpunktpose.",
+      "signal_name": "robot_flange_state",
+      "signal_type": "cartesian_state"
     },
     {
-      "display_name": "Board Geometry",
+      "display_name": "Robot-Kamera: Board-Geometrie",
       "description": "Board-Geometrie [Zeilen, Spalten, Feldgröße in mm] von Board Detection.",
-      "signal_name": "board_geometry",
+      "signal_name": "robot_cam_board_geometry",
       "signal_type": "double_array"
     }
   ],
-
   "outputs": [
     {
-      "display_name": "Target EE Pose",
+      "display_name": "Test-Zielpose Flansch",
       "description": "Kartesische Zielpose des Endeffektors für die Bewegungssteuerung über den Signal Point Attractor.",
-      "signal_name": "target_ee_pose",
+      "signal_name": "robot_cam_handeye_test_target_flange_pose",
       "signal_type": "cartesian_pose"
     }
   ],
-
   "services": [
     {
       "display_name": "Testfahrt Starten",
@@ -41,7 +35,6 @@
       "service_name": "start_test_drive"
     }
   ],
-
   "predicates": [
     {
       "display_name": "Testfahrt läuft",
@@ -50,18 +43,17 @@
     },
     {
       "display_name": "Fehlgeschlagen",
-      "description": "True, falls calibration.yaml/json nicht gelesen werden konnte.",
+      "description": "True, falls calibration.json nicht gelesen werden konnte.",
       "predicate_name": "has_failed"
     }
   ],
-
   "parameters": [
     {
-      "display_name": "Kalibrierdateipfad",
-      "description": "Pfad zur calibration.yaml oder calibration.json Datei.",
-      "parameter_name": "calibration_file_path",
+      "display_name": "Ergebnisdatei [robot_cam_handeye_file_path]",
+      "description": "Absoluter Pfad der Ergebnisdatei der Robot-Kamera-Hand-Auge-Kalibrierung.",
+      "parameter_name": "robot_cam_handeye_file_path",
       "parameter_type": "string",
-      "default_value": "/home/tetripick/Desktop/AICA/roboter_tetris/calibration.yaml",
+      "default_value": "/data/robot_cam_handeye_calibration.json",
       "dynamic": true
     },
     {

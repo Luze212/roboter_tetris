@@ -27,6 +27,9 @@ install(DIRECTORY ./component_descriptions DESTINATION .)
 # Ship safety configuration (workspace bounds) separately from the components.
 install(DIRECTORY ./roboter_tetris/Safety DESTINATION .)
 
+# Ship the robot-camera hand-eye calibration package and its ChArUco board presets.
+install(DIRECTORY ./roboter_tetris/robot_cam_handeye_calibration DESTINATION .)
+
 # install Python modules
 ament_python_install_package(${PROJECT_NAME} SCRIPTS_DESTINATION lib/${PROJECT_NAME})
 

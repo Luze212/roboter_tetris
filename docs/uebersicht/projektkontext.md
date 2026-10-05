@@ -42,7 +42,7 @@ Der Kern ist der **Pick im Lauf** — Ziele 3 und 4 zusammen.
 | Roboter | UR10e direkt neben dem Band, etwa auf einem Drittel vom Bandende aus |
 | Greifer | Robotiq 2F-140 über USB/Modbus (nicht als ros2_control-Hardware). 3D-Druck-Aufsätze mit Gummi-Grippmatte, Greiffläche 20 mm hoch × 15 mm breit, Öffnungsweite 127 mm. Nutzlast in der UR-Installation 1,3 kg, Schwerpunkt 12 / 24 / 45 mm |
 | Basiskamera | RealSense L515 (`serial_no f1370107`) senkrecht über dem Bandanfang, auf einem beweglichen Gestell — daher die wiederholbare Kalibrierung |
-| Roboterkamera | RealSense D435i am Flansch; nicht eingebunden (`entscheidungen.md` §12) |
+| Roboterkamera | RealSense D435i am Flansch; nicht in der Pick-Anwendung. Die getrennte `RobotCamHandEyeCalibration` dient in `calibrateNpick` nur zur Kalibrierung. |
 | Band | grün-türkis, konstante Geschwindigkeit ≈ 0,13 m/s, nicht einstellbar, Lauf entlang −y |
 | Klötze | rechtwinklig, 25 bis 100 mm Kante, rot, blau, weiß; 3D-gedruckt, Oberseite matt, Seitenflächen spiegelnd |
 | Ablage | Pose in der Luft über einer Auffangkiste neben dem Band; der Klotz fällt hinein |

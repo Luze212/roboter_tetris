@@ -1,0 +1,10 @@
+{
+  "aruco_dictionary": "DICT_6x6_250",
+  "board_rows": 5,
+  "board_cols": 7,
+  "checker_size_mm": 35.0,
+  "marker_size_mm": 26.0,
+  "min_detected_markers": 4,
+  "usage": "Unterstützte Konfiguration für die AICA-Komponenten RobotCamBoardDetection und StaticBaseCamBoardDetection.",
+  "notes": "Die Schachbrettfeldgröße ist checker_size_mm; die Markergröße ist marker_size_mm."
+}

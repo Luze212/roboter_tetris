@@ -1,0 +1,236 @@
+{
+  "name": "Robot-Kamera Hand-Auge-Kalibrierung",
+  "description": {
+    "brief": "Kalibriert die am Roboterflansch montierte Kamera per ChArUco-Hand-Auge-Verfahren gegen die statische Basiskamera.",
+    "details": "Der Roboter fährt definierte Flanschposen an. Die Robot-Kamera beobachtet dabei ein stillliegendes ChArUco-Board; die fest montierte Basiskamera beobachtet dasselbe Board. Das Ergebnis enthält die Hand-Auge-Transformation Flansch→Robot-Kamera und eine davon abgeleitete statische Basiskamera-Pose in world. Es wird ausschließlich nach /data/robot_cam_handeye_calibration.json geschrieben und überschreibt weder die Kalibrierdatei der bestehenden BaseCamCalibration noch deren Anwendung. Die Conveyor-Transformation dient nur der Diagnose/Testfahrt; die Pick-Anwendung arbeitet weiter im globalen Frame world."
+  },
+  "registration": "roboter_tetris::RobotCamHandEyeCalibration",
+  "inherits": "modulo_components::LifecycleComponent",
+  "inputs": [
+    {
+      "display_name": "Statische Basiskamera: Board-Pose",
+      "description": "ChArUco-Board-Pose aus StaticBaseCamBoardDetection [tx, ty, tz, rx, ry, rz].",
+      "signal_name": "static_base_cam_board_pose",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Statische Basiskamera: Beobachtungs-ID",
+      "description": "Frische-ID aus StaticBaseCamBoardDetection.",
+      "signal_name": "static_base_cam_board_observation_id",
+      "signal_type": "int"
+    },
+    {
+      "display_name": "Robot-Kamera: Board-Pose",
+      "description": "ChArUco-Board-Pose aus RobotCamBoardDetection [tx, ty, tz, rx, ry, rz].",
+      "signal_name": "robot_cam_board_pose",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Robot-Kamera: Beobachtungs-ID",
+      "description": "Frische-ID aus RobotCamBoardDetection.",
+      "signal_name": "robot_cam_board_observation_id",
+      "signal_type": "int"
+    },
+    {
+      "display_name": "Robot-Kamera: Board-Tiefe",
+      "description": "Tiefeninformationen des Board-Zentrums von der Roboter-Kamera [Mittelwert, Median, gültige Pixel].",
+      "signal_name": "robot_cam_board_depth",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Robot-Kamera: Board-Geometrie",
+      "description": "Board-Geometrie [Zeilen, Spalten, Feldgröße in mm] von Board Detection.",
+      "signal_name": "robot_cam_board_geometry",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Flanschzustand in world",
+      "description": "cartesian_state des Flansches ur_tool0 aus dem robot_state_broadcaster, in world. Keine TCP- oder Greifpunktpose.",
+      "signal_name": "robot_flange_state",
+      "signal_type": "cartesian_state"
+    }
+  ],
+  "outputs": [
+    {
+      "display_name": "Zielpose Flansch",
+      "description": "Zielpose des Flansches ur_tool0 in world für die Kalibriertrajektorie.",
+      "signal_name": "robot_cam_handeye_target_flange_pose",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Conveyor-Pose (Diagnose)",
+      "description": "Abgeleitetes Förderband-Koordinatensystem in world, nur für Diagnose/Testfahrt.",
+      "signal_name": "robot_cam_handeye_conveyor_pose",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Board-Pose in world (Diagnose)",
+      "description": "Rekonstruierte Pose des stillliegenden ChArUco-Boards in world.",
+      "signal_name": "robot_cam_handeye_board_pose",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Robot-Kamera in world (Diagnose)",
+      "description": "Pose der bewegten Robot-Kamera beim ersten Sample in world.",
+      "signal_name": "robot_cam_handeye_camera_pose",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Statische Basiskamera in world",
+      "description": "Aus diesem Verfahren abgeleitete Pose der statischen Basiskamera. Sie wird nicht automatisch von base_cam verwendet.",
+      "signal_name": "robot_cam_handeye_static_base_cam_pose",
+      "signal_type": "cartesian_pose"
+    },
+    {
+      "display_name": "Hand-Auge-Matrix",
+      "description": "Flache 4×4-Transformationsmatrix der Robot-Kamera-Hand-Auge-Kalibrierung.",
+      "signal_name": "robot_cam_handeye_matrix",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "Hand-Auge-RPY",
+      "description": "Euler-Winkel der Robot-Kamera-Hand-Auge-Kalibrierung in Grad.",
+      "signal_name": "robot_cam_handeye_rpy",
+      "signal_type": "double_array"
+    }
+  ],
+  "predicates": [
+    {
+      "display_name": "Is Running",
+      "description": "True, während die Kalibriersequenz aktiv ausgeführt wird.",
+      "predicate_name": "is_running"
+    },
+    {
+      "display_name": "Is Calibrated",
+      "description": "True, wenn die Kalibrierung erfolgreich abgeschlossen und gespeichert wurde.",
+      "predicate_name": "is_calibrated"
+    },
+    {
+      "display_name": "Has Failed",
+      "description": "True, wenn bei der Berechnung oder Ausführung ein Fehler aufgetreten ist.",
+      "predicate_name": "has_failed"
+    }
+  ],
+  "services": [
+    {
+      "display_name": "Start Calibration",
+      "description": "Service zum Auslösen des automatischen Kalibrierlaufs.",
+      "service_name": "start_calibration",
+      "service_type": "modulo_interfaces::srv::StringTrigger"
+    }
+  ],
+  "parameters": [
+    {
+      "display_name": "Ergebnisdatei [robot_cam_handeye_file_path]",
+      "description": "Absoluter Pfad der verbindlichen Ergebnisdatei dieser Robot-Kamera-Hand-Auge-Kalibrierung. Darf nicht auf Extrinsics/base_cam_extrinsics.json zeigen.",
+      "parameter_name": "robot_cam_handeye_file_path",
+      "parameter_type": "string",
+      "default_value": "/data/robot_cam_handeye_calibration.json",
+      "dynamic": true
+    },
+    {
+      "display_name": "Settle Time (s)",
+      "description": "Zeit in Sekunden, die der gemessene Flansch innerhalb der Positions- und Orientierungstoleranz stehen muss.",
+      "parameter_name": "settle_time_s",
+      "parameter_type": "double",
+      "default_value": "0.8",
+      "dynamic": true
+    },
+    {
+      "display_name": "Settle Timeout (s)",
+      "description": "Maximale Zeit bis der gemessene Flansch die Zielpose erreicht; danach wird der Lauf abgebrochen.",
+      "parameter_name": "settle_timeout_s",
+      "parameter_type": "double",
+      "default_value": "10.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Position Tolerance (mm)",
+      "description": "Maximaler Abstand der gemessenen Flanschpose von der Zielposition während der Messung.",
+      "parameter_name": "position_tolerance_mm",
+      "parameter_type": "double",
+      "default_value": "2.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Orientation Tolerance (deg)",
+      "description": "Maximale Winkelabweichung der gemessenen Flanschpose von der Zielorientierung während der Messung.",
+      "parameter_name": "orientation_tolerance_deg",
+      "parameter_type": "double",
+      "default_value": "2.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Sampling Timeout (s)",
+      "description": "Maximale Zeit für genügend neue gültige Roboterkamera-Beobachtungen an einem Wegpunkt.",
+      "parameter_name": "sampling_timeout_s",
+      "parameter_type": "double",
+      "default_value": "5.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Max Position RMSE (mm)",
+      "description": "Größter zulässiger Positions-RMSE des rekonstruierten Boards; bei Überschreitung wird kein Ergebnis gespeichert.",
+      "parameter_name": "max_position_rmse_mm",
+      "parameter_type": "double",
+      "default_value": "10.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Max Rotation RMSE (deg)",
+      "description": "Größter zulässiger Orientierungs-RMSE des rekonstruierten Boards; bei Überschreitung wird kein Ergebnis gespeichert.",
+      "parameter_name": "max_rotation_rmse_deg",
+      "parameter_type": "double",
+      "default_value": "3.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Samples per Waypoint",
+      "description": "Anzahl zu mittelnder Detektionen pro Orbit-Wegpunkt.",
+      "parameter_name": "samples_per_waypoint",
+      "parameter_type": "int",
+      "default_value": "5",
+      "dynamic": true
+    },
+    {
+      "display_name": "Num Waypoints",
+      "description": "Anzahl der abzufahrenden Kalibrier-Wegpunkte.",
+      "parameter_name": "num_waypoints",
+      "parameter_type": "int",
+      "default_value": "9",
+      "dynamic": true
+    },
+    {
+      "display_name": "Max Orbit Radius (mm)",
+      "description": "Maximaler kartesischer Versatz-Radius um die Startposition in mm.",
+      "parameter_name": "max_orbit_radius_mm",
+      "parameter_type": "double",
+      "default_value": "50.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Conveyor Offset X (mm)",
+      "description": "X-Offset des Board-Ursprungs im Förderband-Frame in mm.",
+      "parameter_name": "conveyor_offset_x_mm",
+      "parameter_type": "double",
+      "default_value": "-130.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Conveyor Offset Y (mm)",
+      "description": "Y-Offset des Board-Ursprungs im Förderband-Frame in mm.",
+      "parameter_name": "conveyor_offset_y_mm",
+      "parameter_type": "double",
+      "default_value": "243.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Conveyor Offset Z (mm)",
+      "description": "Z-Offset des Board-Ursprungs im Förderband-Frame in mm.",
+      "parameter_name": "conveyor_offset_z_mm",
+      "parameter_type": "double",
+      "default_value": "0.0",
+      "dynamic": true
+    }
+  ]
+}

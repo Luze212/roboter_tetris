@@ -1,0 +1,146 @@
+{
+  "name": "Statische Basiskamera ChArUco-Erkennung",
+  "description": {
+    "brief": "Erkennt das ChArUco-Board im Bild der statischen Basiskamera.",
+    "details": "Liefert Board-Pose, Frische-ID, Geometrie und Debug-Bild. Die Signale tragen den Kamera-Rollennamen, damit sie in der Hand-Auge-Kalibrierung nicht verwechselt werden."
+  },
+  "registration": "roboter_tetris::StaticBaseCamBoardDetection",
+  "inherits": "modulo_components::LifecycleComponent",
+  "inputs": [
+    {
+      "display_name": "statischen Basiskamera: Color Image",
+      "description": "RGB-Farbbild der Kamera.",
+      "signal_name": "static_base_cam_color_image",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::Image"
+    },
+    {
+      "display_name": "statischen Basiskamera: Color Camera Info",
+      "description": "Kamera-Intrinsics für die Pose-Schätzung.",
+      "signal_name": "static_base_cam_color_camera_info",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::CameraInfo"
+    },
+    {
+      "display_name": "statischen Basiskamera: Aligned Depth Image",
+      "description": "Ausgerichtetes Tiefenbild zur Live-Tiefenmessung.",
+      "signal_name": "static_base_cam_aligned_depth_image",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::Image"
+    }
+  ],
+  "outputs": [
+    {
+      "display_name": "statischen Basiskamera: Board-Ecken",
+      "description": "Flaches Array [id, x, y] pro erkannter ChArUco-Board-Ecke.",
+      "signal_name": "static_base_cam_board_corners",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "statischen Basiskamera: Board-Pose im Kamera-Frame",
+      "description": "Flaches Array [tx, ty, tz, rx, ry, rz].",
+      "signal_name": "static_base_cam_board_pose",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "statischen Basiskamera: Board Observation ID",
+      "description": "Laufende Nummer jedes neu verarbeiteten Farbbilds. Zusammen mit board_pose verwenden, damit keine Beobachtung mehrfach gezählt wird.",
+      "signal_name": "static_base_cam_board_observation_id",
+      "signal_type": "int"
+    },
+    {
+      "display_name": "statischen Basiskamera: Board Depth",
+      "description": "Tiefeninformationen des Board-Zentrums [Mittelwert, Median, gültige Pixel].",
+      "signal_name": "static_base_cam_board_depth",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "statischen Basiskamera: Board Geometry",
+      "description": "Board-Geometrie [Zeilen, Spalten, Feldgröße in mm] zur Nutzung in Kalibrierung und Testfahrt.",
+      "signal_name": "static_base_cam_board_geometry",
+      "signal_type": "double_array"
+    },
+    {
+      "display_name": "statischen Basiskamera: Debug Image",
+      "description": "Debug-Bild mit erkannten Markern.",
+      "signal_name": "static_base_cam_debug_image",
+      "signal_type": "other",
+      "custom_signal_type": "sensor_msgs::msg::Image"
+    }
+  ],
+  "predicates": [
+    {
+      "display_name": "Board erkannt",
+      "description": "True, wenn mindestens ein passendes Board erkannt wurde.",
+      "predicate_name": "has_board"
+    },
+    {
+      "display_name": "Pose geschätzt",
+      "description": "True, wenn eine gültige Board-Pose geschätzt wurde.",
+      "predicate_name": "has_pose"
+    },
+    {
+      "display_name": "Receiving Frames",
+      "description": "True, solange frische Kamera-Frames ankommen.",
+      "predicate_name": "is_receiving_frames"
+    }
+  ],
+  "parameters": [
+    {
+      "display_name": "ArUco Dictionary",
+      "description": "ArUco-Dictionary für das ChArUco-Board.",
+      "parameter_name": "aruco_dictionary",
+      "parameter_type": "string",
+      "default_value": "DICT_6x6_250",
+      "dynamic": true
+    },
+    {
+      "display_name": "Board Rows",
+      "description": "Anzahl der Marker in Y-Richtung.",
+      "parameter_name": "board_rows",
+      "parameter_type": "int",
+      "default_value": "5",
+      "dynamic": true
+    },
+    {
+      "display_name": "Board Cols",
+      "description": "Anzahl der Marker in X-Richtung.",
+      "parameter_name": "board_cols",
+      "parameter_type": "int",
+      "default_value": "7",
+      "dynamic": true
+    },
+    {
+      "display_name": "Checker Size (mm)",
+      "description": "Kantenlänge eines Checker-Felds in mm.",
+      "parameter_name": "checker_size_mm",
+      "parameter_type": "double",
+      "default_value": "35.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Marker Size (mm)",
+      "description": "Kantenlänge eines ArUco-Markers in mm.",
+      "parameter_name": "marker_size_mm",
+      "parameter_type": "double",
+      "default_value": "26.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Minimale Marker",
+      "description": "Minimale Anzahl erkannter Marker.",
+      "parameter_name": "min_detected_markers",
+      "parameter_type": "int",
+      "default_value": "4",
+      "dynamic": true
+    },
+    {
+      "display_name": "Debug aktivieren",
+      "description": "Debug-Bild erzeugen und publizieren.",
+      "parameter_name": "debug_enable",
+      "parameter_type": "bool",
+      "default_value": "true",
+      "dynamic": true
+    }
+  ]
+}

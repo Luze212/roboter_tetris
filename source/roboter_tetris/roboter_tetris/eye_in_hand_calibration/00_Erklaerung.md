@@ -1,3 +1,5 @@
+> **Archivierter Vorläufer:** Dieser Ordner wird weder installiert noch als AICA-Komponente registriert. Er bleibt ausschließlich als Verlauf der ursprünglichen Implementierung erhalten. Die aktive Integrationskandidatin in `calibrateNpick` heißt `robot_cam_handeye_calibration`; ihre AICA-Komponenten beginnen mit `RobotCam…` beziehungsweise `StaticBaseCam…` und schreiben nach `/data/robot_cam_handeye_calibration.json`.
+
 # Eye-in-Hand-Kalibrierung — Ansatz 1
 
 > **Kontext:** Dies ist Ansatz 1 der extrinsischen Kalibrierung, entwickelt im Branch

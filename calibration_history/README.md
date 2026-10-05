@@ -1,16 +1,13 @@
-# Kalibrierungs-Snapshots
+# Historie der Robot-Kamera-Hand-Auge-Kalibrierung
 
-`/calibration.json` ist die aktuelle Laufzeitdatei der AICA-Komponenten. Sie ist
-eine lokale Verknüpfung auf den persistenten AICA-Datenordner und wird nicht in Git
-versioniert.
+Die Laufzeitdatei der **Robot-Kamera-Hand-Auge-Kalibrierung** liegt im Container
+unter `/data/robot_cam_handeye_calibration.json`. Sie wird nicht direkt versioniert,
+damit ein Kalibrierlauf die Git-Arbeitskopie nicht verändert.
 
-Jede freigegebene Kalibrierung wird hier als unveränderliche JSON-Kopie mit einem
-UTC-Zeitstempel im Dateinamen abgelegt und zusammen mit dem zugehörigen Code
-committet. Diese Snapshots dienen der Nachvollziehbarkeit; sie werden von AICA nicht
-automatisch eingelesen und ersetzen nicht die Laufzeitdatei unter `/data`.
+Nach einem akzeptierten Lauf wird die Ergebnisdatei mit UTC-Zeitstempel in diesen
+Ordner kopiert und gemeinsam mit dem Code versioniert. Die bestehende
+Basiskamera-Kalibrierung bleibt davon getrennt: Ihre Datei ist
+`source/roboter_tetris/roboter_tetris/Extrinsics/base_cam_extrinsics.json`.
 
-Für einen neuen Snapshot wird die geprüfte `/data/calibration.json` kopiert, etwa:
-
-```bash
-cp calibration.json calibration_history/2026-10-05T143927Z.json
-```
+`2026-10-05T143927Z.json` ist ein archivierter Lauf der vorigen Benennung
+`/data/calibration.json`; sein Inhalt bleibt unverändert als Messhistorie erhalten.
