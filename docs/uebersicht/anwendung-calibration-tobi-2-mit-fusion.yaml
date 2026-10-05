@@ -1,0 +1,756 @@
+schema: 2-0-6
+dependencies:
+  core: v5.0.0
+frames:
+  Target:
+    reference_frame: world
+    position:
+      x: -0.563646
+      y: 0.701042
+      z: 0.572258
+    orientation:
+      w: -0.000126
+      x: 0.699212
+      y: 0.714887
+      z: 0.006226
+on_start:
+  load:
+  - hardware: hardware
+  - component: signal_point_attractor
+  - component: realsense_camera
+  - component: robot_kamera_charuco_erkennung
+  - component: realsense_camera_2
+  - component: statische_basiskamera_charuco_erkennung
+  - component: basiskamera_kalibrierungen_kombinieren
+components:
+  signal_point_attractor:
+    component: aica_core_components::motion::SignalPointAttractor
+    display_name: Signal Point Attractor
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: signal_point_attractor
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: signal_point_attractor
+            transition: activate
+    parameters:
+      angular_gains:
+        value:
+        - 2
+        type: vector
+      max_linear_velocity:
+        value: 0.1
+        type: double
+      max_angular_velocity:
+        value: 0.3
+        type: double
+      linear_precision:
+        value: 0.005
+        type: double
+      angular_precision:
+        value: 0.03
+        type: double
+    inputs:
+      state: /hardware/robot_state_broadcaster/cartesian_state
+      attractor: /auto_calibration/target_pose
+    outputs:
+      twist: /signal_point_attractor/twist
+  frame_to_signal:
+    component: aica_core_components::ros::TfToSignal
+    display_name: Frame to Signal
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: frame_to_signal
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: frame_to_signal
+            transition: activate
+    parameters:
+      frame:
+        value: Target
+        type: string
+    outputs:
+      pose: /auto_calibration/target_pose
+  realsense_camera:
+    component: realsense2_camera::RealSenseNodeFactory
+    display_name: Camera Robot
+    parameters:
+      camera_name:
+        value: Robot_D435i
+        type: string
+      serial_no:
+        value: '241122074842'
+        type: string
+      rgb_camera.profile:
+        value: 848x480x30
+        type: string
+      depth_module.profile:
+        value: 848x480x30
+        type: string
+      align_depth.enable:
+        value: true
+        type: bool
+    outputs:
+      color_image_raw: /realsense_camera/color_image_raw
+      color_camera_info: /realsense_camera/color_camera_info
+      aligned_depth_to_color_image_raw: /realsense_camera/aligned_depth_to_color_image_raw
+  realsense_camera_2:
+    component: realsense2_camera::RealSenseNodeFactory
+    display_name: Camera Base
+    parameters:
+      camera_name:
+        value: base_L515
+        type: string
+      serial_no:
+        value: f1370107
+        type: string
+      align_depth.enable:
+        value: true
+        type: bool
+    outputs:
+      color_image_raw: /realsense_camera_2/color_image_raw
+      color_camera_info: /realsense_camera_2/color_camera_info
+      aligned_depth_to_color_image_raw: /realsense_camera_2/aligned_depth_to_color_image_raw
+  signal_to_frame:
+    component: aica_core_components::ros::SignalToTf
+    display_name: Signal to Frame - Conveyor
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: signal_to_frame
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: signal_to_frame
+            transition: activate
+    parameters:
+      remap_frame:
+        value: Conveyor
+        type: string
+    inputs:
+      pose: /robot_kamera_hand_auge_kalibrierung/robot_cam_handeye_conveyor_pose
+  signal_to_frame_2:
+    component: aica_core_components::ros::SignalToTf
+    display_name: Signal to Frame - Charuco Board
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: signal_to_frame_2
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: signal_to_frame_2
+            transition: activate
+    inputs:
+      pose: /auto_calibration/board_pose_out
+  signal_to_frame_3:
+    component: aica_core_components::ros::SignalToTf
+    display_name: Signal to Frame - Robot Cam
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: signal_to_frame_3
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: signal_to_frame_3
+            transition: activate
+    inputs:
+      pose: /auto_calibration/robot_cam_pose_out
+  signal_to_frame_4:
+    component: aica_core_components::ros::SignalToTf
+    display_name: Signal to Frame - Base Cam
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: signal_to_frame_4
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: signal_to_frame_4
+            transition: activate
+    inputs:
+      pose: /auto_calibration/base_cam_pose_out
+  robot_kamera_hand_auge_kalibrierung:
+    component: roboter_tetris::RobotCamHandEyeCalibration
+    display_name: Robot-Kamera Hand-Auge-Kalibrierung
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: robot_kamera_hand_auge_kalibrierung
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: robot_kamera_hand_auge_kalibrierung
+            transition: activate
+    inputs:
+      static_base_cam_board_pose: /statische_basiskamera_charuco_erkennung/static_base_cam_board_pose
+      static_base_cam_board_observation_id: /statische_basiskamera_charuco_erkennung/static_base_cam_board_observation_id
+      robot_cam_board_pose: /robot_kamera_charuco_erkennung/robot_cam_board_pose
+      robot_cam_board_observation_id: /robot_kamera_charuco_erkennung/robot_cam_board_observation_id
+      robot_cam_board_depth: /robot_kamera_charuco_erkennung/robot_cam_board_depth
+      robot_cam_board_geometry: /robot_kamera_charuco_erkennung/robot_cam_board_geometry
+      robot_flange_state: /hardware/robot_state_broadcaster/cartesian_state
+    outputs:
+      robot_cam_handeye_target_flange_pose: /auto_calibration/target_pose
+      robot_cam_handeye_conveyor_pose: /robot_kamera_hand_auge_kalibrierung/robot_cam_handeye_conveyor_pose
+      robot_cam_handeye_board_pose: /auto_calibration/board_pose_out
+      robot_cam_handeye_camera_pose: /auto_calibration/robot_cam_pose_out
+      robot_cam_handeye_static_base_cam_pose: /auto_calibration/base_cam_pose_out
+  robot_kamera_charuco_erkennung:
+    component: roboter_tetris::RobotCamBoardDetection
+    display_name: Robot-Kamera ChArUco-Erkennung
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: robot_kamera_charuco_erkennung
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: robot_kamera_charuco_erkennung
+            transition: activate
+    inputs:
+      robot_cam_color_image: /realsense_camera/color_image_raw
+      robot_cam_color_camera_info: /realsense_camera/color_camera_info
+      robot_cam_aligned_depth_image: /realsense_camera/aligned_depth_to_color_image_raw
+    outputs:
+      robot_cam_board_pose: /robot_kamera_charuco_erkennung/robot_cam_board_pose
+      robot_cam_board_observation_id: /robot_kamera_charuco_erkennung/robot_cam_board_observation_id
+      robot_cam_board_depth: /robot_kamera_charuco_erkennung/robot_cam_board_depth
+      robot_cam_board_geometry: /robot_kamera_charuco_erkennung/robot_cam_board_geometry
+  statische_basiskamera_charuco_erkennung:
+    component: roboter_tetris::StaticBaseCamBoardDetection
+    display_name: Statische Basiskamera ChArUco-Erkennung
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: statische_basiskamera_charuco_erkennung
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: statische_basiskamera_charuco_erkennung
+            transition: activate
+    inputs:
+      static_base_cam_color_image: /realsense_camera_2/color_image_raw
+      static_base_cam_color_camera_info: /realsense_camera_2/color_camera_info
+      static_base_cam_aligned_depth_image: /realsense_camera_2/aligned_depth_to_color_image_raw
+    outputs:
+      static_base_cam_board_pose: /statische_basiskamera_charuco_erkennung/static_base_cam_board_pose
+      static_base_cam_board_observation_id: /statische_basiskamera_charuco_erkennung/static_base_cam_board_observation_id
+  robot_kamera_hand_auge_testfahrt:
+    component: roboter_tetris::RobotCamHandEyeTestDrive
+    display_name: Robot-Kamera Hand-Auge-Testfahrt
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: robot_kamera_hand_auge_testfahrt
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: robot_kamera_hand_auge_testfahrt
+            transition: activate
+    inputs:
+      robot_flange_state: /hardware/robot_state_broadcaster/cartesian_state
+    outputs:
+      robot_cam_handeye_test_target_flange_pose: /auto_calibration/target_pose
+  basiskamera_kalibrierungen_kombinieren:
+    component: roboter_tetris::BaseCamCalibrationFusion
+    display_name: Basiskamera-Kalibrierungen kombinieren
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: basiskamera_kalibrierungen_kombinieren
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: basiskamera_kalibrierungen_kombinieren
+            transition: activate
+    parameters:
+      base_cam_file:
+        value: Extrinsics/base_cam_extrinsics.json
+        type: string
+      robot_cam_file:
+        value: /data/robot_cam_handeye_calibration.json
+        type: string
+      output_file:
+        value: /data/base_cam_fused_extrinsics.json
+        type: string
+      robot_cam_weight_percent:
+        value: 50.0
+        type: double
+hardware:
+  hardware:
+    display_name: Hardware Interface
+    urdf: Universal Robots 10e
+    rate: 500
+    events:
+      transitions:
+        on_load:
+          load:
+          - controller: robot_state_broadcaster
+            hardware: hardware
+          - controller: ik_velocity_controller
+            hardware: hardware
+    parameters:
+      robot_ip: 192.168.96.221
+    controllers:
+      robot_state_broadcaster:
+        plugin: aica_core_controllers/RobotStateBroadcaster
+        outputs:
+          cartesian_state: /hardware/robot_state_broadcaster/cartesian_state
+        events:
+          transitions:
+            on_load:
+              switch_controllers:
+                hardware: hardware
+                activate: robot_state_broadcaster
+        display_name: Robot State Broadcaster
+      ik_velocity_controller:
+        plugin: aica_core_controllers/velocity/IKVelocityController
+        inputs:
+          command: /signal_point_attractor/twist
+        events:
+          transitions:
+            on_load:
+              switch_controllers:
+                hardware: hardware
+                activate: ik_velocity_controller
+graph:
+  positions:
+    on_start:
+      x: -780
+      y: 0
+    stop:
+      x: -780
+      y: 100
+    buttons:
+      button:
+        x: -780
+        y: 280
+      button_2:
+        x: 100
+        y: -1240
+      button_3:
+        x: 1620
+        y: -620
+      button_4:
+        x: 100
+        y: -1140
+      button_5:
+        x: -780
+        y: 380
+      button_6:
+        x: 1620
+        y: -500
+      button_7:
+        x: 1620
+        y: -900
+    components:
+      signal_point_attractor:
+        x: 480
+        y: 200
+      frame_to_signal:
+        x: -280
+        y: 280
+      realsense_camera:
+        x: -480
+        y: -480
+      realsense_camera_2:
+        x: -480
+        y: -980
+      signal_to_frame:
+        x: 1160
+        y: -1340
+      signal_to_frame_2:
+        x: 1160
+        y: -1120
+      signal_to_frame_3:
+        x: 1160
+        y: -900
+      signal_to_frame_4:
+        x: 1160
+        y: -680
+      robot_kamera_hand_auge_kalibrierung:
+        x: 620
+        y: -1060
+      robot_kamera_charuco_erkennung:
+        x: 40
+        y: -560
+      statische_basiskamera_charuco_erkennung:
+        x: 40
+        y: -1060
+      robot_kamera_hand_auge_testfahrt:
+        x: 2100
+        y: -500
+      basiskamera_kalibrierungen_kombinieren:
+        x: 2100
+        y: -900
+    hardware:
+      hardware:
+        x: 1200
+        y: 0
+  buttons:
+    button:
+      display_name: Frame Steuerung ein
+      on_click:
+        load:
+          component: frame_to_signal
+    button_2:
+      display_name: Start Auto Calibration (Robot moving!)
+      on_click:
+        load:
+        - component: signal_to_frame_4
+        - component: signal_to_frame_3
+        - component: signal_to_frame_2
+        - component: signal_to_frame
+        - component: robot_kamera_hand_auge_kalibrierung
+    button_3:
+      display_name: Start Test Drive (Robot Moving!)
+      on_click:
+        load:
+          component: robot_kamera_hand_auge_testfahrt
+    button_4:
+      display_name: Stop Auto Calibration
+      on_click:
+        unload:
+          component: robot_kamera_hand_auge_kalibrierung
+    button_5:
+      display_name: Frame Steuerung aus
+      on_click:
+        unload:
+          component: frame_to_signal
+    button_6:
+      display_name: Stop Test Drive
+      on_click:
+        unload:
+          component: robot_kamera_hand_auge_testfahrt
+    button_7:
+      display_name: Kalibrierungen kombinieren (keine Bewegung)
+      on_click:
+        call_service:
+          component: basiskamera_kalibrierungen_kombinieren
+          service: write_fused_base_cam_calibration
+  edges:
+    realsense_camera_2_color_image_raw_charuco_detection_color_image:
+      path:
+      - x: -40
+        y: -800
+      - x: -40
+        y: -1020
+    realsense_camera_2_color_camera_info_charuco_detection_color_camera_info:
+      path:
+      - x: -20
+        y: -760
+      - x: -20
+        y: -980
+    auto_calibration_target_pose_signal_point_attractor_attractor:
+      path:
+      - x: 960
+        y: -720
+      - x: 960
+        y: -100
+      - x: 200
+        y: -100
+      - x: 200
+        y: 500
+    hardware_hardware_robot_state_broadcaster_cartesian_state_auto_calibration_robot_ee_pose:
+      path:
+      - x: 1100
+        y: 500
+      - x: 1100
+        y: -180
+      - x: 520
+        y: -180
+      - x: 520
+        y: -480
+    hardware_hardware_robot_state_broadcaster_cartesian_state_calibration_test_drive_robot_ee_pose:
+      path:
+      - x: 1100
+        y: 500
+      - x: 1100
+        y: -180
+    auto_calibration_target_ee_pose_signal_point_attractor_attractor:
+      path:
+      - x: 1000
+        y: -720
+      - x: 1000
+        y: -80
+      - x: 400
+        y: -80
+      - x: 400
+        y: 500
+    calibration_test_drive_target_ee_pose_signal_point_attractor_attractor:
+      path:
+      - x: 2520
+        y: -180
+      - x: 2520
+        y: -80
+      - x: 400
+        y: -80
+      - x: 400
+        y: 500
+    realsense_camera_aligned_depth_to_color_image_raw_board_detection_2_aligned_depth_image:
+      path:
+      - x: -80
+        y: -140
+      - x: -80
+        y: -220
+    realsense_camera_2_aligned_depth_to_color_image_raw_board_detection_aligned_depth_image:
+      path:
+      - x: -80
+        y: -600
+      - x: -80
+        y: -680
+    board_detection_2_board_pose_auto_calibration_robot_cam_board_pose:
+      path:
+      - x: 400
+        y: -260
+      - x: 400
+        y: -640
+    board_detection_2_board_observation_id_auto_calibration_robot_cam_observation_id:
+      path:
+      - x: 420
+        y: -220
+      - x: 420
+        y: -600
+    board_detection_2_board_depth_auto_calibration_robot_cam_board_depth:
+      path:
+      - x: 440
+        y: -180
+      - x: 440
+        y: -560
+    board_detection_2_board_geometry_auto_calibration_board_geometry:
+      path:
+      - x: 480
+        y: -140
+      - x: 480
+        y: -520
+    auto_calibration_conveyor_pose_signal_to_frame_pose:
+      path:
+      - x: 1060
+        y: -680
+      - x: 1060
+        y: -1120
+    auto_calibration_board_pose_out_signal_to_frame_2_pose:
+      path:
+      - x: 1080
+        y: -640
+      - x: 1080
+        y: -900
+    auto_calibration_robot_cam_pose_out_signal_to_frame_3_pose:
+      path:
+      - x: 1100
+        y: -600
+      - x: 1100
+        y: -680
+    auto_calibration_base_cam_pose_out_signal_to_frame_4_pose:
+      path:
+      - x: 1120
+        y: -560
+      - x: 1120
+        y: -460
+    on_start_on_start_signal_point_attractor_signal_point_attractor:
+      path:
+      - x: 140
+        y: 60
+      - x: 140
+        y: 260
+    on_start_on_start_realsense_camera_realsense_camera:
+      path:
+      - x: -520
+        y: 60
+      - x: -520
+        y: -420
+    on_start_on_start_robot_kamera_charuco_erkennung_robot_kamera_charuco_erkennung:
+      path:
+      - x: -560
+        y: 60
+      - x: -560
+        y: -500
+    on_start_on_start_realsense_camera_2_realsense_camera_2:
+      path:
+      - x: -600
+        y: 60
+      - x: -600
+        y: -920
+    on_start_on_start_statische_basiskamera_charuco_erkennung_statische_basiskamera_charuco_erkennung:
+      path:
+      - x: -640
+        y: 60
+      - x: -640
+        y: -1000
+    button_2_on_click_signal_to_frame_4_signal_to_frame_4:
+      path:
+      - x: 1120
+        y: -1180
+      - x: 1120
+        y: -620
+    button_2_on_click_signal_to_frame_3_signal_to_frame_3:
+      path:
+      - x: 1120
+        y: -1180
+      - x: 1120
+        y: -840
+    button_2_on_click_signal_to_frame_2_signal_to_frame_2:
+      path:
+      - x: 1120
+        y: -1180
+      - x: 1120
+        y: -1060
+    button_2_on_click_signal_to_frame_signal_to_frame:
+      path:
+      - x: 1120
+        y: -1180
+      - x: 1120
+        y: -1280
+    button_2_on_click_robot_kamera_hand_auge_kalibrierung_robot_kamera_hand_auge_kalibrierung:
+      path:
+      - x: 520
+        y: -1180
+      - x: 520
+        y: -1000
+    button_3_on_click_robot_kamera_hand_auge_testfahrt_robot_kamera_hand_auge_testfahrt:
+      path:
+      - x: 2060
+        y: -560
+      - x: 2060
+        y: -440
+    button_4_on_click_robot_kamera_hand_auge_kalibrierung_robot_kamera_hand_auge_kalibrierung:
+      path:
+      - x: 520
+        y: -1080
+      - x: 520
+        y: -1000
+    button_5_on_click_frame_to_signal_frame_to_signal:
+      path:
+      - x: -340
+        y: 440
+      - x: -340
+        y: 340
+    hardware_hardware_robot_state_broadcaster_cartesian_state_signal_point_attractor_state:
+      path:
+      - x: 1020
+        y: 500
+      - x: 1020
+        y: 180
+      - x: 440
+        y: 180
+      - x: 440
+        y: 460
+    hardware_hardware_robot_state_broadcaster_cartesian_state_robot_kamera_hand_auge_kalibrierung_robot_flange_state:
+      path:
+      - x: 1020
+        y: 500
+      - x: 1020
+        y: -140
+      - x: 600
+        y: -140
+      - x: 600
+        y: -520
+    hardware_hardware_robot_state_broadcaster_cartesian_state_robot_kamera_hand_auge_testfahrt_robot_flange_state:
+      path:
+      - x: 1160
+        y: 500
+      - x: 1160
+        y: -200
+    robot_kamera_hand_auge_kalibrierung_robot_cam_handeye_target_flange_pose_signal_point_attractor_attractor:
+      path:
+      - x: 1080
+        y: -760
+      - x: 1080
+        y: 120
+      - x: 320
+        y: 120
+      - x: 320
+        y: 500
+    robot_kamera_hand_auge_testfahrt_robot_cam_handeye_test_target_flange_pose_signal_point_attractor_attractor:
+      path:
+      - x: 2500
+        y: -200
+      - x: 2500
+        y: 160
+      - x: 380
+        y: 160
+      - x: 380
+        y: 500
+    signal_point_attractor_twist_hardware_hardware_ik_velocity_controller_command:
+      path:
+      - x: 960
+        y: 460
+      - x: 960
+        y: 760
+    realsense_camera_aligned_depth_to_color_image_raw_robot_kamera_charuco_erkennung_robot_cam_aligned_depth_image:
+      path:
+      - x: -20
+        y: -140
+      - x: -20
+        y: -220
+    ? realsense_camera_2_aligned_depth_to_color_image_raw_statische_basiskamera_charuco_erkennung_static_base_cam_aligned_depth_image
+    : path:
+      - x: -20
+        y: -640
+      - x: -20
+        y: -720
+    robot_kamera_hand_auge_kalibrierung_robot_cam_handeye_conveyor_pose_signal_to_frame_pose:
+      path:
+      - x: 1060
+        y: -720
+      - x: 1060
+        y: -1120
+    robot_kamera_hand_auge_kalibrierung_robot_cam_handeye_board_pose_signal_to_frame_2_pose:
+      path:
+      - x: 1080
+        y: -680
+      - x: 1080
+        y: -900
+    robot_kamera_hand_auge_kalibrierung_robot_cam_handeye_camera_pose_signal_to_frame_3_pose:
+      path:
+      - x: 1100
+        y: -640
+      - x: 1100
+        y: -680
+    robot_kamera_hand_auge_kalibrierung_robot_cam_handeye_static_base_cam_pose_signal_to_frame_4_pose:
+      path:
+      - x: 1060
+        y: -600
+      - x: 1060
+        y: -460
+    robot_kamera_charuco_erkennung_robot_cam_board_pose_robot_kamera_hand_auge_kalibrierung_robot_cam_board_pose:
+      path:
+      - x: 520
+        y: -260
+      - x: 520
+        y: -680
+    ? robot_kamera_charuco_erkennung_robot_cam_board_observation_id_robot_kamera_hand_auge_kalibrierung_robot_cam_board_observation_id
+    : path:
+      - x: 540
+        y: -220
+      - x: 540
+        y: -640
+    robot_kamera_charuco_erkennung_robot_cam_board_depth_robot_kamera_hand_auge_kalibrierung_robot_cam_board_depth:
+      path:
+      - x: 560
+        y: -180
+      - x: 560
+        y: -600
+    robot_kamera_charuco_erkennung_robot_cam_board_geometry_robot_kamera_hand_auge_kalibrierung_robot_cam_board_geometry:
+      path:
+      - x: 580
+        y: -140
+      - x: 580
+        y: -560

@@ -1,0 +1,65 @@
+{
+  "name": "Basiskamera-Kalibrierungen kombinieren",
+  "description": {
+    "brief": "Mischt die statische Basiskamera-Pose aus BaseCam- und Robot-Kamera-Kalibrierung in einer dritten Datei.",
+    "details": "0 % Robot-Kamera = nur BaseCam-Kalibrierung, 100 % = nur Robot-Kamera-Hand-Auge-Kalibrierung. Position linear, Orientierung entlang des kuerzesten Rotationswegs. Der Block hat keine Roboterverbindung und schreibt erst beim Dienstaufruf. Die Ergebnisdatei wird nicht automatisch vom Pick-System verwendet. Die BaseCam-Quelle muss eine erfolgreiche Stufe-1- oder Stufe-2-Messung sein; die Uebergangsdatei L6 wird nicht als neue Messung ausgegeben."
+  },
+  "registration": "roboter_tetris::BaseCamCalibrationFusion",
+  "inherits": "modulo_components::LifecycleComponent",
+  "inputs": [],
+  "outputs": [],
+  "predicates": [
+    {
+      "display_name": "Ergebnis geschrieben",
+      "description": "True nach erfolgreichem Schreiben durch den Dienst in dieser Aktivierung.",
+      "predicate_name": "has_result"
+    },
+    {
+      "display_name": "Kombination fehlgeschlagen",
+      "description": "True, wenn die letzte angeforderte Kombination fehlgeschlagen ist.",
+      "predicate_name": "has_failed"
+    }
+  ],
+  "services": [
+    {
+      "display_name": "Kalibrierungen kombinieren und Datei schreiben (keine Bewegung)",
+      "description": "Liest beide Quelldateien, interpoliert die Pose und schreibt die separate Ergebnisdatei.",
+      "service_name": "write_fused_base_cam_calibration",
+      "service_type": "modulo_interfaces::srv::StringTrigger"
+    }
+  ],
+  "parameters": [
+    {
+      "display_name": "BaseCam-Kalibrierdatei [base_cam_file]",
+      "description": "Erfolgreiches Ergebnis von BaseCamCalibration; relativer Pfad liegt im installierten Paket.",
+      "parameter_name": "base_cam_file",
+      "parameter_type": "string",
+      "default_value": "Extrinsics/base_cam_extrinsics.json",
+      "dynamic": true
+    },
+    {
+      "display_name": "Robot-Kamera-Kalibrierdatei [robot_cam_file]",
+      "description": "Validiertes Robot-Kamera-Hand-Auge-Ergebnis mit BaseCam-kompatibler Matrix.",
+      "parameter_name": "robot_cam_file",
+      "parameter_type": "string",
+      "default_value": "/data/robot_cam_handeye_calibration.json",
+      "dynamic": true
+    },
+    {
+      "display_name": "Ergebnisdatei [output_file]",
+      "description": "Dritte, separate BaseCam-kompatible JSON-Datei; vorherige Version wird als *_vorher.json gesichert.",
+      "parameter_name": "output_file",
+      "parameter_type": "string",
+      "default_value": "/data/base_cam_fused_extrinsics.json",
+      "dynamic": true
+    },
+    {
+      "display_name": "Anteil Robot-Kamera (%) [robot_cam_weight_percent]",
+      "description": "0 bis 100 Prozent; Rest ist Anteil der eigenstaendigen BaseCam-Kalibrierung.",
+      "parameter_name": "robot_cam_weight_percent",
+      "parameter_type": "double",
+      "default_value": "50.0",
+      "dynamic": true
+    }
+  ]
+}
