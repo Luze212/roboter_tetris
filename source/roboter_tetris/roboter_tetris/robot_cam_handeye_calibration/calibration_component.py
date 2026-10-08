@@ -12,7 +12,6 @@ from modulo_core.encoded_state import EncodedState
 from clproto import MessageType
 import state_representation as sr
 from std_msgs.msg import Float64MultiArray, Int32
-from modulo_interfaces.srv import StringTrigger
 
 from .handeye_solver import (
     HandEyeCalibrationResult, HandEyeCalibrationSample,
@@ -73,6 +72,10 @@ def quaternion_slerp(q1: np.ndarray, q2: np.ndarray, t: float) -> np.ndarray:
 class RobotCamHandEyeCalibration(LifecycleComponent):
     """Calibrates the flange-mounted robot camera against the static base camera."""
 
+    DEFAULT_RESULT_FILE = "/data/robot_cam_handeye_calibration.json"
+    START_SERVICE_NAME = "start_robot_cam_handeye_calibration"
+    AUTO_START_ON_ACTIVATE = True
+
     def __init__(self, node_name: str, *args, **kwargs):
         super().__init__(node_name, *args, **kwargs)
 
@@ -80,7 +83,7 @@ class RobotCamHandEyeCalibration(LifecycleComponent):
         self.add_parameter(
             sr.Parameter(
                 "robot_cam_handeye_file_path",
-                "/data/robot_cam_handeye_calibration.json",
+                self.DEFAULT_RESULT_FILE,
                 sr.ParameterType.STRING
             ),
             "Absoluter Pfad zur Ergebnisdatei der Robot-Kamera-Hand-Auge-Kalibrierung (persistent unter /data)."
@@ -143,13 +146,17 @@ class RobotCamHandEyeCalibration(LifecycleComponent):
         self.add_input("static_base_cam_board_pose", "_base_cam_board_pose_msg", Float64MultiArray)
 
         self._base_cam_observation_id = -1
-        self.add_input("static_base_cam_board_observation_id", "_base_cam_observation_id", Int32)
+        self._last_base_cam_board_ns = None
+        self.add_input("static_base_cam_board_observation_id", "_base_cam_observation_id", Int32,
+                       user_callback=self._on_base_cam_board_observation_id)
 
         self._robot_cam_board_pose_msg = []
         self.add_input("robot_cam_board_pose", "_robot_cam_board_pose_msg", Float64MultiArray)
 
         self._robot_cam_observation_id = -1
-        self.add_input("robot_cam_board_observation_id", "_robot_cam_observation_id", Int32)
+        self._last_robot_cam_board_ns = None
+        self.add_input("robot_cam_board_observation_id", "_robot_cam_observation_id", Int32,
+                       user_callback=self._on_robot_cam_board_observation_id)
 
         self._robot_cam_board_depth_msg = []
         self.add_input("robot_cam_board_depth", "_robot_cam_board_depth_msg", Float64MultiArray)
@@ -161,7 +168,9 @@ class RobotCamHandEyeCalibration(LifecycleComponent):
         # Contract: input is world_T_ur_tool0 from the robot hardware.  It is
         # the flange pose, never a TCP or gripper-point pose.
         self._robot_ee_pose = sr.CartesianState("ur_tool0", "world")
-        self.add_input("robot_flange_state", "_robot_ee_pose", EncodedState)
+        self._last_robot_state_time_ns = None
+        self.add_input("robot_flange_state", "_robot_ee_pose", EncodedState,
+                       user_callback=self._on_robot_flange_state)
 
         # Outputs
         self._target_pose = sr.CartesianPose("calibration_target", "world")
@@ -190,10 +199,7 @@ class RobotCamHandEyeCalibration(LifecycleComponent):
         self.add_predicate("is_calibrated", False)
         self.add_predicate("has_failed", False)
 
-        try:
-            self.add_service("start_robot_cam_handeye_calibration", StringTrigger, self._on_start_calibration_service)
-        except Exception:
-            pass
+        self.add_service(self.START_SERVICE_NAME, self._on_start_calibration_service)
 
         self._state = "IDLE"
         self._current_waypoint_idx = 0
@@ -206,6 +212,17 @@ class RobotCamHandEyeCalibration(LifecycleComponent):
         self._last_robot_cam_observation_id = -1
         self._last_base_cam_observation_id = -1
         self._settled_since_time = None
+
+    def _on_robot_flange_state(self) -> None:
+        """Remember arrival time; the three-board run rejects stale flange data."""
+        if not self._robot_ee_pose.is_empty():
+            self._last_robot_state_time_ns = self.get_clock().now().nanoseconds
+
+    def _on_base_cam_board_observation_id(self) -> None:
+        self._last_base_cam_board_ns = self.get_clock().now().nanoseconds
+
+    def _on_robot_cam_board_observation_id(self) -> None:
+        self._last_robot_cam_board_ns = self.get_clock().now().nanoseconds
 
     def _generate_waypoints(self):
         num_wp = max(4, int(self.get_parameter("num_waypoints").get_value()))
@@ -233,7 +250,8 @@ class RobotCamHandEyeCalibration(LifecycleComponent):
         self.set_predicate("is_calibrated", False)
         self.set_predicate("has_failed", False)
 
-        self._on_start_calibration()
+        if self.AUTO_START_ON_ACTIVATE:
+            self._on_start_calibration()
         return True
 
     def on_deactivate_callback(self) -> bool:
@@ -299,17 +317,12 @@ class RobotCamHandEyeCalibration(LifecycleComponent):
         self.set_predicate("is_running", False)
         self._state = "FAILED"
 
-    def _on_start_calibration_service(self, request: StringTrigger.Request) -> StringTrigger.Response:
-        response = StringTrigger.Response()
+    def _on_start_calibration_service(self) -> dict:
         if self._state not in ("IDLE", "FINISHED", "FAILED"):
-            response.success = False
-            response.message = f"Kalibrierung läuft bereits (Zustand: {self._state})."
-            return response
+            return {"success": False, "message": f"Kalibrierung läuft bereits (Zustand: {self._state})."}
 
         self._on_start_calibration()
-        response.success = True
-        response.message = "Kalibriersequenz gestartet."
-        return response
+        return {"success": True, "message": "Kalibriersequenz gestartet."}
 
     def _on_start_calibration(self):
         if self._state in ("IDLE", "FINISHED", "FAILED"):

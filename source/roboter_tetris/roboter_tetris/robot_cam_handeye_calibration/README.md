@@ -8,6 +8,7 @@ Verfahrens `BaseCamCalibration`.
 |---|---|---|---|
 | Basiskamera-Kalibrierung | `BaseCamCalibration` | `Extrinsics/base_cam_extrinsics.json` | Bestehende `base_cam`-Pick-Anwendung |
 | Robot-Kamera-Hand-Auge-Kalibrierung | `RobotCamHandEyeCalibration` | `/data/robot_cam_handeye_calibration.json` | Eigenständige Kalibrierung und Diagnose; optional als Basiskamera-Extrinsik für `BaseCam` auswählbar |
+| Robot-Kamera-Hand-Auge-Kalibrierung mit drei Board-Lagen | `RobotCamHandEyeThreeBoardPositions` | `/data/robot_cam_handeye_3positions_calibration.json` | Drei getrennte Messabschnitte und eine gemeinsame, separat gespeicherte Basiskamera-Pose |
 
 ## Komponenten
 
@@ -16,11 +17,58 @@ Verfahrens `BaseCamCalibration`.
   Basiskamera.
 - `RobotCamHandEyeCalibration`: führt die Orbit-Bewegung aus, löst die
   Hand-Auge-Transformation und speichert ihr Ergebnis.
+- `RobotCamHandEyeThreeBoardPositions`: wiederholt den Orbit an drei nacheinander
+  vom Bediener umgesetzten Board-Lagen. Nach jedem der ersten beiden Orbits fährt
+  der Roboter zur Startpose zurück und wartet dort auf eine ausdrückliche
+  Fortsetzung. Erst nach der dritten Lage wird eine Ergebnisdatei geschrieben.
 - `RobotCamHandEyeTestDrive`: prüft das Ergebnis mit einer Fahrt entlang der
   diagnostischen Conveyor-Y-Achse.
 
 Die Komponenten wurden absichtlich nach Kamera-Rolle benannt. Dadurch können die
 beiden Board-Beobachtungen im AICA-Graphen nicht verwechselt werden.
+
+### Variante mit drei Board-Lagen
+
+Die AICA-Vorlage liegt unter
+`docs/uebersicht/anwendung-calibration-tobi-3-board-lagen.yaml`. Sie ist eine
+eigene Anwendung: Die alte Einzellauf-Anwendung bleibt unverändert und beide
+Komponenten sind im selben gebauten Paket verfügbar. In der neuen Anwendung
+läuft nur die Drei-Lagen-Komponente am Bewegungsziel des Attractors.
+
+Aktivieren der neuen Komponente fährt den Roboter **nicht**. Der Dienst
+`start_three_board_calibration` startet Lage 1. Erst wenn der Roboter zur
+Startpose zurückgekehrt ist, kann das Board für Lage 2 umgesetzt werden; der
+Log und `waiting_for_board` zeigen die Pause an. Mit
+`continue_after_board_move` beginnt Lage 2, später Lage 3. Beide Dienstaufrufe
+lösen Roboterbewegung aus. Während einer Lage darf das Board nicht bewegt
+werden; zwischen den Lagen muss es in beiden Kameras sichtbar und nachweislich
+anders positioniert sein. Bei fehlender oder alter Flanschpose, fehlenden
+Board-Erkennungen, instabilem Board oder zu stark voneinander abweichenden
+Einzelergebnissen endet die Sitzung ohne neue Ergebnisdatei.
+
+Die drei Abschnitte werden **einzeln** gelöst. Alle 27 Samples in den Solver des
+Einzellaufs zu geben wäre falsch: dieser setzt eine einzige konstante Board-Pose
+voraus. Nach den drei Einzelprüfungen werden die drei Flansch-Kamera-Posen und
+die drei Basiskamera-Posen mit gleichen Gewichten gemittelt (Position linear,
+Rotation auf SO(3)). Die größte Differenz zwischen den Einzelresultaten und
+deren Qualitätswerte stehen im JSON unter `multi_board`. Die Datei enthält
+weiterhin die BaseCam-kompatiblen Felder `schema`, `version`, `matrix` und `cal`.
+Die älteren `validation`-RMSE-Felder enthalten bei dieser Variante den jeweils
+schlechtesten der drei Abschnitte; sie sind kein aus bewegtem Board berechneter
+Gesamt-RMSE.
+Ein lokaler Link `robot_cam_handeye_3positions_calibration.json` im Projektordner
+zeigt nach einem erfolgreichen Lauf auf die Datei im AICA-Datenvolume. Der Link
+selbst wird nicht versioniert. Wiederholte Läufe sichern die vorherige
+Ergebnisdatei als `_vorher.json`; geprüfte Ergebnisse sollten zusätzlich mit
+Zeitstempel in `calibration_history/` übernommen werden.
+
+Es gibt bei drei Board-Lagen keine gemeinsame Board- oder Conveyor-Pose; daher
+enthält die neue Ergebnisdatei keine `T_world_conveyor`. Die bestehende
+`RobotCamHandEyeTestDrive` darf damit nicht verwendet werden. Auch diese neue
+Basiskamera-Pose wird erst im Pick-System wirksam, wenn dort `BaseCam.calibration_file`
+bewusst auf `/data/robot_cam_handeye_3positions_calibration.json` gesetzt und
+`BaseCam` neu aktiviert wird. Bei der separaten Fusionskomponente muss stattdessen
+deren Parameter `robot_cam_file` auf diesen Pfad gesetzt werden.
 
 ## Bezugssysteme und Datenvertrag
 

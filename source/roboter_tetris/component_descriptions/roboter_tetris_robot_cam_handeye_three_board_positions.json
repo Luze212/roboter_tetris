@@ -1,10 +1,10 @@
 {
-  "name": "Robot-Kamera Hand-Auge-Kalibrierung (1 Board-Lage)",
+  "name": "Robot-Kamera Hand-Auge-Kalibrierung (3 Board-Lagen)",
   "description": {
-    "brief": "Kalibriert die am Roboterflansch montierte Kamera per ChArUco-Hand-Auge-Verfahren gegen die statische Basiskamera.",
-    "details": "Der Roboter fährt definierte Flanschposen an. Die Robot-Kamera beobachtet dabei ein stillliegendes ChArUco-Board; die fest montierte Basiskamera beobachtet dasselbe Board. Das Ergebnis enthält die Hand-Auge-Transformation Flansch→Robot-Kamera und eine davon abgeleitete statische Basiskamera-Pose in world. Es wird ausschließlich nach /data/robot_cam_handeye_calibration.json geschrieben und überschreibt die Kalibrierdatei der bestehenden BaseCamCalibration nicht. Bei gültiger Basiskamera-Pose enthält dieselbe Datei zusätzlich BaseCam-kompatible Felder; die Pick-Anwendung nutzt sie erst, wenn dort calibration_file ausdrücklich auf diesen Pfad gesetzt wird. Die Conveyor-Transformation dient nur der Diagnose/Testfahrt; die Pick-Anwendung arbeitet weiter im globalen Frame world."
+    "brief": "Drei getrennte ChArUco-Board-Lagen in einer angehaltenen, manuell fortgesetzten Kalibriersitzung.",
+    "details": "Pro Board-Lage fährt der Roboter einen Orbit und kehrt zur Startpose zurück. Vor Lage 2 und 3 hält er an, bis das Board sichtbar umgesetzt und der Dienst continue_after_board_move bewusst ausgelöst wurde. Jede Lage wird getrennt gelöst; danach werden die drei Flansch-Robot-Kamera- und statischen Basiskamera-Posen nur bei ausreichender Übereinstimmung gemittelt. Aktivieren allein bewegt den Roboter nicht. Ergebnis: /data/robot_cam_handeye_3positions_calibration.json. Die Einzellauf-Datei bleibt unverändert. Da es drei verschiedene Board-Posen gibt, wird kein gemeinsamer Conveyor-Frame ausgegeben; die bisherige Testfahrt darf nicht mit dieser Datei benutzt werden."
   },
-  "registration": "roboter_tetris::RobotCamHandEyeCalibration",
+  "registration": "roboter_tetris::RobotCamHandEyeThreeBoardPositions",
   "inherits": "modulo_components::LifecycleComponent",
   "inputs": [
     {
@@ -58,40 +58,10 @@
       "signal_type": "cartesian_pose"
     },
     {
-      "display_name": "Conveyor-Pose (Diagnose)",
-      "description": "Abgeleitetes Förderband-Koordinatensystem in world, nur für Diagnose/Testfahrt.",
-      "signal_name": "robot_cam_handeye_conveyor_pose",
-      "signal_type": "cartesian_pose"
-    },
-    {
-      "display_name": "Board-Pose in world (Diagnose)",
-      "description": "Rekonstruierte Pose des stillliegenden ChArUco-Boards in world.",
-      "signal_name": "robot_cam_handeye_board_pose",
-      "signal_type": "cartesian_pose"
-    },
-    {
-      "display_name": "Robot-Kamera in world (Diagnose)",
-      "description": "Pose der bewegten Robot-Kamera beim ersten Sample in world.",
-      "signal_name": "robot_cam_handeye_camera_pose",
-      "signal_type": "cartesian_pose"
-    },
-    {
       "display_name": "Statische Basiskamera in world",
       "description": "Aus diesem Verfahren abgeleitete Pose der statischen Basiskamera. Sie wird nicht automatisch von base_cam verwendet.",
       "signal_name": "robot_cam_handeye_static_base_cam_pose",
       "signal_type": "cartesian_pose"
-    },
-    {
-      "display_name": "Hand-Auge-Matrix",
-      "description": "Flache 4×4-Transformationsmatrix der Robot-Kamera-Hand-Auge-Kalibrierung.",
-      "signal_name": "robot_cam_handeye_matrix",
-      "signal_type": "double_array"
-    },
-    {
-      "display_name": "Hand-Auge-RPY",
-      "description": "Euler-Winkel der Robot-Kamera-Hand-Auge-Kalibrierung in Grad.",
-      "signal_name": "robot_cam_handeye_rpy",
-      "signal_type": "double_array"
     }
   ],
   "predicates": [
@@ -109,22 +79,32 @@
       "display_name": "Has Failed",
       "description": "True, wenn bei der Berechnung oder Ausführung ein Fehler aufgetreten ist.",
       "predicate_name": "has_failed"
+    },
+    {
+      "display_name": "Wartet auf neues Board",
+      "description": "True, nachdem ein Orbit beendet wurde und vor der nächsten Board-Lage. Der Roboter bleibt an der Startpose.",
+      "predicate_name": "waiting_for_board"
     }
   ],
   "services": [
     {
-      "display_name": "Robot-Kamera Hand-Auge-Kalibrierung starten",
-      "description": "Service zum Auslösen des Robot-Kamera-Hand-Auge-Kalibrierlaufs.",
-      "service_name": "start_robot_cam_handeye_calibration"
+      "display_name": "Drei-Board-Kalibrierung starten (Roboter bewegt sich)",
+      "description": "Startet die erste von drei Board-Lagen. Nur bei gültiger Flanschpose und beiden Board-Erkennungen.",
+      "service_name": "start_three_board_calibration"
+    },
+    {
+      "display_name": "Board umgesetzt – nächste Lage starten (Roboter bewegt sich)",
+      "description": "Nur im Wartezustand: prüft frische Beobachtungen und eine andere Board-Lage, dann beginnt der nächste Orbit.",
+      "service_name": "continue_after_board_move"
     }
   ],
   "parameters": [
     {
-      "display_name": "Ergebnisdatei [robot_cam_handeye_file_path]",
-      "description": "Absoluter Pfad der verbindlichen Ergebnisdatei dieser Robot-Kamera-Hand-Auge-Kalibrierung. Darf nicht auf Extrinsics/base_cam_extrinsics.json zeigen.",
+      "display_name": "Drei-Board-Ergebnisdatei [robot_cam_handeye_file_path]",
+      "description": "Eigene Ergebnisdatei; darf weder Einzellauf noch BaseCam- oder Fusionsdatei überschreiben.",
       "parameter_name": "robot_cam_handeye_file_path",
       "parameter_type": "string",
-      "default_value": "/data/robot_cam_handeye_calibration.json",
+      "default_value": "/data/robot_cam_handeye_3positions_calibration.json",
       "dynamic": true
     },
     {
@@ -229,6 +209,54 @@
       "parameter_name": "conveyor_offset_z_mm",
       "parameter_type": "double",
       "default_value": "0.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Basiskamera-Beobachtungen je Wegpunkt",
+      "description": "Neue gültige Board-Beobachtungen der statischen Kamera je Wegpunkt mindestens.",
+      "parameter_name": "min_base_observations_per_waypoint",
+      "parameter_type": "int",
+      "default_value": "3",
+      "dynamic": true
+    },
+    {
+      "display_name": "Board-Stabilität innerhalb einer Lage (mm)",
+      "description": "Maximale Abweichung einer Basiskamera-Board-Pose vom Lagendurchschnitt.",
+      "parameter_name": "max_board_motion_mm",
+      "parameter_type": "double",
+      "default_value": "10.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Board-Stabilität innerhalb einer Lage (Grad)",
+      "description": "Maximale Orientierungabweichung einer Basiskamera-Board-Pose vom Lagendurchschnitt.",
+      "parameter_name": "max_board_motion_deg",
+      "parameter_type": "double",
+      "default_value": "3.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Board-Versatz zwischen Lagen (mm)",
+      "description": "Mindestversatz des Boards in der statischen Basiskamera zur vorigen Lage.",
+      "parameter_name": "min_board_change_mm",
+      "parameter_type": "double",
+      "default_value": "30.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Maximaler Kamera-Unterschied (mm)",
+      "description": "Größter Paarabstand zwischen den drei Ergebnissen; gilt für beide Kamera-Transformationen.",
+      "parameter_name": "max_camera_spread_mm",
+      "parameter_type": "double",
+      "default_value": "20.0",
+      "dynamic": true
+    },
+    {
+      "display_name": "Maximaler Kamera-Unterschied (Grad)",
+      "description": "Größter Paarwinkel zwischen den drei Ergebnissen; gilt für beide Kamera-Transformationen.",
+      "parameter_name": "max_camera_spread_deg",
+      "parameter_type": "double",
+      "default_value": "1.5",
       "dynamic": true
     }
   ]

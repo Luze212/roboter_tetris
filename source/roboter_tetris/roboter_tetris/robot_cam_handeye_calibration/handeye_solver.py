@@ -380,7 +380,8 @@ def save_handeye_calibration_json(
     result: HandEyeCalibrationResult,
     operator: str = "robot_cam_handeye_calibration_component",
     notes: str = "Robot-camera hand-eye calibration via ChArUco board detection",
-    board_center_conveyor_mm: Optional[Tuple[float, float, float]] = None
+    board_center_conveyor_mm: Optional[Tuple[float, float, float]] = None,
+    multi_board: Optional[dict] = None,
 ) -> None:
     """Atomically replace only the configured JSON file; propagate write errors."""
     if not os.path.isabs(filepath) or not filepath.lower().endswith(".json"):
@@ -506,6 +507,11 @@ def save_handeye_calibration_json(
             "flange_rotation_span_deg": round(float(result.flange_rotation_span_deg), 4),
         }
     }
+
+    if multi_board is not None:
+        # Three different board poses cannot define one global board/conveyor.
+        data.pop("board_center_conveyor_mm")
+        data["multi_board"] = multi_board
 
     # BaseCam uses these fields only when calibration_file explicitly points here.
     add_base_cam_compatibility_fields(data)

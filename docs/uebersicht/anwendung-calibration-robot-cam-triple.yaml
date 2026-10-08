@@ -1,0 +1,388 @@
+schema: 2-0-6
+dependencies:
+  core: v5.0.0
+on_start:
+  load:
+    - hardware: hardware
+    - component: signal_point_attractor
+    - component: realsense_camera
+    - component: robot_kamera_charuco_erkennung
+    - component: realsense_camera_2
+    - component: statische_basiskamera_charuco_erkennung
+components:
+  signal_point_attractor:
+    component: aica_core_components::motion::SignalPointAttractor
+    display_name: Signal Point Attractor
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: signal_point_attractor
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: signal_point_attractor
+            transition: activate
+    parameters:
+      angular_gains:
+        value:
+          - 2
+        type: vector
+      max_linear_velocity:
+        value: 0.1
+        type: double
+      max_angular_velocity:
+        value: 0.3
+        type: double
+      linear_precision:
+        value: 0.005
+        type: double
+      angular_precision:
+        value: 0.03
+        type: double
+    inputs:
+      state: /hardware/robot_state_broadcaster/cartesian_state
+      attractor: /auto_calibration/target_pose
+    outputs:
+      twist: /signal_point_attractor/twist
+  realsense_camera:
+    component: realsense2_camera::RealSenseNodeFactory
+    display_name: Camera Robot
+    parameters:
+      camera_name:
+        value: Robot_D435i
+        type: string
+      serial_no:
+        value: "241122074842"
+        type: string
+      rgb_camera.profile:
+        value: 848x480x30
+        type: string
+      depth_module.profile:
+        value: 848x480x30
+        type: string
+      align_depth.enable:
+        value: true
+        type: bool
+    outputs:
+      color_image_raw: /realsense_camera/color_image_raw
+      color_camera_info: /realsense_camera/color_camera_info
+      aligned_depth_to_color_image_raw: /realsense_camera/aligned_depth_to_color_image_raw
+  realsense_camera_2:
+    component: realsense2_camera::RealSenseNodeFactory
+    display_name: Camera Base
+    parameters:
+      camera_name:
+        value: base_L515
+        type: string
+      serial_no:
+        value: f1370107
+        type: string
+      align_depth.enable:
+        value: true
+        type: bool
+    outputs:
+      color_image_raw: /realsense_camera_2/color_image_raw
+      color_camera_info: /realsense_camera_2/color_camera_info
+      aligned_depth_to_color_image_raw: /realsense_camera_2/aligned_depth_to_color_image_raw
+  robot_kamera_charuco_erkennung:
+    component: roboter_tetris::RobotCamBoardDetection
+    display_name: Robot-Kamera ChArUco-Erkennung
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: robot_kamera_charuco_erkennung
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: robot_kamera_charuco_erkennung
+            transition: activate
+    inputs:
+      robot_cam_color_image: /realsense_camera/color_image_raw
+      robot_cam_color_camera_info: /realsense_camera/color_camera_info
+      robot_cam_aligned_depth_image: /realsense_camera/aligned_depth_to_color_image_raw
+    outputs:
+      robot_cam_board_pose: /robot_kamera_charuco_erkennung/robot_cam_board_pose
+      robot_cam_board_observation_id: /robot_kamera_charuco_erkennung/robot_cam_board_observation_id
+      robot_cam_board_depth: /robot_kamera_charuco_erkennung/robot_cam_board_depth
+      robot_cam_board_geometry: /robot_kamera_charuco_erkennung/robot_cam_board_geometry
+  statische_basiskamera_charuco_erkennung:
+    component: roboter_tetris::StaticBaseCamBoardDetection
+    display_name: Statische Basiskamera ChArUco-Erkennung
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: statische_basiskamera_charuco_erkennung
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: statische_basiskamera_charuco_erkennung
+            transition: activate
+    inputs:
+      static_base_cam_color_image: /realsense_camera_2/color_image_raw
+      static_base_cam_color_camera_info: /realsense_camera_2/color_camera_info
+      static_base_cam_aligned_depth_image: /realsense_camera_2/aligned_depth_to_color_image_raw
+    outputs:
+      static_base_cam_board_pose: /statische_basiskamera_charuco_erkennung/static_base_cam_board_pose
+      static_base_cam_board_observation_id: /statische_basiskamera_charuco_erkennung/static_base_cam_board_observation_id
+  robot_kamera_hand_auge_3_board_lagen:
+    component: roboter_tetris::RobotCamHandEyeThreeBoardPositions
+    display_name: Robot-Kamera Hand-Auge-Kalibrierung (3 Board-Lagen)
+    events:
+      transitions:
+        on_load:
+          lifecycle:
+            component: robot_kamera_hand_auge_3_board_lagen
+            transition: configure
+        on_configure:
+          lifecycle:
+            component: robot_kamera_hand_auge_3_board_lagen
+            transition: activate
+    inputs:
+      static_base_cam_board_pose: /statische_basiskamera_charuco_erkennung/static_base_cam_board_pose
+      static_base_cam_board_observation_id: /statische_basiskamera_charuco_erkennung/static_base_cam_board_observation_id
+      robot_cam_board_pose: /robot_kamera_charuco_erkennung/robot_cam_board_pose
+      robot_cam_board_observation_id: /robot_kamera_charuco_erkennung/robot_cam_board_observation_id
+      robot_cam_board_depth: /robot_kamera_charuco_erkennung/robot_cam_board_depth
+      robot_cam_board_geometry: /robot_kamera_charuco_erkennung/robot_cam_board_geometry
+      robot_flange_state: /hardware/robot_state_broadcaster/cartesian_state
+    outputs:
+      robot_cam_handeye_target_flange_pose: /auto_calibration/target_pose
+      robot_cam_handeye_static_base_cam_pose: /robot_kamera_hand_auge_3_board_lagen/static_base_cam_pose
+hardware:
+  hardware:
+    display_name: Hardware Interface
+    urdf: Universal Robots 10e
+    rate: 500
+    events:
+      transitions:
+        on_load:
+          load:
+            - controller: robot_state_broadcaster
+              hardware: hardware
+            - controller: ik_velocity_controller
+              hardware: hardware
+    parameters:
+      robot_ip: 192.168.96.221
+    controllers:
+      robot_state_broadcaster:
+        plugin: aica_core_controllers/RobotStateBroadcaster
+        outputs:
+          cartesian_state: /hardware/robot_state_broadcaster/cartesian_state
+        events:
+          transitions:
+            on_load:
+              switch_controllers:
+                hardware: hardware
+                activate: robot_state_broadcaster
+        display_name: Robot State Broadcaster
+      ik_velocity_controller:
+        plugin: aica_core_controllers/velocity/IKVelocityController
+        inputs:
+          command: /signal_point_attractor/twist
+        events:
+          transitions:
+            on_load:
+              switch_controllers:
+                hardware: hardware
+                activate: ik_velocity_controller
+graph:
+  positions:
+    on_start:
+      x: -780
+      y: 0
+    stop:
+      x: -780
+      y: 100
+    buttons:
+      button:
+        x: 100
+        y: -1540
+      button_2:
+        x: 100
+        y: -1440
+      button_3:
+        x: 100
+        y: -1340
+      button_4:
+        x: 100
+        y: -1240
+    components:
+      signal_point_attractor:
+        x: 480
+        y: 200
+      realsense_camera:
+        x: -480
+        y: -480
+      realsense_camera_2:
+        x: -480
+        y: -980
+      robot_kamera_charuco_erkennung:
+        x: 40
+        y: -560
+      statische_basiskamera_charuco_erkennung:
+        x: 40
+        y: -1060
+      robot_kamera_hand_auge_3_board_lagen:
+        x: 620
+        y: -1060
+    hardware:
+      hardware:
+        x: 1200
+        y: 0
+  buttons:
+    button:
+      display_name: 3-Board-Komponente laden (keine Bewegung)
+      on_click:
+        load:
+          component: robot_kamera_hand_auge_3_board_lagen
+    button_2:
+      display_name: Start 3 Board-Lagen (Roboter bewegt sich)
+      on_click:
+        call_service:
+          component: robot_kamera_hand_auge_3_board_lagen
+          service: start_three_board_calibration
+    button_3:
+      display_name: Board umgesetzt – weiter (Roboter bewegt sich)
+      on_click:
+        call_service:
+          component: robot_kamera_hand_auge_3_board_lagen
+          service: continue_after_board_move
+    button_4:
+      display_name: 3-Board-Lauf stoppen
+      on_click:
+        unload:
+          component: robot_kamera_hand_auge_3_board_lagen
+  edges:
+    on_start_on_start_signal_point_attractor_signal_point_attractor:
+      path:
+        - x: -100
+          y: 60
+        - x: -100
+          y: 260
+    on_start_on_start_realsense_camera_realsense_camera:
+      path:
+        - x: -580
+          y: 60
+        - x: -580
+          y: -420
+    on_start_on_start_robot_kamera_charuco_erkennung_robot_kamera_charuco_erkennung:
+      path:
+        - x: -320
+          y: 60
+        - x: -320
+          y: -500
+    on_start_on_start_realsense_camera_2_realsense_camera_2:
+      path:
+        - x: -580
+          y: 60
+        - x: -580
+          y: -920
+    on_start_on_start_statische_basiskamera_charuco_erkennung_statische_basiskamera_charuco_erkennung:
+      path:
+        - x: -320
+          y: 60
+        - x: -320
+          y: -1000
+    button_on_click_robot_kamera_hand_auge_3_board_lagen_robot_kamera_hand_auge_3_board_lagen:
+      path:
+        - x: 560
+          y: -1480
+        - x: 560
+          y: -1000
+    button_2_on_click_robot_kamera_hand_auge_3_board_lagen_start_three_board_calibration:
+      path:
+        - x: 560
+          y: -1380
+        - x: 560
+          y: -800
+    button_3_on_click_robot_kamera_hand_auge_3_board_lagen_continue_after_board_move:
+      path:
+        - x: 560
+          y: -1280
+        - x: 560
+          y: -760
+    button_4_on_click_robot_kamera_hand_auge_3_board_lagen_robot_kamera_hand_auge_3_board_lagen:
+      path:
+        - x: 560
+          y: -1180
+        - x: 560
+          y: -1000
+    hardware_hardware_robot_state_broadcaster_cartesian_state_signal_point_attractor_state:
+      path:
+        - x: 460
+          y: 500
+        - x: 460
+          y: 460
+    hardware_hardware_robot_state_broadcaster_cartesian_state_robot_kamera_hand_auge_3_board_lagen_robot_flange_state:
+      path:
+        - x: 600
+          y: 500
+        - x: 600
+          y: -440
+    robot_kamera_hand_auge_3_board_lagen_robot_cam_handeye_target_flange_pose_signal_point_attractor_attractor:
+      path:
+        - x: 1020
+          y: -680
+        - x: 1020
+          y: -80
+        - x: 460
+          y: -80
+        - x: 460
+          y: 500
+    signal_point_attractor_twist_hardware_hardware_ik_velocity_controller_command:
+      path:
+        - x: 1040
+          y: 460
+        - x: 1040
+          y: 760
+    realsense_camera_aligned_depth_to_color_image_raw_robot_kamera_charuco_erkennung_robot_cam_aligned_depth_image:
+      path:
+        - x: -20
+          y: -140
+        - x: -20
+          y: -220
+    realsense_camera_2_aligned_depth_to_color_image_raw_statische_basiskamera_charuco_erkennung_static_base_cam_aligned_depth_image:
+      path:
+        - x: -20
+          y: -640
+        - x: -20
+          y: -720
+    robot_kamera_charuco_erkennung_robot_cam_board_pose_robot_kamera_hand_auge_3_board_lagen_robot_cam_board_pose:
+      path:
+        - x: 520
+          y: -260
+        - x: 520
+          y: -600
+    robot_kamera_charuco_erkennung_robot_cam_board_observation_id_robot_kamera_hand_auge_3_board_lagen_robot_cam_board_observation_id:
+      path:
+        - x: 520
+          y: -220
+        - x: 520
+          y: -560
+    robot_kamera_charuco_erkennung_robot_cam_board_depth_robot_kamera_hand_auge_3_board_lagen_robot_cam_board_depth:
+      path:
+        - x: 520
+          y: -180
+        - x: 520
+          y: -520
+    robot_kamera_charuco_erkennung_robot_cam_board_geometry_robot_kamera_hand_auge_3_board_lagen_robot_cam_board_geometry:
+      path:
+        - x: 520
+          y: -140
+        - x: 520
+          y: -480
+    statische_basiskamera_charuco_erkennung_static_base_cam_board_pose_robot_kamera_hand_auge_3_board_lagen_static_base_cam_board_pose:
+      path:
+        - x: 520
+          y: -760
+        - x: 520
+          y: -680
+    statische_basiskamera_charuco_erkennung_static_base_cam_board_observation_id_robot_kamera_hand_auge_3_board_lagen_static_base_cam_board_observation_id:
+      path:
+        - x: 520
+          y: -720
+        - x: 520
+          y: -640

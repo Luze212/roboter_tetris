@@ -10,4 +10,5 @@ GEMINI.md
 .venv/
 /calibration.json
 /robot_cam_handeye_calibration.json
+/robot_cam_handeye_3positions_calibration.json
 /base_cam_fused_extrinsics.json
