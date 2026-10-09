@@ -11,7 +11,8 @@ from roboter_tetris.robot_cam_handeye_calibration.handeye_solver import (
     HandEyeCalibrationResult, save_handeye_calibration_json,
 )
 from roboter_tetris.robot_cam_handeye_calibration.multi_board_solver import (
-    combine_board_results, mean_transforms, rotation_angle_deg,
+    board_result_consistency_report, combine_board_results, mean_transforms,
+    rotation_angle_deg,
 )
 
 
@@ -61,6 +62,22 @@ def test_outlier_is_rejected_before_writing():
     groups = [_result(0.10, -0.780), _result(0.11, -0.775), _result(0.12, -0.730)]
     with pytest.raises(ValueError, match="widersprechen"):
         combine_board_results(groups, _pose(-0.6), 20, 1.5)
+
+
+def test_consistency_report_retains_each_pair_for_failed_run_diagnostics():
+    groups = [_result(0.10, -0.780), _result(0.11, -0.775), _result(0.12, -0.730)]
+
+    report = board_result_consistency_report(groups)
+
+    static = report["world_base_static_cam"]
+    assert static["max_pairwise_translation_mm"] == pytest.approx(50.0)
+    assert len(static["pairwise_gaps"]) == 3
+    assert static["pairwise_gaps"][-1] == {
+        "first_position": 2,
+        "second_position": 3,
+        "translation_mm": 45.0,
+        "rotation_deg": 0.0,
+    }
 
 
 def test_accepts_configurable_group_count_and_rejects_empty_groups():

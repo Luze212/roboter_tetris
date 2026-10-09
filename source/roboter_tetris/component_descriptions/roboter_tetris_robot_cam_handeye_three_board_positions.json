@@ -2,7 +2,7 @@
   "name": "Robot-Kamera Hand-Auge-Kalibrierung (3 Board-Lagen)",
   "description": {
     "brief": "Drei getrennte ChArUco-Board-Lagen in einer angehaltenen, manuell fortgesetzten Kalibriersitzung.",
-    "details": "Pro Board-Lage mittelt die statische Basiskamera an der Startpose zehn Board-Beobachtungen; erst danach fährt der Roboter den Orbit und kehrt zur Startpose zurück. Die Basiskamera wird während des Orbits nicht benötigt. Optional fährt der Roboter Lage 2 und weitere anhand der vorläufigen Kalibrierung aus Lage 1 automatisch an: Der von der Basiskamera erkannte Board-Versatz wird nach world gedreht und nur auf X/Y der Kalibrierstartpose übertragen; Z und Flanschorientierung bleiben unverändert. Die Roboterkamera übernimmt an dieser groben Sichtpose die Feinprüfung vor dem Orbit. Vor jeder weiteren Lage hält er an, bis das Board sichtbar umgesetzt und der Dienst continue_after_board_move bewusst ausgelöst wurde. Jede Lage wird getrennt gelöst; danach werden die Flansch-Robot-Kamera- und statischen Basiskamera-Posen nur bei ausreichender Übereinstimmung gemittelt. Aktivieren allein bewegt den Roboter nicht. Die aktive Ergebnisdatei ist /data/robot_cam_handeye_3positions_calibration.json; jede erfolgreiche Fassung wird zusätzlich unveränderlich unter /data/calibration_archive/robot_cam_handeye_multi_board/ archiviert. Die Einzellauf-Datei bleibt unverändert. Da es mehrere verschiedene Board-Posen gibt, wird kein gemeinsamer Conveyor-Frame ausgegeben; die bisherige Testfahrt darf nicht mit dieser Datei benutzt werden."
+    "details": "Pro Board-Lage mittelt die statische Basiskamera an der freien Kalibrierstartpose zehn Board-Beobachtungen. Für Lage 1 fährt der Roboter zunächst einen vorläufigen Orbit, der ausschließlich die erste Hand-Auge-Schätzung liefert und nicht in das Ergebnis eingeht. Er fährt danach über die geometrische ChArUco-Boardmitte, mit der optischen Achse der Roboterkamera senkrecht nach unten und derselben Kamerahöhe wie an Kalibrierstart, und zeichnet dort den endgültigen Orbit auf. Für Lage 2 und weitere berechnet die Komponente die Boardmitte aus der gemittelten Basiskamera-Pose und der vorläufigen Kalibrierung, fährt direkt zu dieser zentrierten Sichtpose und zeichnet den Orbit auf. Nach jedem Orbit fährt sie vor dem Warten wieder zur freien Kalibrierstartpose zurück; die Basiskamera wird während der Orbits nicht benötigt. Vor jeder weiteren Lage hält der Roboter an, bis das Board sichtbar umgesetzt und continue_after_board_move bewusst ausgelöst wurde. Jede Lage wird getrennt gelöst; danach werden Flansch-Robot-Kamera- und statische-Basiskamera-Posen nur bei ausreichender Übereinstimmung gemittelt. Aktivieren allein bewegt den Roboter nicht. Die aktive Ergebnisdatei ist /data/robot_cam_handeye_3positions_calibration.json; jede erfolgreiche Fassung wird zusätzlich unveränderlich unter /data/calibration_archive/robot_cam_handeye_multi_board/ archiviert. Die Einzellauf-Datei bleibt unverändert. Da es mehrere verschiedene Board-Posen gibt, wird kein gemeinsamer Conveyor-Frame ausgegeben; die bisherige Testfahrt darf nicht mit dieser Datei benutzt werden."
   },
   "registration": "roboter_tetris::RobotCamHandEyeThreeBoardPositions",
   "inherits": "modulo_components::LifecycleComponent",
@@ -103,7 +103,7 @@
     },
     {
       "display_name": "Automatische Anfahrt aktiv",
-      "description": "True, während der Roboter über Annäherungs- und Sichtpose zur neuen Board-Lage fährt.",
+      "description": "True, während der Roboter zur zentrierten, senkrechten Sichtpose über der Boardmitte fährt.",
       "predicate_name": "auto_approach_active"
     },
     {
@@ -173,15 +173,15 @@
     },
     {
       "display_name": "Automatische Board-Anfahrt aktivieren",
-      "description": "Fährt jede weitere Lage nach der Basiskamera-Messreihe über Annäherungs- und Sichtpose automatisch an. Die Arbeitsraumgrenzen vor der ersten Verwendung am Aufbau abfahren.",
+      "description": "Fährt Lage 1 nach dem vorläufigen Orbit und jede weitere Lage nach der Basiskamera-Messreihe automatisch zentriert über die Boardmitte an. Die Kamera blickt senkrecht nach unten; ihre Höhe entspricht der Kalibrierstartpose.",
       "parameter_name": "auto_approach_enabled",
       "parameter_type": "bool",
       "default_value": "true",
       "dynamic": true
     },
     {
-      "display_name": "Annäherungsabstand (mm)",
-      "description": "Zusätzlicher Abstand vor der berechneten Sichtpose. Die Annäherung fährt zuerst diese weiter entfernte Pose an.",
+      "display_name": "Ehemaliger Annäherungsabstand (mm)",
+      "description": "Kompatibilitätsparameter für ältere Systemabbilder. Die aktuelle zentrierte Anfahrt verwendet keinen Zwischenabstand, sondern die feste Kamerahöhe aus Kalibrierstart.",
       "parameter_name": "auto_approach_clearance_mm",
       "parameter_type": "double",
       "default_value": "100.0",

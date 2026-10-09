@@ -70,21 +70,31 @@ weitermachen.
    | Arbeitsraum Y | `0,500` bis `0,760 m` |
    | Arbeitsraum Z | `0,310` bis `0,570 m` |
 
+   `Kalibrierstart` liegt mit `z=0,572258 m` um 2,258 mm oberhalb dieser
+   Orbit-Grenze. Das ist als manuell geprüfte, freie Beobachtungspose erlaubt;
+   die Komponente akzeptiert für die automatische Rückfahrt höchstens 5 mm
+   Abweichung. Zentrierte Sicht- und Orbit-Posen bleiben strikt innerhalb der
+   angegebenen Grenzen.
+
 5. Board-Lage 1 in Sicht der Basiskamera platzieren und
-   **Start 3 Board-Lagen (Roboter bewegt sich)** drücken. Die Komponente
-   sammelt an der Startpose zehn Basiskamera-Aufnahmen, fährt anschließend
-   den Orbit mit neun Wegpunkten und kehrt zur Startpose zurück.
+   **Start 3 Board-Lagen (Roboter bewegt sich)** drücken. Nach zehn
+   Basiskamera-Aufnahmen fährt die Komponente zunächst einen **vorläufigen**
+   Orbit an der Kalibrierstartpose. Dieser dient nur dazu, die Boardmitte
+   erstmals in `world` bestimmen zu können und wird verworfen. Der Roboter
+   fährt danach kamerazentriert über die ChArUco-Boardmitte, blickt senkrecht
+   nach unten und zeichnet dort den endgültigen Orbit auf. Danach kehrt er zur
+   freien Kalibrierstartpose zurück.
 6. Erst wenn `board_position_1_complete=true` und
    `waiting_for_board=true` sind, das Board mindestens 30 mm versetzen. Es
    muss erneut ruhig und vollständig für die Basiskamera sichtbar sein. Dann
    **Board umgesetzt – weiter (Roboter bewegt sich)** drücken.
-7. Dasselbe für Lage 3 wiederholen. Die automatische Anfahrt überträgt für
-   Lage 2 und 3 ausschließlich den von der Basiskamera gemessenen
-   Board-Versatz in der X/Y-Ebene auf die Kalibrierstartpose. Z und
-   Flanschorientierung bleiben an der geprüften Startpose. Erst wenn diese
-   grobe Sichtpose samt Orbit außerhalb des Arbeitsraums liegt oder die
-   Roboterkamera das Board dort nicht wieder erkennt, bricht der Lauf vor
-   einem Orbit ab.
+7. Dasselbe für Lage 3 wiederholen. Für Lage 2 und 3 berechnet die Komponente
+   aus der Basiskamera-Messreihe die geometrische Boardmitte in `world`, fährt
+   die Roboterkamera direkt darüber und hält ihre Höhe wie bei Kalibrierstart.
+   Ihre optische Achse zeigt senkrecht nach unten. Jeder Ziel- und Orbitpunkt
+   muss innerhalb des Kalibrier-Arbeitsraums liegen; andernfalls bricht der
+   Lauf vor der Bewegung ab. Nach jedem Orbit kehrt der Roboter zur freien
+   Kalibrierstartpose zurück.
 
 Ein erfolgreicher Abschluss verlangt:
 
@@ -98,6 +108,17 @@ Ein erfolgreicher Abschluss verlangt:
 
 Die Triple-Datei enthält absichtlich keinen Conveyor-Frame. Die alte
 Robot-Cam-Testfahrt darf dafür nicht verwendet werden.
+
+### Bei einem abgelehnten Drei-Board-Lauf
+
+Wenn die Konsistenzgrenze überschritten wird, entsteht **keine** aktive
+Kalibrierdatei und keine Fusionsquelle. Stattdessen schreibt die Komponente eine
+reine Diagnose unter
+`/data/calibration_archive/robot_cam_handeye_multi_board/failed_runs/`.
+Sie enthält die Einzelmatrizen jeder abgeschlossenen Board-Lage,
+Basiskamera-Streuung sowie alle paarweisen Abstände von
+`flange_robot_cam` und `world_base_static_cam`. Diese Diagnose wird weder vom
+Pick-System noch von der Fusionskomponente gelesen.
 
 ## 3. Ergebnisse sichern und vergleichen
 

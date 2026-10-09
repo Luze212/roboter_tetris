@@ -57,6 +57,52 @@ def _largest_pairwise_gap(transforms: Sequence[np.ndarray]) -> Tuple[float, floa
     return translation_mm, rotation_deg
 
 
+def pairwise_transform_gaps(transforms: Sequence[np.ndarray]) -> list[dict]:
+    """Return every pairwise translation and rotation gap with one-based labels."""
+    gaps = []
+    for index, first in enumerate(transforms):
+        for other_index in range(index + 1, len(transforms)):
+            second = transforms[other_index]
+            gaps.append({
+                "first_position": index + 1,
+                "second_position": other_index + 1,
+                "translation_mm": round(float(np.linalg.norm(
+                    first[:3, 3] - second[:3, 3]
+                ) * 1000.0), 4),
+                "rotation_deg": round(rotation_angle_deg(
+                    first[:3, :3].T @ second[:3, :3]
+                ), 5),
+            })
+    return gaps
+
+
+def board_result_consistency_report(results: Sequence[HandEyeCalibrationResult]) -> dict:
+    """Describe all per-board transform gaps without accepting or rejecting them."""
+    if not results:
+        raise ValueError("Mindestens eine abgeschlossene Board-Lage ist erforderlich")
+    flange_cam, static_cam = [], []
+    for index, result in enumerate(results, 1):
+        if result.T_ee_robot_cam is None or result.T_robot_base_static_cam is None:
+            raise ValueError(f"Board-Lage {index}: Hand-Auge- oder Basiskamera-Pose fehlt")
+        flange_cam.append(np.asarray(result.T_ee_robot_cam, dtype=np.float64))
+        static_cam.append(np.asarray(result.T_robot_base_static_cam, dtype=np.float64))
+
+    report = {}
+    for label, matrices in (("flange_robot_cam", flange_cam),
+                            ("world_base_static_cam", static_cam)):
+        # Validate each source before publishing any diagnostics.
+        mean_transforms(matrices)
+        position_mm, rotation_deg = _largest_pairwise_gap(matrices)
+        report[label] = {
+            "max_pairwise_translation_mm": round(position_mm, 4),
+            "max_pairwise_rotation_deg": round(rotation_deg, 5),
+            "pairwise_gaps": pairwise_transform_gaps(matrices),
+        }
+    report["group_count"] = len(results)
+    report["samples_per_group"] = [item.sample_count for item in results]
+    return report
+
+
 def combine_board_results(results: Sequence[HandEyeCalibrationResult],
                           first_world_T_flange: np.ndarray,
                           max_camera_spread_mm: float,
@@ -72,21 +118,15 @@ def combine_board_results(results: Sequence[HandEyeCalibrationResult],
     limits = (float(max_camera_spread_mm), float(max_camera_spread_deg))
     if not all(math.isfinite(value) and value > 0.0 for value in limits):
         raise ValueError("Streuungsgrenzen müssen endlich und positiv sein")
-    flange_cam, static_cam = [], []
-    for index, result in enumerate(results, 1):
-        if result.T_ee_robot_cam is None or result.T_robot_base_static_cam is None:
-            raise ValueError(f"Board-Lage {index}: Hand-Auge- oder Basiskamera-Pose fehlt")
-        flange_cam.append(np.asarray(result.T_ee_robot_cam, dtype=np.float64))
-        static_cam.append(np.asarray(result.T_robot_base_static_cam, dtype=np.float64))
+    flange_cam = [np.asarray(item.T_ee_robot_cam, dtype=np.float64) for item in results]
+    static_cam = [np.asarray(item.T_robot_base_static_cam, dtype=np.float64) for item in results]
     # Validate every source matrix before calculating spreads or an average.
     mean_flange_cam = mean_transforms(flange_cam)
     mean_static_cam = mean_transforms(static_cam)
-    report = {}
-    for label, matrices in (("flange_robot_cam", flange_cam),
-                            ("world_base_static_cam", static_cam)):
-        position_mm, rotation_deg = _largest_pairwise_gap(matrices)
-        report[label] = {"max_pairwise_translation_mm": round(position_mm, 4),
-                         "max_pairwise_rotation_deg": round(rotation_deg, 5)}
+    report = board_result_consistency_report(results)
+    for label in ("flange_robot_cam", "world_base_static_cam"):
+        position_mm = report[label]["max_pairwise_translation_mm"]
+        rotation_deg = report[label]["max_pairwise_rotation_deg"]
         if position_mm > limits[0] or rotation_deg > limits[1]:
             raise ValueError(
                 f"{label}: {len(results)} Board-Lagen widersprechen sich um bis zu "
@@ -109,7 +149,5 @@ def combine_board_results(results: Sequence[HandEyeCalibrationResult],
         flange_rotation_span_deg=min(item.flange_rotation_span_deg for item in results),
         sample_count=sum(item.sample_count for item in results),
     )
-    report["group_count"] = len(results)
-    report["samples_per_group"] = [item.sample_count for item in results]
     report["aggregation"] = "equal weight per board position; translation arithmetic, rotation geodesic mean"
     return result, report

@@ -78,6 +78,14 @@ def fuse_calibration_files(base_file: str, robot_file: str, output_file: str,
         resolve_calibration_path(value) for value in (base_file, robot_file, output_file)
     )
     base_path, robot_path, output_path = map(os.path.abspath, (base_path, robot_path, output_path))
+    protected_main_basecam_path = os.path.realpath(
+        resolve_calibration_path(DEFAULT_BASE_CAM_FILE)
+    )
+    if os.path.realpath(output_path) == protected_main_basecam_path:
+        raise ValueError(
+            "Geschützte Hauptdatei Extrinsics/base_cam_extrinsics.json darf niemals "
+            "als Fusions-Ergebnis überschrieben werden. Bitte eine separate Ausgabedatei wählen."
+        )
     backup_path = os.path.splitext(output_path)[0] + "_vorher.json"
     if os.path.islink(output_path) or os.path.islink(backup_path):
         raise ValueError("Ergebnisdatei und Sicherung dürfen keine symbolischen Links sein")

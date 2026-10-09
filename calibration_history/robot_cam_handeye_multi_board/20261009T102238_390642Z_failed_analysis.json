@@ -1,0 +1,421 @@
+{
+  "schema": "roboter_tetris.robot_cam_handeye_three_board_analysis",
+  "schema_version": 1,
+  "created": "2026-10-09T10:27:12.565290+00:00",
+  "source_diagnostic": {
+    "path": "calibration_history/robot_cam_handeye_multi_board/20261009T102238_390642Z_failed_diagnostic.json",
+    "sha256": "63cdfac10d132ad3a432c0629030a3198118e78cb2d12f827b4f65015ed2e1e3"
+  },
+  "read_only_reference": {
+    "path": "source/roboter_tetris/roboter_tetris/Extrinsics/base_cam_extrinsics.json",
+    "sha256": "99aaf9acd2f398a87820bbd0031a67b578f54188bcc8feb042d9163dd2a55e66",
+    "method": "uebergang_L6",
+    "note": "Nur gelesen; nicht als Ergebnis verwendet oder verändert."
+  },
+  "run_status": "rejected",
+  "failure_message": "Drei-Board-Kalibrierung fehlgeschlagen: world_base_static_cam: 3 Board-Lagen widersprechen sich um bis zu 32.42 mm / 2.455 Grad; erlaubt sind 20.00 mm / 1.500 Grad",
+  "per_position_quality": [
+    {
+      "position_index": 1,
+      "sample_count": 9,
+      "board_position_rmse_mm": 1.8023,
+      "board_rotation_rmse_deg": 0.2977,
+      "base_cam_board_motion_max_mm": 0.5377,
+      "base_cam_board_motion_max_deg": 0.59794
+    },
+    {
+      "position_index": 2,
+      "sample_count": 9,
+      "board_position_rmse_mm": 2.5747,
+      "board_rotation_rmse_deg": 0.36937,
+      "base_cam_board_motion_max_mm": 0.3686,
+      "base_cam_board_motion_max_deg": 0.21749
+    },
+    {
+      "position_index": 3,
+      "sample_count": 9,
+      "board_position_rmse_mm": 1.61,
+      "board_rotation_rmse_deg": 0.25416,
+      "base_cam_board_motion_max_mm": 0.7109,
+      "base_cam_board_motion_max_deg": 0.16008
+    }
+  ],
+  "flange_robot_cam": {
+    "poses": [
+      {
+        "position_index": 1,
+        "translation_m": [
+          0.10299339,
+          -0.03760416,
+          0.04977272
+        ],
+        "translation_mm": [
+          102.993,
+          -37.604,
+          49.773
+        ],
+        "rpy_deg": [
+          1.3325,
+          0.41733,
+          91.36469
+        ],
+        "matrix": [
+          [
+            -0.02381537,
+            -0.99945005,
+            0.02307445,
+            0.10299339
+          ],
+          [
+            0.99968984,
+            -0.02364023,
+            0.00783347,
+            -0.03760416
+          ],
+          [
+            -0.00728368,
+            0.02325385,
+            0.99970306,
+            0.04977272
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "position_index": 2,
+        "translation_m": [
+          0.10286928,
+          -0.03937102,
+          0.04362228
+        ],
+        "translation_mm": [
+          102.869,
+          -39.371,
+          43.622
+        ],
+        "rpy_deg": [
+          1.28048,
+          0.61679,
+          91.64926
+        ],
+        "matrix": [
+          [
+            -0.02877929,
+            -0.99934305,
+            0.02202782,
+            0.10286928
+          ],
+          [
+            0.99952782,
+            -0.02853331,
+            0.01140081,
+            -0.03937102
+          ],
+          [
+            -0.01076479,
+            0.02234552,
+            0.99969235,
+            0.04362228
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "position_index": 3,
+        "translation_m": [
+          0.10241443,
+          -0.03014848,
+          0.05224448
+        ],
+        "translation_mm": [
+          102.414,
+          -30.148,
+          52.244
+        ],
+        "rpy_deg": [
+          1.27773,
+          -0.0804,
+          90.55241
+        ],
+        "matrix": [
+          [
+            -0.00964114,
+            -0.99970458,
+            0.02231129,
+            0.10241443
+          ],
+          [
+            0.99995254,
+            -0.00967004,
+            -0.00118779,
+            -0.03014848
+          ],
+          [
+            0.00140319,
+            0.02229878,
+            0.99975037,
+            0.05224448
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      }
+    ],
+    "consistency": {
+      "max_pairwise_translation_mm": 12.6335,
+      "max_pairwise_rotation_deg": 1.29966,
+      "pairwise_gaps": [
+        {
+          "first_position": 1,
+          "second_position": 2,
+          "translation_mm": 6.4004,
+          "rotation_deg": 0.35176
+        },
+        {
+          "first_position": 1,
+          "second_position": 3,
+          "translation_mm": 7.876,
+          "rotation_deg": 0.95408
+        },
+        {
+          "first_position": 2,
+          "second_position": 3,
+          "translation_mm": 12.6335,
+          "rotation_deg": 1.29966
+        }
+      ]
+    }
+  },
+  "world_base_static_cam": {
+    "poses": [
+      {
+        "position_index": 1,
+        "translation_m": [
+          -0.77563108,
+          0.80468,
+          0.92386767
+        ],
+        "translation_mm": [
+          -775.631,
+          804.68,
+          923.868
+        ],
+        "rpy_deg": [
+          -179.97153,
+          0.21354,
+          179.53229
+        ],
+        "matrix": [
+          [
+            -0.99995974,
+            0.00816484,
+            0.00372285,
+            -0.77563108
+          ],
+          [
+            0.00816293,
+            0.99996654,
+            -0.00052735,
+            0.80468
+          ],
+          [
+            -0.00372704,
+            -0.00049694,
+            -0.99999293,
+            0.92386767
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "position_index": 2,
+        "translation_m": [
+          -0.76516868,
+          0.82367657,
+          0.92891279
+        ],
+        "translation_mm": [
+          -765.169,
+          823.677,
+          928.913
+        ],
+        "rpy_deg": [
+          -178.64797,
+          -0.47213,
+          179.2166
+        ],
+        "matrix": [
+          [
+            -0.99987258,
+            0.01347432,
+            -0.00855968,
+            -0.76516868
+          ],
+          [
+            0.01367207,
+            0.99963081,
+            -0.02348027,
+            0.82367657
+          ],
+          [
+            0.00824014,
+            -0.0235943,
+            -0.99968766,
+            0.92891279
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      {
+        "position_index": 3,
+        "translation_m": [
+          -0.78519555,
+          0.79965991,
+          0.92037391
+        ],
+        "translation_mm": [
+          -785.196,
+          799.66,
+          920.374
+        ],
+        "rpy_deg": [
+          179.83494,
+          1.09521,
+          -179.66582
+        ],
+        "matrix": [
+          [
+            -0.99980031,
+            -0.00588756,
+            0.01909659,
+            -0.78519555
+          ],
+          [
+            -0.00583145,
+            0.99997852,
+            0.00299228,
+            0.79965991
+          ],
+          [
+            -0.0191138,
+            0.00288032,
+            -0.99981317,
+            0.92037391
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      }
+    ],
+    "consistency": {
+      "max_pairwise_translation_mm": 32.4159,
+      "max_pairwise_rotation_deg": 2.45463,
+      "pairwise_gaps": [
+        {
+          "first_position": 1,
+          "second_position": 2,
+          "translation_mm": 22.2662,
+          "rotation_deg": 1.52305
+        },
+        {
+          "first_position": 1,
+          "second_position": 3,
+          "translation_mm": 11.3528,
+          "rotation_deg": 1.20886
+        },
+        {
+          "first_position": 2,
+          "second_position": 3,
+          "translation_mm": 32.4159,
+          "rotation_deg": 2.45463
+        }
+      ]
+    }
+  },
+  "comparison_to_read_only_reference": [
+    {
+      "position_index": 1,
+      "translation_delta_mm_xyz": [
+        3.069,
+        11.28,
+        7.568
+      ],
+      "translation_distance_mm": 13.926,
+      "rotation_difference_deg": 0.65759,
+      "relative_rotation_axis": [
+        0.866479,
+        0.35803,
+        0.347876
+      ]
+    },
+    {
+      "position_index": 2,
+      "translation_delta_mm_xyz": [
+        13.531,
+        30.277,
+        12.613
+      ],
+      "translation_distance_mm": 35.48,
+      "rotation_difference_deg": 2.17367,
+      "relative_rotation_axis": [
+        0.870356,
+        0.426005,
+        0.246995
+      ]
+    },
+    {
+      "position_index": 3,
+      "translation_delta_mm_xyz": [
+        -6.496,
+        6.26,
+        4.074
+      ],
+      "translation_distance_mm": 9.898,
+      "rotation_difference_deg": 0.93847,
+      "relative_rotation_axis": [
+        0.391265,
+        -0.683729,
+        -0.615995
+      ]
+    }
+  ],
+  "assessment": {
+    "usable_as_active_calibration": false,
+    "reason": "Die Konsistenzgrenze der statischen Basiskamera wurde überschritten; keine Mittelung und keine Fusion zulässig.",
+    "likely_outlier_position": 2,
+    "evidence": [
+      "Lage 1 und 3 liegen bei der statischen Basiskamera 11.353 mm / 1.209 Grad auseinander und damit innerhalb der eingestellten Grenzen.",
+      "Lage 2 liegt 22.266 mm / 1.523 Grad von Lage 1 und 32.416 mm / 2.455 Grad von Lage 3 entfernt.",
+      "Auch die Flansch-Roboterkamera streut bei Lage 2 zu Lage 3 am stärksten (12.634 mm / 1.300 Grad), bleibt aber innerhalb der dortigen Grenzen."
+    ],
+    "next_run": "Board-Lage 2 und 3 nur 40 bis 80 mm rein translativ versetzen, Board nicht verdrehen oder in der Höhe verändern; bei einem erneuten Abbruch die neue Diagnose vergleichen."
+  }
+}

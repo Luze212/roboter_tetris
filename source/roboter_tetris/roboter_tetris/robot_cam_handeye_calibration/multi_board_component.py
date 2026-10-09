@@ -4,9 +4,12 @@ Each board pose is solved independently. The robot returns to its initial pose
 and waits for an explicit service call before another orbit can begin.
 """
 
+import datetime
+import json
 import math
 import os
 import shutil
+import tempfile
 
 import numpy as np
 
@@ -24,7 +27,10 @@ from .handeye_solver import (
     matrix_to_pose, pose_to_matrix, rotation_matrix_to_quaternion,
     save_handeye_calibration_json, solve_robot_cam_handeye,
 )
-from .multi_board_solver import combine_board_results, mean_transforms, rotation_angle_deg
+from .multi_board_solver import (
+    board_result_consistency_report, combine_board_results, mean_transforms,
+    rotation_angle_deg,
+)
 
 
 class RobotCamHandEyeThreeBoardPositions(RobotCamHandEyeCalibration):
@@ -46,7 +52,8 @@ class RobotCamHandEyeThreeBoardPositions(RobotCamHandEyeCalibration):
             ("auto_approach_enabled", True, sr.ParameterType.BOOL,
              "Automatische Anfahrt zur neuen Board-Lage nach der ersten gelösten Lage."),
             ("auto_approach_clearance_mm", 100.0, sr.ParameterType.DOUBLE,
-             "Zusätzlicher Abstand der Annäherungspose vor der späteren Sichtpose."),
+             "Kompatibilitätsparameter ohne Einfluss auf die zentrierte Anfahrt; "
+             "diese hält die an Kalibrierstart gemessene Kamerahöhe konstant."),
             ("calibration_ws_x_min", -0.900, sr.ParameterType.DOUBLE,
              "Untergrenze des Kalibrier-Arbeitsraums in world."),
             ("calibration_ws_x_max", -0.500, sr.ParameterType.DOUBLE,
@@ -106,6 +113,11 @@ class RobotCamHandEyeThreeBoardPositions(RobotCamHandEyeCalibration):
         self._provisional_flange_T_robot_cam = None
         self._reference_robot_cam_T_board = None
         self._auto_approach_view_target = None
+        self._first_board_centered = False
+        self._center_view_height_m = None
+        self._center_camera_rotation = None
+        self._orbit_returned_to_safe_start = False
+        self._failure_diagnostic_written = False
 
     def on_validate_parameter_callback(self, parameter: sr.Parameter) -> bool:
         name = parameter.get_name()
@@ -174,6 +186,11 @@ class RobotCamHandEyeThreeBoardPositions(RobotCamHandEyeCalibration):
         self._provisional_flange_T_robot_cam = None
         self._reference_robot_cam_T_board = None
         self._auto_approach_view_target = None
+        self._first_board_centered = False
+        self._center_view_height_m = None
+        self._center_camera_rotation = None
+        self._orbit_returned_to_safe_start = False
+        self._failure_diagnostic_written = False
         self.set_predicate("waiting_for_board", False)
         self._reset_position_predicates()
         self._reset_position_progress()
@@ -272,10 +289,26 @@ class RobotCamHandEyeThreeBoardPositions(RobotCamHandEyeCalibration):
                 f"X={position[0]:.3f}, Y={position[1]:.3f}, Z={position[2]:.3f} m"
             )
 
-    def _begin_transform_move(self, target: np.ndarray, state: str) -> None:
+    def _require_safe_start_near_workspace(self, transform: np.ndarray) -> None:
+        """Permit only the small, known frame rounding outside the orbit box."""
+        lower, upper = self._workspace_bounds()
+        position = np.asarray(transform[:3, 3], dtype=np.float64)
+        overflow = np.maximum(np.maximum(lower - position, position - upper), 0.0)
+        if not np.all(np.isfinite(position)) or np.any(overflow > 0.005):
+            raise ValueError(
+                "Kalibrierstartpose liegt mehr als 5 mm außerhalb des Kalibrier-Arbeitsraums: "
+                f"X={position[0]:.3f}, Y={position[1]:.3f}, Z={position[2]:.3f} m"
+            )
+
+    def _begin_transform_move(
+            self, target: np.ndarray, state: str,
+            allow_safe_start_outside_calibration_box: bool = False) -> None:
         current = self._fresh_flange()
         self._require_inside_workspace("Aktuelle Flanschpose", current)
-        self._require_inside_workspace("Automatisches Ziel", target)
+        if allow_safe_start_outside_calibration_box:
+            self._require_safe_start_near_workspace(target)
+        else:
+            self._require_inside_workspace("Automatisches Ziel", target)
         self._moving_start_pos = current[:3, 3].copy()
         self._moving_start_quat = rotation_matrix_to_quaternion(current[:3, :3])
         self._moving_target_pos = np.asarray(target[:3, 3], dtype=np.float64).copy()
@@ -331,47 +364,139 @@ class RobotCamHandEyeThreeBoardPositions(RobotCamHandEyeCalibration):
         except (AttributeError, TypeError, ValueError) as exc:
             self._fail_calibration(f"Orbit außerhalb des Kalibrier-Arbeitsraums: {exc}")
 
+    def _board_center_in_board_m(self) -> np.ndarray:
+        """Return the geometric centre; ChArUco pose translation is its origin."""
+        if self._board_geometry_reference is None:
+            raise ValueError("Board-Geometrie aus Lage 1 fehlt")
+        rows, cols, checker_size_mm = np.asarray(
+            self._board_geometry_reference, dtype=np.float64
+        )
+        if not np.all(np.isfinite([rows, cols, checker_size_mm])) or min(rows, cols, checker_size_mm) <= 0:
+            raise ValueError("Board-Geometrie ist ungültig")
+        return np.array([
+            cols * checker_size_mm / 2000.0,
+            rows * checker_size_mm / 2000.0,
+            0.0,
+        ], dtype=np.float64)
+
+    @staticmethod
+    def _downward_camera_rotation(reference_rotation: np.ndarray) -> np.ndarray:
+        """Keep the reference yaw while making OpenCV camera +Z point down."""
+        z_axis = np.array([0.0, 0.0, -1.0], dtype=np.float64)
+        x_axis = np.asarray(reference_rotation, dtype=np.float64)[:3, 0].copy()
+        x_axis -= float(np.dot(x_axis, z_axis)) * z_axis
+        if np.linalg.norm(x_axis) < 1e-8:
+            x_axis = np.array([1.0, 0.0, 0.0], dtype=np.float64)
+        x_axis /= np.linalg.norm(x_axis)
+        y_axis = np.cross(z_axis, x_axis)
+        return np.column_stack((x_axis, y_axis, z_axis))
+
+    def _centered_flange_target(
+            self, T_base_cam_board: np.ndarray, T_world_base_cam: np.ndarray,
+            T_flange_robot_cam: np.ndarray) -> tuple[np.ndarray, float]:
+        """Place the camera over the ChArUco centre with its optical axis down."""
+        if self._first_world_T_flange is None:
+            raise ValueError("Kalibrierstartpose fehlt")
+        T_world_board = T_world_base_cam @ T_base_cam_board
+        board_center_world = T_world_board[:3, :3] @ self._board_center_in_board_m()
+        board_center_world += T_world_board[:3, 3]
+
+        T_world_camera_reference = self._first_world_T_flange @ T_flange_robot_cam
+        if self._center_view_height_m is None:
+            height = float(T_world_camera_reference[2, 3] - board_center_world[2])
+            if not math.isfinite(height) or height < 0.1:
+                raise ValueError("Startpose liegt nicht mindestens 100 mm über der Boardmitte")
+            self._center_view_height_m = height
+            self._center_camera_rotation = self._downward_camera_rotation(
+                T_world_camera_reference[:3, :3]
+            )
+        if self._center_camera_rotation is None:
+            raise ValueError("Referenzorientierung der Roboterkamera fehlt")
+
+        T_world_robot_cam = np.eye(4, dtype=np.float64)
+        T_world_robot_cam[:3, :3] = self._center_camera_rotation
+        T_world_robot_cam[:3, 3] = board_center_world + np.array(
+            [0.0, 0.0, self._center_view_height_m], dtype=np.float64
+        )
+        T_world_flange = T_world_robot_cam @ np.linalg.inv(T_flange_robot_cam)
+        mean_transforms([T_world_flange])
+        self._require_inside_workspace("Zentrierte Sichtpose", T_world_flange)
+        self._validate_orbit_workspace(T_world_flange, self._center_view_height_m)
+        return T_world_flange, self._center_view_height_m
+
     def _begin_auto_approach(self) -> None:
         if (self._provisional_world_T_base_cam is None
-                or self._reference_robot_cam_T_board is None
-                or self._base_cam_board_pose_for_position is None
-                or self._previous_board_in_base_cam is None
-                or self._first_world_T_flange is None):
+                or self._provisional_flange_T_robot_cam is None
+                or self._base_cam_board_pose_for_position is None):
             raise ValueError("Vorläufige Kamerakalibrierung aus Board-Lage 1 fehlt")
         T_base_cam_board = pose_to_matrix(
             np.asarray(self._base_cam_board_pose_for_position[:3]),
             np.asarray(self._base_cam_board_pose_for_position[3:6]),
         )
-
-        # The static camera observes board coordinates in its own frame.  Only
-        # transfer the measured board displacement in the horizontal world
-        # plane to the known-safe calibration start pose.  This is deliberately
-        # a coarse approach: height and orientation stay unchanged, and the
-        # robot camera must reacquire the board before the orbit begins.
-        delta_base_cam = (
-            T_base_cam_board[:3, 3] - self._previous_board_in_base_cam[:3, 3]
-        )
-        delta_world = self._provisional_world_T_base_cam[:3, :3] @ delta_base_cam
-        T_world_flange_view = self._first_world_T_flange.copy()
-        T_world_flange_view[:2, 3] += delta_world[:2]
-        T_world_flange_view[2, 3] = self._first_world_T_flange[2, 3]
-        mean_transforms([T_world_flange_view])
-        self._require_inside_workspace("XY-Nachführpose", T_world_flange_view)
-        self._validate_orbit_workspace(
-            T_world_flange_view,
-            max(0.1, float(self._reference_robot_cam_T_board[2, 3])),
+        T_world_flange_view, view_height = self._centered_flange_target(
+            T_base_cam_board,
+            self._provisional_world_T_base_cam,
+            self._provisional_flange_T_robot_cam,
         )
         self._auto_approach_view_target = T_world_flange_view
         self.set_predicate("board_position_ready", True)
         self.set_predicate("auto_approach_active", True)
         self._begin_transform_move(T_world_flange_view, "AUTO_APPROACH_VIEW")
         self.get_logger().info(
-            "Neue Board-Lage erkannt; XY-Nachführung zur Sichtpose startet "
-            f"(ΔX={delta_world[0] * 1000.0:.1f} mm, ΔY={delta_world[1] * 1000.0:.1f} mm, "
-            f"Z unverändert {T_world_flange_view[2, 3]:.3f} m)."
+            "Neue Board-Lage erkannt; zentrierte Sichtpose startet "
+            f"(Kamera senkrecht nach unten, Abstand zur Boardmitte {view_height * 1000.0:.0f} mm, "
+            f"Flansch X={T_world_flange_view[0, 3]:.3f}, "
+            f"Y={T_world_flange_view[1, 3]:.3f}, Z={T_world_flange_view[2, 3]:.3f} m)."
         )
 
-    def _step_auto_approach(self) -> None:
+    def _is_at_safe_start_pose(self) -> bool:
+        """Use the measured flange state, not the most recent orbit target."""
+        if self._first_world_T_flange is None:
+            return False
+        current = self._fresh_flange()
+        position_error_mm = float(np.linalg.norm(
+            current[:3, 3] - self._first_world_T_flange[:3, 3]
+        ) * 1000.0)
+        rotation_error_deg = rotation_angle_deg(
+            self._first_world_T_flange[:3, :3].T @ current[:3, :3]
+        )
+        return (
+            position_error_mm <= float(self.get_parameter("position_tolerance_mm").get_value())
+            and rotation_error_deg <= float(self.get_parameter("orientation_tolerance_deg").get_value())
+        )
+
+    def _return_to_safe_start_before_finish(self) -> bool:
+        """Return true only after an orbit has ended at the clear BaseCam pose."""
+        if self._orbit_returned_to_safe_start:
+            return True
+        if self._first_world_T_flange is None:
+            raise ValueError("Kalibrierstartpose fehlt")
+        if self._is_at_safe_start_pose():
+            self._orbit_returned_to_safe_start = True
+            return True
+        self._begin_transform_move(
+            self._first_world_T_flange,
+            "RETURNING_SAFE_START",
+            allow_safe_start_outside_calibration_box=True,
+        )
+        self.get_logger().info(
+            "Orbit beendet; Roboter fährt für die Board-Auswertung zur freien Kalibrierstartpose zurück."
+        )
+        return False
+
+    def _store_provisional_calibration(self, result, board_mean: np.ndarray) -> None:
+        """Keep the first solved transform only for camera centring of later steps."""
+        if self._first_world_T_flange is None or result.T_ee_robot_cam is None:
+            raise ValueError("Referenzpose für die automatische Anfahrt fehlt")
+        self._provisional_world_T_base_cam = result.T_robot_base_static_cam.copy()
+        self._provisional_flange_T_robot_cam = result.T_ee_robot_cam.copy()
+        T_world_robot_cam = self._first_world_T_flange @ result.T_ee_robot_cam
+        T_world_board = result.T_robot_base_static_cam @ board_mean
+        self._reference_robot_cam_T_board = np.linalg.inv(T_world_robot_cam) @ T_world_board
+        mean_transforms([self._reference_robot_cam_T_board])
+
+    def _step_transform_move(self) -> None:
+        """Execute one explicit auxiliary move without generating an orbit."""
         now = self.get_clock().now()
         if self._state_start_time is None:
             self._state_start_time = now
@@ -388,15 +513,31 @@ class RobotCamHandEyeThreeBoardPositions(RobotCamHandEyeCalibration):
         self._target_pose.set_orientation(orientation)
         if progress_raw < 1.0:
             return
-        if self._state == "AUTO_APPROACH_PRE":
+        completed_state = self._state
+        if completed_state == "AUTO_APPROACH_PRE":
             self._begin_transform_move(self._auto_approach_view_target, "AUTO_APPROACH_VIEW")
+            return
+        if completed_state == "RETURNING_SAFE_START":
+            self._orbit_returned_to_safe_start = True
+            self._state = "SOLVING"
+            self._state_start_time = now
+            self._home_settled_since_ns = None
+            self.get_logger().info(
+                "Roboter wieder an der freien Kalibrierstartpose; Board-Auswertung wird abgeschlossen."
+            )
             return
         self.set_predicate("auto_approach_active", False)
         self._state = "IDLE"
+        self._orbit_returned_to_safe_start = False
         super()._on_start_calibration()
-        self.get_logger().info(
-            "Sichtpose erreicht; Roboterkamera muss das Board jetzt für den Orbit erkennen."
-        )
+        if completed_state == "CENTERING_FIRST_BOARD":
+            self.get_logger().info(
+                "Board-Lage 1 zentriert erreicht; endgültiger Orbit beginnt."
+            )
+        else:
+            self.get_logger().info(
+                "Zentrierte Sichtpose erreicht; Roboterkamera muss das Board jetzt für den Orbit erkennen."
+            )
 
     def _reset_base_cam_capture(self) -> None:
         self._base_cam_capture_after_id = -1
@@ -412,6 +553,10 @@ class RobotCamHandEyeThreeBoardPositions(RobotCamHandEyeCalibration):
         self._base_cam_capture_after_id = self._observation_id(self._base_cam_observation_id)
         self._base_cam_capture_started_ns = self.get_clock().now().nanoseconds
         self._state = "BASE_CAM_SAMPLING"
+        self._current_board_position = self._position_index + 1
+        self.set_predicate("board_position_ready", False)
+        self.set_predicate("base_cam_sampling_active", True)
+        self.set_predicate("robot_camera_board_reacquired", False)
         self.set_predicate("is_running", True)
         self.set_predicate("is_calibrated", False)
         self.set_predicate("has_failed", False)
@@ -474,12 +619,14 @@ class RobotCamHandEyeThreeBoardPositions(RobotCamHandEyeCalibration):
             if len(self._base_cam_capture_samples) < required:
                 return
             self._finish_base_cam_capture()
+            self.set_predicate("base_cam_sampling_active", False)
             if (self._position_index > 0
                     and bool(self.get_parameter("auto_approach_enabled").get_value())):
-                phase = "XY-Nachführung"
+                phase = "Zentrierte Anfahrt"
                 self._begin_auto_approach()
                 return
             self._state = "IDLE"
+            self._orbit_returned_to_safe_start = False
             super()._on_start_calibration()
             self.get_logger().info(
                 f"Board-Lage {self._position_index + 1}/{self._board_count}: {required} Basiskamera-Aufnahmen "
@@ -508,6 +655,15 @@ class RobotCamHandEyeThreeBoardPositions(RobotCamHandEyeCalibration):
         self._first_world_T_flange = flange.copy()
         self._board_geometry_reference = None
         self._home_settled_since_ns = None
+        self._provisional_world_T_base_cam = None
+        self._provisional_flange_T_robot_cam = None
+        self._reference_robot_cam_T_board = None
+        self._auto_approach_view_target = None
+        self._first_board_centered = False
+        self._center_view_height_m = None
+        self._center_camera_rotation = None
+        self._orbit_returned_to_safe_start = False
+        self._failure_diagnostic_written = False
         self._reset_position_predicates()
         self._start_base_cam_capture()
         return {"success": True,
@@ -564,12 +720,73 @@ class RobotCamHandEyeThreeBoardPositions(RobotCamHandEyeCalibration):
         except (AttributeError, TypeError, ValueError):
             pass
         self.set_predicate("waiting_for_board", False)
+        self.set_predicate("base_cam_sampling_active", False)
+        self.set_predicate("auto_approach_active", False)
+        self._current_board_position = 0
+        self._write_failure_diagnostic(message)
         super()._fail_calibration(message)
+
+    def _write_failure_diagnostic(self, failure_message: str) -> None:
+        """Persist completed groups only; never create an active calibration result."""
+        if self._failure_diagnostic_written or not self._position_results:
+            return
+        self._failure_diagnostic_written = True
+        try:
+            diagnostic_directory = os.path.join(
+                ROBOT_CAM_MULTI_ARCHIVE_DIR, "failed_runs"
+            )
+            os.makedirs(diagnostic_directory, exist_ok=True)
+            timestamp = datetime.datetime.now(datetime.timezone.utc)
+            name = timestamp.strftime("%Y%m%dT%H%M%S_%fZ_failed_diagnostic.json")
+            destination = os.path.join(diagnostic_directory, name)
+            if os.path.lexists(destination):
+                raise ValueError(f"Diagnosepfad existiert bereits: {destination}")
+            try:
+                consistency = board_result_consistency_report(self._position_results)
+            except (TypeError, ValueError, np.linalg.LinAlgError) as exc:
+                consistency = {"could_not_compute": str(exc)}
+            payload = {
+                "schema": "roboter_tetris.robot_cam_handeye_three_board_diagnostic",
+                "schema_version": 1,
+                "created": timestamp.isoformat(),
+                "status": "rejected",
+                "failure_message": str(failure_message),
+                "completed_board_positions": len(self._position_results),
+                "requested_board_positions": self._board_count,
+                "positions": self._position_details,
+                "consistency": consistency,
+                "note": (
+                    "Diagnosedaten eines abgelehnten Laufs. Diese Datei ist keine aktive "
+                    "Kalibrierung und wird von keiner Pick- oder Fusionskomponente gelesen."
+                ),
+            }
+            descriptor, temporary_path = tempfile.mkstemp(
+                prefix=".pending_", suffix=".json", dir=diagnostic_directory
+            )
+            try:
+                with os.fdopen(descriptor, "w", encoding="utf-8") as temporary:
+                    json.dump(payload, temporary, ensure_ascii=False, indent=2)
+                    temporary.write("\n")
+                    temporary.flush()
+                    os.fsync(temporary.fileno())
+                os.replace(temporary_path, destination)
+            except Exception:
+                if os.path.exists(temporary_path):
+                    os.unlink(temporary_path)
+                raise
+            self.get_logger().info(
+                f"Diagnose eines abgelehnten Drei-Board-Laufs gespeichert: {destination}"
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            self.get_logger().warn(
+                f"Diagnose eines abgelehnten Drei-Board-Laufs konnte nicht gespeichert werden: {exc}"
+            )
 
     def on_step_callback(self):
         if self._state in ("IDLE", "WAIT_BOARD_REPOSITION", "FINISHED", "FAILED"):
             return
         if self._state in ("BASE_CAM_SAMPLING", "AUTO_APPROACH_PRE", "AUTO_APPROACH_VIEW",
+                           "CENTERING_FIRST_BOARD", "RETURNING_SAFE_START",
                            "MOVING", "SETTLING", "SAMPLING", "RETURNING_HOME", "SOLVING"):
             try:
                 self._fresh_flange()
@@ -579,11 +796,12 @@ class RobotCamHandEyeThreeBoardPositions(RobotCamHandEyeCalibration):
         if self._state == "BASE_CAM_SAMPLING":
             self._step_base_cam_capture()
             return
-        if self._state in ("AUTO_APPROACH_PRE", "AUTO_APPROACH_VIEW"):
+        if self._state in ("AUTO_APPROACH_PRE", "AUTO_APPROACH_VIEW",
+                           "CENTERING_FIRST_BOARD", "RETURNING_SAFE_START"):
             try:
-                self._step_auto_approach()
+                self._step_transform_move()
             except (AttributeError, TypeError, ValueError, np.linalg.LinAlgError) as exc:
-                self._fail_calibration(f"Automatische Anfahrt fehlgeschlagen: {exc}")
+                self._fail_calibration(f"Zusatzfahrt fehlgeschlagen: {exc}")
             return
         if self._state == "SOLVING":
             now = self.get_clock().now()
@@ -615,9 +833,17 @@ class RobotCamHandEyeThreeBoardPositions(RobotCamHandEyeCalibration):
             self._collected_samples[-1].base_cam_board_pose = list(
                 self._base_cam_board_pose_for_position
             )
+            if previous_count == 0:
+                self.set_predicate("robot_camera_board_reacquired", True)
 
     def _finish_position(self) -> None:
         try:
+            # The parent orbit returns to its own centre.  For the final orbit
+            # of every board pose that centre is above the board and may mask it
+            # from the static camera.  Always finish at the operator-defined,
+            # non-occluding Kalibrierstart before asking for another board pose.
+            if not self._return_to_safe_start_before_finish():
+                return
             samples = list(self._collected_samples)
             if len(samples) != len(self._waypoints):
                 raise ValueError("Nicht alle Wegpunkte haben gültige Samples")
@@ -651,18 +877,25 @@ class RobotCamHandEyeThreeBoardPositions(RobotCamHandEyeCalibration):
                     f"(Grenzen {max_position:.2f} mm / {max_rotation:.3f} Grad)"
                 )
             if self._position_index == 0:
-                if self._first_world_T_flange is None or result.T_ee_robot_cam is None:
-                    raise ValueError("Referenzpose für die automatische Anfahrt fehlt")
-                self._provisional_world_T_base_cam = result.T_robot_base_static_cam.copy()
-                self._provisional_flange_T_robot_cam = result.T_ee_robot_cam.copy()
-                T_world_robot_cam = self._first_world_T_flange @ result.T_ee_robot_cam
-                T_world_board = result.T_robot_base_static_cam @ board_mean
-                self._reference_robot_cam_T_board = (
-                    np.linalg.inv(T_world_robot_cam) @ T_world_board
-                )
-                mean_transforms([self._reference_robot_cam_T_board])
+                self._store_provisional_calibration(result, board_mean)
+                if not self._first_board_centered:
+                    T_world_flange_view, view_height = self._centered_flange_target(
+                        board_mean,
+                        self._provisional_world_T_base_cam,
+                        self._provisional_flange_T_robot_cam,
+                    )
+                    self._first_board_centered = True
+                    self._orbit_returned_to_safe_start = False
+                    self.set_predicate("auto_approach_active", True)
+                    self._begin_transform_move(T_world_flange_view, "CENTERING_FIRST_BOARD")
+                    self.get_logger().info(
+                        "Vorläufiger Orbit für Board-Lage 1 ausgewertet und verworfen; "
+                        "Roboter fährt jetzt zur zentrierten, senkrechten Sichtpose "
+                        f"(Abstand {view_height * 1000.0:.0f} mm)."
+                    )
+                    return
                 self.get_logger().info(
-                    "Vorläufige Kamerakalibrierung aus Board-Lage 1 für die "
+                    "Zentrierter Endorbit aus Board-Lage 1 als Referenz für die "
                     "automatische Anfahrt der nächsten Lage gespeichert."
                 )
             self._position_results.append(result)
@@ -722,6 +955,7 @@ class RobotCamHandEyeThreeBoardPositions(RobotCamHandEyeCalibration):
             self._calibration_matrix = combined.T_robot_base_cam.flatten().tolist()
             self.set_predicate("is_calibrated", True)
             self.set_predicate("is_running", False)
+            self._current_board_position = 0
             self._state = "FINISHED"
             self.get_logger().info(
                 f"DREI-BOARD-KALIBRIERUNG ERFOLGREICH: "

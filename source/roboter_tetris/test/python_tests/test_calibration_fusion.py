@@ -75,3 +75,19 @@ def test_fusion_rejects_bad_robot_source_without_output(tmp_path):
     with pytest.raises(ValueError):
         fuse_calibration_files(str(base), str(robot), str(output), 50.0)
     assert not output.exists()
+
+
+def test_fusion_never_overwrites_protected_main_basecam_file(tmp_path, monkeypatch):
+    protected = tmp_path / "base_cam_extrinsics.json"
+    robot = tmp_path / "robot.json"
+    save_record(str(protected), _record(0.0, "stufe1_basecam"))
+    before = protected.read_bytes()
+    _robot_source(robot)
+    monkeypatch.setattr(
+        "roboter_tetris.calibration_fusion.DEFAULT_BASE_CAM_FILE", str(protected)
+    )
+
+    with pytest.raises(ValueError, match="Geschützte Hauptdatei"):
+        fuse_calibration_files(str(protected), str(robot), str(protected), 50.0)
+
+    assert protected.read_bytes() == before
