@@ -77,7 +77,7 @@ class BaseCamCalibrationFusion(LifecycleComponent):
         self.set_predicate("has_failed", False)
         response.success = True
         response.message = (
-            f"Gespeichert: {result['output_path']}; Robot-Kamera-Anteil "
+            f"Aktive Datei: {result['output_path']}; Archiv: {result['archive_path']}; Robot-Kamera-Anteil "
             f"{result['robot_cam_weight_percent']:.1f} %; Quellenabstand "
             f"{result['translation_difference_mm']:.2f} mm / "
             f"{result['rotation_difference_deg']:.3f} Grad"

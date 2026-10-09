@@ -14,7 +14,8 @@ import cv2
 import numpy as np
 
 from .basecam_extrinsics import (
-    ExtrinsicsRecord, record_from_dict, replace_calibration,
+    ExtrinsicsRecord, FUSION_ARCHIVE_DIR, archive_calibration_file,
+    record_from_dict, replace_calibration,
     resolve_calibration_path, rotation_angle_deg,
 )
 
@@ -64,8 +65,8 @@ def fuse_calibration_files(base_file: str, robot_file: str, output_file: str,
                            robot_cam_weight_percent: float) -> dict:
     """Validate inputs, write a separate BaseCam-readable file, return a summary.
 
-    A failed validation leaves the output untouched. The previous successful
-    output is kept as ``*_vorher.json`` when a new result is written.
+    A failed validation leaves the output untouched. The active output keeps the
+    established path and every successful result is copied to the fusion archive.
     """
     weight = float(robot_cam_weight_percent)
     if not math.isfinite(weight) or not 0.0 <= weight <= 100.0:
@@ -135,7 +136,8 @@ def fuse_calibration_files(base_file: str, robot_file: str, output_file: str,
         },
     )
     backup = replace_calibration(output_path, record)
-    return {"output_path": output_path, "backup_path": backup,
+    archive_path = archive_calibration_file(output_path, FUSION_ARCHIVE_DIR, "base_cam_fusion")
+    return {"output_path": output_path, "backup_path": backup, "archive_path": archive_path,
             "robot_cam_weight_percent": weight,
             "translation_difference_mm": round(position_gap_mm, 3),
             "rotation_difference_deg": round(angle_gap_deg, 4)}

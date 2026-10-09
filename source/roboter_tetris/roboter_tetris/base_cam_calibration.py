@@ -30,6 +30,7 @@ from rclpy.qos import QoSProfile
 from sensor_msgs.msg import CameraInfo, Image
 
 from .basecam_extrinsics import (
+    BASE_CAM_ARCHIVE_DIR, archive_calibration_file,
     L6_CAL, CalibrationWatch, load_camera_calibration, make_tag_detector, matrix_from_cal, pose_from_quaternion,
     quaternion_from_matrix, replace_calibration, required_start_height, resolve_calibration_path,
 )
@@ -299,6 +300,7 @@ class BaseCamCalibration(LifecycleComponent):
         path = resolve_calibration_path(self.get_parameter("output_file").get_value())
         try:
             backup = replace_calibration(path, run.result)
+            archive = archive_calibration_file(path, BASE_CAM_ARCHIVE_DIR, "base_cam")
         except OSError as exc:
             self.get_logger().error(f"base_cam_calibration: {path} nicht schreibbar: {exc}")
             self.set_predicate("has_failed", True)
@@ -308,7 +310,7 @@ class BaseCamCalibration(LifecycleComponent):
         self.get_logger().info(
             f"base_cam_calibration: Kalibrierung für base_cam geschrieben: {path} - "
             + ", ".join(f"{k} {v:.4f}" for k, v in cal.items())
-            + f". base_cam nutzt sie ab dem nächsten Aktivieren.{kept} Dauerhaft erst "
+            + f". Unveränderliche Archivkopie: {archive}. base_cam nutzt die aktuelle Datei ab dem nächsten Aktivieren.{kept} Dauerhaft erst "
               "nach docker cp ins Repo (roboter_tetris/Extrinsics/) und Build.")
 
     def _write_raw(self, run) -> None:

@@ -280,12 +280,15 @@ Grenzen: `entscheidungen.md` §5.5. In Kraft ist die Handkalibrierung L6.
    28.09. (0,34 px, 0,54 mm, 0,04 mm) — dann besser wiederholen. Die Rohdaten liegen in
    jedem Fall in `/tmp/base_cam_extrinsics_rohdaten.json`.
 
-**Was der Lauf schreibt:** Das Ergebnis ersetzt `Extrinsics/base_cam_extrinsics.json`
-im Container, die bisherige bleibt als `base_cam_extrinsics_vorher.json` daneben.
-`base_cam` nutzt die neue ab dem nächsten Aktivieren, ohne Build. **Zurück ohne
-Build:** in `base_cam` den Parameter „Kalibrierdatei“ auf
-`Extrinsics/base_cam_extrinsics_vorher.json` setzen. **Dauerhaft** wird sie erst im
-Repo — ein Build ohne das bringt die Datei aus dem Repo zurück:
+**Was der Lauf schreibt:** Das Ergebnis ersetzt die aktive Datei
+`Extrinsics/base_cam_extrinsics.json` im Container und legt gleichzeitig eine
+unveränderliche Zeitstempelkopie unter `/data/calibration_archive/base_cam/` ab.
+`base_cam` nutzt die aktive Datei ab dem nächsten Aktivieren, ohne Build.
+**Zurück ohne Build:** in `base_cam` den Parameter „Kalibrierdatei“ auf die
+gewünschte konkrete Archivdatei setzen. Die vollständige Ablage steht in
+[`kalibrierdateien-ablage.md`](kalibrierdateien-ablage.md). **Dauerhaft** wird
+eine bewusst ausgewählte Fassung erst im Repo — ein Build ohne das bringt die
+Datei aus dem Repo zurück:
 
 ```bash
 C=$(docker ps --format '{{.Names}}' | grep aica-launcher | head -1)

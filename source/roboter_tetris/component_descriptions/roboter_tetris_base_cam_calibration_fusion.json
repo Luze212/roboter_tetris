@@ -2,7 +2,7 @@
   "name": "Basiskamera-Kalibrierungen kombinieren",
   "description": {
     "brief": "Mischt die statische Basiskamera-Pose aus BaseCam- und Robot-Kamera-Kalibrierung in einer dritten Datei.",
-    "details": "0 % Robot-Kamera = nur BaseCam-Kalibrierung, 100 % = nur Robot-Kamera-Hand-Auge-Kalibrierung. Position linear, Orientierung entlang des kuerzesten Rotationswegs. Der Block hat keine Roboterverbindung und schreibt erst beim Dienstaufruf. Die Ergebnisdatei wird nicht automatisch vom Pick-System verwendet. Die BaseCam-Quelle muss eine erfolgreiche Stufe-1- oder Stufe-2-Messung sein; die Uebergangsdatei L6 wird nicht als neue Messung ausgegeben."
+    "details": "0 % Robot-Kamera = nur BaseCam-Kalibrierung, 100 % = nur Robot-Kamera-Hand-Auge-Kalibrierung. Position linear, Orientierung entlang des kuerzesten Rotationswegs. Der Block hat keine Roboterverbindung und schreibt erst beim Dienstaufruf. Die aktive Ergebnisdatei wird zusätzlich unveränderlich unter /data/calibration_archive/base_cam_fusion/ archiviert und nicht automatisch vom Pick-System verwendet. Die BaseCam-Quelle muss eine erfolgreiche Stufe-1- oder Stufe-2-Messung sein; die Uebergangsdatei L6 wird nicht als neue Messung ausgegeben."
   },
   "registration": "roboter_tetris::BaseCamCalibrationFusion",
   "inherits": "modulo_components::LifecycleComponent",
@@ -47,7 +47,7 @@
     },
     {
       "display_name": "Ergebnisdatei [output_file]",
-      "description": "Dritte, separate BaseCam-kompatible JSON-Datei; vorherige Version wird als *_vorher.json gesichert.",
+      "description": "Dritte, separate BaseCam-kompatible aktive JSON-Datei. Jede erfolgreiche Fassung wird zusätzlich unveränderlich unter /data/calibration_archive/base_cam_fusion/ archiviert.",
       "parameter_name": "output_file",
       "parameter_type": "string",
       "default_value": "/data/base_cam_fused_extrinsics.json",

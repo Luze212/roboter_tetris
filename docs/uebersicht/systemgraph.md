@@ -74,8 +74,10 @@ in den Regelpfad (§10.2).
 ```
 
 Eigene AICA-Anwendung (`anwendung-kalibrierung-basiskamera.yaml`), Attractor
-gedrosselt (0,1 m/s, 0,3 rad/s). Stufe 1 schreibt in dieselbe Kalibrierdatei, die
-`base_cam` in der Greifanwendung liest; die Anzeige folgt ihr. `true_signal` und
+gedrosselt (0,1 m/s, 0,3 rad/s). Stufe 1 aktualisiert dieselbe aktive
+Kalibrierdatei, die `base_cam` in der Greifanwendung liest, und archiviert jede
+Fassung unter `/data/calibration_archive/base_cam/`; die Anzeige folgt der aktiven
+Datei. `true_signal` und
 `toggle_signal` liefern „Greifer zu“ und „Greifer auf“. Bedienung:
 `einrichtung-projektanwendung.md` §10, Verfahren: §5.5.
 

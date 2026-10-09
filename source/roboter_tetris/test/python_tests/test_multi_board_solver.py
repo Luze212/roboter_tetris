@@ -63,9 +63,14 @@ def test_outlier_is_rejected_before_writing():
         combine_board_results(groups, _pose(-0.6), 20, 1.5)
 
 
-def test_rejects_missing_group_and_invalid_transform():
-    with pytest.raises(ValueError, match="Genau drei"):
-        combine_board_results([_result(.1, -.78)], _pose(-.6), 20, 1.5)
+def test_accepts_configurable_group_count_and_rejects_empty_groups():
+    combined, report = combine_board_results(
+        [_result(.1, -.78), _result(.11, -.775)], _pose(-.6), 20, 1.5
+    )
+    assert combined.sample_count == 18
+    assert report["group_count"] == 2
+    with pytest.raises(ValueError, match="Mindestens eine"):
+        combine_board_results([], _pose(-.6), 20, 1.5)
     bad = _pose(.1)
     bad[0, 0] = 2.0
     with pytest.raises(ValueError, match="Ungültige"):

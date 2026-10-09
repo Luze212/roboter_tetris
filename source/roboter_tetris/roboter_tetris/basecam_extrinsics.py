@@ -33,6 +33,8 @@ import datetime
 import json
 import math
 import os
+import re
+import shutil
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -51,6 +53,15 @@ SCHEMA_VERSION = 1
 #: of the project lives in the repository).
 DEFAULT_CALIBRATION_FILE = "Extrinsics/base_cam_extrinsics.json"
 PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Persistent AICA data volume.  The active files keep the established paths so
+# existing images keep working; each successful result is additionally copied
+# here under an immutable timestamped name.
+CALIBRATION_ARCHIVE_ROOT = "/data/calibration_archive"
+BASE_CAM_ARCHIVE_DIR = os.path.join(CALIBRATION_ARCHIVE_ROOT, "base_cam")
+ROBOT_CAM_ARCHIVE_DIR = os.path.join(CALIBRATION_ARCHIVE_ROOT, "robot_cam_handeye")
+ROBOT_CAM_MULTI_ARCHIVE_DIR = os.path.join(CALIBRATION_ARCHIVE_ROOT, "robot_cam_handeye_multi_board")
+FUSION_ARCHIVE_DIR = os.path.join(CALIBRATION_ARCHIVE_ROOT, "base_cam_fusion")
 
 #: Transitional calibration of Nachtrag 13 / L6 (the cal_* defaults of base_cam),
 #: in force whenever no valid file is.
@@ -1309,6 +1320,41 @@ def replace_calibration(path: str, record: ExtrinsicsRecord) -> Optional[str]:
             dst.write(src.read())
     save_record(path, record)
     return backup
+
+
+def archive_calibration_file(source_path: str, archive_directory: str, prefix: str) -> str:
+    """Copy a completed JSON result to an immutable timestamped archive file.
+
+    ``source_path`` remains the intentionally replaceable active file used by
+    existing AICA images.  The returned archive path is never selected as an
+    existing filename, therefore a completed measurement is not overwritten.
+    """
+    source_path = os.path.abspath(source_path)
+    if not os.path.isfile(source_path) or os.path.islink(source_path):
+        raise OSError(f"Ergebnisdatei ist keine reguläre Datei: {source_path}")
+    if not isinstance(prefix, str) or not re.fullmatch(r"[a-z0-9_]+", prefix):
+        raise ValueError("Archivpräfix darf nur Kleinbuchstaben, Ziffern und _ enthalten")
+    archive_directory = os.path.abspath(archive_directory)
+    if os.path.islink(archive_directory):
+        raise OSError(f"Archivverzeichnis darf kein symbolischer Link sein: {archive_directory}")
+    os.makedirs(archive_directory, mode=0o755, exist_ok=True)
+    if not os.path.isdir(archive_directory):
+        raise OSError(f"Archivpfad ist kein Verzeichnis: {archive_directory}")
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+    for suffix in range(1000):
+        number = "" if suffix == 0 else f"_{suffix:03d}"
+        destination = os.path.join(archive_directory, f"{prefix}_{stamp}{number}.json")
+        try:
+            # Exclusive creation prevents even concurrent writers from replacing
+            # a result with the same timestamp.
+            with open(destination, "x", encoding="utf-8") as target, open(
+                    source_path, encoding="utf-8") as source:
+                shutil.copyfileobj(source, target)
+            shutil.copystat(source_path, destination)
+            return destination
+        except FileExistsError:
+            continue
+    raise OSError("Kein freier Dateiname im Kalibrierarchiv gefunden")
 
 
 def _matrix_problems(T: np.ndarray) -> List[str]:

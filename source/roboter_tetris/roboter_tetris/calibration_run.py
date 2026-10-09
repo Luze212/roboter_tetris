@@ -117,8 +117,9 @@ PARAMETERS = (
      "Pose ausgeben, für einen Frame; folgt der Datei, wenn ein Lauf sie überschreibt."),
     ("output_file", DEFAULT_CALIBRATION_FILE,
      "Hierhin schreibt stufe1/stufe2 die Kalibrierung für base_cam, relativ zum Paket oder "
-     "absolut. Standard: die Datei, die base_cam liest - sie gilt ab dem nächsten Aktivieren "
-     "von base_cam, ohne Build; die bisherige bleibt als ..._vorher.json daneben. Im "
+     "absolut. Standard: die aktive Datei, die base_cam liest - sie gilt ab dem nächsten Aktivieren "
+     "von base_cam, ohne Build; jede erfolgreiche Fassung wird zusätzlich unter "
+     "/data/calibration_archive/base_cam/ archiviert. Im "
      "Container: dauerhaft erst, wenn sie ins Repo kopiert und gebaut ist."),
     ("raw_file", "/tmp/base_cam_extrinsics_rohdaten.json",
      "Rohdaten jedes Laufs (alle Posen, auch wenn eine Gütegrenze greift), zum Nachrechnen "

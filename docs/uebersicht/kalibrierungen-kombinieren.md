@@ -3,8 +3,9 @@
 Die eigenständige AICA-Komponente **Basiskamera-Kalibrierungen kombinieren** liest
 das erfolgreiche Ergebnis der BaseCamCalibration und das validierte Ergebnis der
 Robot-Kamera-Hand-Auge-Kalibrierung. Sie schreibt eine dritte Datei im vorhandenen
-BaseCam-JSON-Schema. Die Quelldateien bleiben unverändert. Ein erneutes Schreiben
-sichert die vorige kombinierte Datei als `base_cam_fused_extrinsics_vorher.json`.
+BaseCam-JSON-Schema. Die Quelldateien bleiben unverändert. Die aktive
+Ergebnisdatei wird zusätzlich bei jedem erfolgreichen Dienstaufruf unveränderlich
+und zeitgestempelt unter `/data/calibration_archive/base_cam_fusion/` archiviert.
 
 Die Gewichtsangabe `robot_cam_weight_percent` bedeutet: 0 % übernimmt die
 BaseCam-Pose, 100 % die Robot-Kamera-Pose. Dazwischen werden die Positionen in
@@ -30,9 +31,9 @@ Alle drei Pfade und das Gewicht sind in AICA änderbar. Der Projektordner enthä
 den lokalen Link `base_cam_fused_extrinsics.json` auf die Ergebnisdatei im
 AICA-Datenvolume; vor dem ersten erfolgreichen Schreiben ist der Link noch leer.
 Die Datei `/data` bleibt beim Neubau des Pakets erhalten. Der Link ist
-rechnerspezifisch und wird nicht mit Git versioniert. Für eine dauerhaft
-versionierte Kalibrierung muss das konkrete Ergebnis nach einem geprüften Lauf
-separat ins Repository übernommen werden.
+rechnerspezifisch und wird nicht mit Git versioniert. Die vollständige
+Archivstruktur steht in
+[`kalibrierdateien-ablage.md`](kalibrierdateien-ablage.md).
 
 Die Datei
 [`anwendung-calibration-tobi-2-mit-fusion.yaml`](anwendung-calibration-tobi-2-mit-fusion.yaml)

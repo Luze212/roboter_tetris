@@ -95,7 +95,7 @@ Komponenten, Signale und Abläufe zum Einlesen: der Komponentenplan (Word).
 
 | Datei | Inhalt |
 |---|---|
-| `roboter_tetris/Extrinsics/base_cam_extrinsics.json` | Kalibrierung der Basiskamera, die `base_cam` liest (Handkalibrierung L6); ein Kalibrierlauf schreibt in dieselbe Datei |
+| `roboter_tetris/Extrinsics/base_cam_extrinsics.json` | Aktive Kalibrierung der Basiskamera, die `base_cam` liest (derzeit Handkalibrierung L6); ein Kalibrierlauf aktualisiert diese aktive Datei und archiviert jede Fassung unter `/data/calibration_archive/base_cam/` |
 | `roboter_tetris/Safety/workspace_bounds.json` | Arbeitsraum des Flansches; dieselben Werte sind Standard im `object_follower`, ein Test prüft die Gleichheit |
 
 ## 5. Tests

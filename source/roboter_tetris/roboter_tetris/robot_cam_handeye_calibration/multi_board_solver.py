@@ -67,8 +67,8 @@ def combine_board_results(results: Sequence[HandEyeCalibrationResult],
     Both the flange-mounted robot camera and static base camera must agree
     across positions. A large disagreement is not hidden by their mean.
     """
-    if len(results) != 3:
-        raise ValueError("Genau drei abgeschlossene Board-Lagen sind erforderlich")
+    if not results:
+        raise ValueError("Mindestens eine abgeschlossene Board-Lage ist erforderlich")
     limits = (float(max_camera_spread_mm), float(max_camera_spread_deg))
     if not all(math.isfinite(value) and value > 0.0 for value in limits):
         raise ValueError("Streuungsgrenzen müssen endlich und positiv sein")
@@ -89,7 +89,7 @@ def combine_board_results(results: Sequence[HandEyeCalibrationResult],
                          "max_pairwise_rotation_deg": round(rotation_deg, 5)}
         if position_mm > limits[0] or rotation_deg > limits[1]:
             raise ValueError(
-                f"{label}: drei Board-Lagen widersprechen sich um bis zu "
+                f"{label}: {len(results)} Board-Lagen widersprechen sich um bis zu "
                 f"{position_mm:.2f} mm / {rotation_deg:.3f} Grad; erlaubt sind "
                 f"{limits[0]:.2f} mm / {limits[1]:.3f} Grad"
             )
@@ -109,7 +109,7 @@ def combine_board_results(results: Sequence[HandEyeCalibrationResult],
         flange_rotation_span_deg=min(item.flange_rotation_span_deg for item in results),
         sample_count=sum(item.sample_count for item in results),
     )
-    report["group_count"] = 3
+    report["group_count"] = len(results)
     report["samples_per_group"] = [item.sample_count for item in results]
     report["aggregation"] = "equal weight per board position; translation arithmetic, rotation geodesic mean"
     return result, report

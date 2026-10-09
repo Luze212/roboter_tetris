@@ -14,6 +14,9 @@ ist die Handkalibrierung L6 (28.09.2026).
 | `projektkontext.md` | Aufgabe, Ziele und Ergebnis, Aufbau, Paket, Tests. **Einstieg.** |
 | `systemgraph.md` | Der AICA-Graph: Komponenten mit Ein- und Ausgängen und Raten, Ablauf eines Griffs, Bezugssysteme, Kopplungen zwischen Parametern |
 | `einrichtung-projektanwendung.md` | Was beim Anlegen der AICA-Anwendung gesetzt werden muss, alle Messwerte des Aufbaus (§8), Bedienung der Kalibrierung (§10) |
+| `kalibrierung-abschluss-heute.md` | Konkreter Ablauf für den Abschluss: BaseCamCalibration, Drei-Lagen-Robot-Cam-Kalibrierung, anschließender Vergleich und späterer Folienauftrag |
+| `kalibrierdateien-ablage.md` | Aktive Ergebnisdateien und unveränderliche Archive aller Kalibrierverfahren |
+| `kalibrierungen-kombinieren.md` | Fusionskomponente und ihre bewusste, manuelle Gewichtung |
 | `anwendung-kalibrierung-basiskamera.yaml` | AICA-Anwendung für die Kalibrierung der Basiskamera |
 | `Komponentenplan Robotetris - Stand 2026-09-28.docx` | Alle Komponenten, Signale, Abläufe und Einstellungen zum Einlesen, mit Farbcode |
 

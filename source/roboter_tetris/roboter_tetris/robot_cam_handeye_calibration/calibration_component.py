@@ -13,6 +13,8 @@ from clproto import MessageType
 import state_representation as sr
 from std_msgs.msg import Float64MultiArray, Int32
 
+from ..basecam_extrinsics import ROBOT_CAM_ARCHIVE_DIR, archive_calibration_file
+
 from .handeye_solver import (
     HandEyeCalibrationResult, HandEyeCalibrationSample,
     average_rotation_matrices,
@@ -652,8 +654,12 @@ class RobotCamHandEyeCalibration(LifecycleComponent):
                     save_path, result,
                     board_center_conveyor_mm=board_center_mm
                 )
+                archive_path = archive_calibration_file(
+                    save_path, ROBOT_CAM_ARCHIVE_DIR, "robot_cam_handeye"
+                )
 
                 self.get_logger().info("==================================================")
+                self.get_logger().info(f"Archivkopie: {archive_path}")
                 self.get_logger().info(" ROBOT-KAMERA-HAND-AUGE-KALIBRIERUNG ERFOLGREICH BEENDET ")
                 self.get_logger().info("==================================================")
                 self.get_logger().info(f"Verwendete Samples: {result.sample_count}")
